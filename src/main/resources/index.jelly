@@ -1,9 +1,0 @@
-<?jelly escape-by-default='true'?>
-<div>
-  Generic Jenkins plugin: JSON-shaped, versioned configuration store (ConfigSet /
-  ConfigSetVersion) persisted natively in $JENKINS_HOME, with structural validation and
-  <code>#{Path}#</code> token substitution Pipeline steps
-  (<code>configTemplateValidate</code>, <code>configTemplateSubstitute</code>), including
-  build-version config pinning for safe rollback replay. Milestone 1 (MVP): persistence + pipeline
-  steps only, driven from Pipeline scripts / Script Console — no Jelly configuration UI yet.
-</div>
