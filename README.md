@@ -73,6 +73,36 @@ version computation — Maven resolves `${revision}` while building the reactor'
 any plugin execution runs, so it cannot be set from inside the build itself; only the wrapper (or an
 explicit `-Drevision=...` flag) can supply it in time.
 
+### Zero-host-tooling option: Docker build
+
+If you don't want to install Java, Maven, or the GitVersion CLI on your machine at all — only
+[Docker](https://www.docker.com/) is required — use:
+
+```
+./docker-build.sh      # Linux/macOS/Git Bash/WSL
+docker-build.cmd       # Windows cmd.exe
+```
+
+This runs the exact same two logical steps as `mvnw`/`mvnw.cmd`, just inside containers instead of on
+the host:
+
+1. [`gittools/gitversion`](https://gitversion.net/docs/usage/docker) (the official GitVersion Docker
+   image) computes the SemVer from this repo's git history, mounted read/write at `/repo`.
+2. The official `maven` image (`eclipse-temurin-11` variant, matching this project's
+   `<java.level>11</java.level>` in `pom.xml`) runs `mvn -Drevision=<computed SemVer> clean verify`
+   against the same mounted repo.
+
+Both steps run as **two sequential `docker run` commands**, not a single `docker-compose.yml` —
+compose services have no built-in way to capture one service's stdout and inject it as a `-D`
+argument into a second service's command, and `${revision}` must be known before Maven starts (see
+the note above), so a plain script that captures GitVersion's output into a shell variable and passes
+it to the Maven container is the reliable mechanism.
+
+`target/config-template-sync.hpi` lands on the **host** filesystem at the same path the `mvnw`/
+`mvnw.cmd` path already produces it at (the repo directory is bind-mounted into both containers, not
+copied in/out) — so anything downstream that expects it there (e.g. Docker-Jenkins e2e testing of
+this plugin) keeps working unchanged.
+
 ## Explicitly out of scope for this milestone
 
 No Stapler/Jelly admin UI, no Monaco editor integration, no private Jenkins Update Center, and no
