@@ -1,0 +1,28 @@
+# Disposable, fully-seeded Jenkins for e2e-testing the config-template-sync plugin.
+# See docker/test-jenkins/README.md for the one command + what's pre-seeded.
+#
+# `docker compose up --build` — builds the plugin's .hpi from THIS repo's current source
+# (see docker/test-jenkins/Dockerfile, stage 1) and starts a Jenkins controller with it
+# baked in, base plugins installed, and test data auto-seeded via init.groovy.d — no
+# manual Script Console steps, no manual plugin copy/restart dance.
+#
+# `docker compose up` (no --build) reuses a previously-built image if one exists.
+#
+# `docker compose down -v` is the documented way to fully reset back to a clean seeded
+# state (wipes the named jenkins_home volume, including anything the owner clicked/typed
+# in the UI on top of the seed).
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: docker/test-jenkins/Dockerfile
+    ports:
+      - "28080:8080"   # Jenkins UI -> http://localhost:28080
+      - "58000:50000"  # inbound agent port; unused by this single-controller setup, harmless to expose
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    volumes:
+      - jenkins_home:/var/jenkins_home
+
+volumes:
+  jenkins_home:
