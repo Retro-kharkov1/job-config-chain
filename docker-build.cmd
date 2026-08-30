@@ -28,7 +28,11 @@ if "%SEMVER%"=="" (
 echo     SemVer: %SEMVER%
 
 echo ==^> [2/2] Building with Maven (%MAVEN_IMAGE%), -Drevision=%SEMVER%
-docker run --rm -v "%REPO_DIR%:/repo" -w /repo %MAVEN_IMAGE% mvn -Drevision=%SEMVER% clean verify
+rem -Dmaven.clean.failOnError=false: works around a documented Windows-only file-lock
+rem issue where maven-clean-plugin's clean:clean goal can fail to delete a native helper
+rem lib the JVM briefly still holds open, on repeated builds against this bind mount.
+rem See https://maven.apache.org/plugins/maven-clean-plugin/clean-mojo.html#failOnError
+docker run --rm -v "%REPO_DIR%:/repo" -w /repo %MAVEN_IMAGE% mvn -Drevision=%SEMVER% -Dmaven.clean.failOnError=false clean verify
 if errorlevel 1 exit /b 1
 
 echo ==^> Done. Artifact: target\config-template-sync.hpi (Plugin-Version: %SEMVER%)
