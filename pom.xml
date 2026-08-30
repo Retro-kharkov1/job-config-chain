@@ -13,7 +13,7 @@
 
   <groupId>io.github.retrokharkov1</groupId>
   <artifactId>config-template-sync</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>${revision}</version>
   <packaging>hpi</packaging>
 
   <name>Config Template Sync</name>
@@ -46,6 +46,10 @@
   </scm>
 
   <properties>
+    <!-- CI-friendly version (https://maven.apache.org/maven-ci-friendly.html).
+         Overridden at build time with -Drevision=<GitVersion SemVer>; this default lets
+         a plain local `mvn clean verify` still work without GitVersion installed. -->
+    <revision>0.0.0-SNAPSHOT</revision>
     <jenkins.version>2.426.3</jenkins.version>
     <java.level>11</java.level>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
