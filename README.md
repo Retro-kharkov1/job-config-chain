@@ -50,6 +50,29 @@ of objects, if you need per-environment element-level overrides).
   Jenkinsfile's environment (e.g. via `withCredentials`) and are merged in by dotted-path key before
   substitution.
 
+## Building and versioning
+
+Build with the bundled Maven Wrapper — no separate script or CI platform required:
+
+```
+./mvnw clean verify      # Linux/macOS
+mvnw.cmd clean verify    # Windows
+```
+
+The wrapper computes the plugin's version from git history via the
+[GitVersion](https://gitversion.net/) CLI (`dotnet-gitversion`, config in `GitVersion.yml`) before
+delegating to Maven, and passes it as `-Drevision=<computed SemVer>` (Maven's
+[CI Friendly Versions](https://maven.apache.org/maven-ci-friendly.html) mechanism — see `pom.xml`).
+This only affects the version of the artifact produced by a **local** build; it has no dependency on
+any CI platform and does not decide where or when the plugin gets deployed. If `dotnet-gitversion` is
+not installed, the build still succeeds and falls back to the default `revision` in `pom.xml`
+(`0.0.0-SNAPSHOT`).
+
+Invoking the raw `mvn` binary directly (bypassing the wrapper) also works, but without automatic
+version computation — Maven resolves `${revision}` while building the reactor's project model, before
+any plugin execution runs, so it cannot be set from inside the build itself; only the wrapper (or an
+explicit `-Drevision=...` flag) can supply it in time.
+
 ## Explicitly out of scope for this milestone
 
 No Stapler/Jelly admin UI, no Monaco editor integration, no private Jenkins Update Center, and no
