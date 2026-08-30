@@ -1,0 +1,35 @@
+# Disposable local harness to prove the self-hosted Update Center path end-to-end:
+#   1. `update-site` serves distribution/site/ (update-center.json + the .hpi) over plain HTTP,
+#      standing in for the GitHub Release asset URLs baked into update-center.json (those don't
+#      resolve today because the source repo is private -- see README "Private-repo blocker").
+#   2. `jenkins` is a throwaway Jenkins core instance pointed at that update site, used only to
+#      prove the plugin shows up in the normal Update Center / Plugin Manager "Available" list
+#      and installs through that flow -- not via manual .hpi upload.
+#
+# Signature verification is disabled (-Dhudson.model.DownloadService.noSignatureCheck=true,
+# see hudson.model.DownloadService#signatureCheck in jenkinsci/jenkins core) because this site
+# serves plain unsigned JSON, matching common practice for small self-hosted update sites (e.g.
+# the jenkinsci/juseppe project) rather than standing up a full RSA/X.509 signing pipeline for a
+# single personal plugin. This flag affects ALL configured update sites on the instance it's set
+# on, including the default one -- acceptable for this disposable test container, but call this
+# out explicitly if it's ever applied to a real, permanent Jenkins master.
+services:
+  update-site:
+    image: python:3.12-alpine
+    working_dir: /site
+    volumes:
+      - ./site:/site:ro
+    command: ["python3", "-m", "http.server", "8000"]
+    ports:
+      - "8090:8000"
+
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    environment:
+      JAVA_OPTS: >-
+        -Djenkins.install.runSetupWizard=false
+        -Dhudson.model.DownloadService.noSignatureCheck=true
+    ports:
+      - "8080:8080"
+    depends_on:
+      - update-site

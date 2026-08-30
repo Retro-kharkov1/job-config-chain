@@ -1,0 +1,30 @@
+{
+  "connectionCheckUrl": "https://www.google.com/",
+  "id": "config-template-sync-update-center",
+  "plugins": {
+    "config-template-sync": {
+      "dependencies": [
+        {
+          "name": "workflow-step-api",
+          "optional": "false",
+          "version": "678.v3ee58b_469476"
+        },
+        {
+          "name": "credentials",
+          "optional": "false",
+          "version": "1371.vfee6b_095f0a_3"
+        }
+      ],
+      "excerpt": "Keeps a nested structured-config token store (per common/env layer) structurally in sync with #{Dotted.Path}# placeholder tokens in a target application config file.",
+      "name": "config-template-sync",
+      "requiredCore": "2.426.3",
+      "sha1": "Dz1a8r/Yd/wC6hcecpMkitAKudU=",
+      "sha256": "GREBnGP6YA+pdIOo/+DVlAHOkCno1Jvby1GAOcFEI04=",
+      "title": "Config Template Sync",
+      "url": "https://github.com/Retro-kharkov1/config-template-sync/releases/download/v0.0.29/config-template-sync.hpi",
+      "version": "0.0.29",
+      "wiki": "https://github.com/Retro-kharkov1/config-template-sync"
+    }
+  },
+  "updateCenterVersion": "1"
+}
