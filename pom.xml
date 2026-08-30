@@ -47,8 +47,21 @@
 
   <properties>
     <!-- CI-friendly version (https://maven.apache.org/maven-ci-friendly.html).
-         Overridden at build time with -Drevision=<GitVersion SemVer>; this default lets
-         a plain local `mvn clean verify` still work without GitVersion installed. -->
+         IMPORTANT (verified against Maven's own docs and empirically against this repo):
+         `${revision}` is interpolated into <version> while Maven builds the reactor's
+         project models, BEFORE any lifecycle phase of any plugin runs — so a plugin
+         execution bound to `validate`/`initialize` (e.g. exec-maven-plugin, gmavenplus)
+         CANNOT set this property in time to affect this build's own packaged artifact
+         version (confirmed: it still produced "0.0.0-SNAPSHOT" in the .hpi manifest
+         even though the script ran and computed a real SemVer). Per Maven's own docs,
+         `revision` must be present as a command-line `-D` property or via
+         `.mvn/maven.config` BEFORE Maven starts reading POMs.
+         That is why version computation lives in `mvnw`/`mvnw.cmd` (see repo root):
+         the wrapper shells out to `dotnet-gitversion` first and passes
+         `-Drevision=<computed SemVer>` into the real `mvn` invocation it wraps. This
+         default value below is only the graceful-degradation fallback for a bare
+         checkout with no git history / no GitVersion CLI installed (or for anyone who
+         invokes the raw `mvn` binary directly instead of the wrapper). -->
     <revision>0.0.0-SNAPSHOT</revision>
     <jenkins.version>2.426.3</jenkins.version>
     <java.level>11</java.level>
