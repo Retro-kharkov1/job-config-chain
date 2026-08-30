@@ -1,0 +1,6 @@
+<?jelly escape-by-default='true'?>
+<div>
+    Keeps a nested structured-config token store (per common/env layer) structurally in sync with
+    #{Dotted.Path}# placeholder tokens in a target application config file, validating drift and
+    substituting real values at deploy time, without an external database or a git-backed store.
+</div>
