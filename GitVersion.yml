@@ -1,0 +1,17 @@
+# GitVersion configuration for this repo.
+#
+# This is a personal, single-branch (main) project with no GitFlow release/develop
+# branches, so we use GitVersion's built-in TrunkBased workflow preset instead of
+# importing GitFlow/GitHubFlow complexity that doesn't apply here:
+# https://gitversion.net/docs/reference/configuration#workflows (workflow presets)
+#
+# TrunkBased puts `main` in ContinuousDeployment mode: every commit on `main` gets a
+# real, deployable SemVer computed from commit history since the last tag (no manual
+# version bump needed). Tag a commit (e.g. `v1.2.0`) to pin an exact release version;
+# every commit after that tag auto-increments (default: patch). Use `+semver: minor`
+# or `+semver: major` in a commit message to bump minor/major instead.
+#
+# Verified locally against `dotnet-gitversion` 6.4.0 (gitversion.tool) — computes a
+# real SemVer (e.g. 0.0.26) against this repo's actual commit history.
+workflow: TrunkBased/preview1
+tag-prefix: '[vV]'
