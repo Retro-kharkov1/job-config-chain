@@ -3,3 +3,6 @@ target/
 .idea/
 *.iml
 work/
+build.log
+build-package.log
+distribution/site/*.hpi
