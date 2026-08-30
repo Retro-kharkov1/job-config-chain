@@ -48,7 +48,16 @@ SEMVER="$(docker run --rm -v "${SCRIPT_DIR}:/repo" "${GITVERSION_IMAGE}" /repo /
 echo "    SemVer: ${SEMVER}"
 
 echo "==> [2/2] Building with Maven (${MAVEN_IMAGE}), -Drevision=${SEMVER}"
+# `-Dmaven.clean.failOnError=false`: on repeated builds against this Windows-backed bind
+# mount, maven-clean-plugin's `clean:clean` goal can hit a well-known Windows file-lock
+# issue deleting a native helper lib (e.g. plexus-utils' own JNA-extracted temp .dll under
+# target/tmp) that the JVM briefly still holds open — a documented Windows-only quirk of
+# `mvn clean`, unrelated to this project's own code (see maven-clean-plugin's official
+# `failOnError` parameter: https://maven.apache.org/plugins/maven-clean-plugin/clean-mojo.html#failOnError).
+# `false` makes a leftover-file clean warning non-fatal instead of aborting an otherwise
+# healthy build; it does not skip cleaning, it only stops one locked leftover from failing
+# the whole run.
 docker run --rm -v "${SCRIPT_DIR}:/repo" -w /repo "${MAVEN_IMAGE}" \
-  mvn -Drevision="${SEMVER}" clean verify
+  mvn -Drevision="${SEMVER}" -Dmaven.clean.failOnError=false clean verify
 
 echo "==> Done. Artifact: target/config-template-sync.hpi (Plugin-Version: ${SEMVER})"
