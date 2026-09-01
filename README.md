@@ -45,10 +45,14 @@ of objects, if you need per-environment element-level overrides).
   resolves the effective configuration (pinned to a prior Deployment Binding if `buildVersion`
   matches one, otherwise the currently active versions — with an explicit log line if a
   `buildVersion` was given but no binding was found), substitutes every `#{Dotted.Path}#` token in
-  `file`, and fails if any token-shaped text remains afterward. This step does not resolve Jenkins
-  credentials itself — secret values are expected to already be present in the calling
-  Jenkinsfile's environment (e.g. via `withCredentials`) and are merged in by dotted-path key before
-  substitution.
+  `file`, and fails if any token-shaped text remains afterward. Any dotted path declared secret in
+  the common and/or env Config Set's secrets manifest has its real value resolved **exclusively**
+  from the Jenkins credential ID declared for that path — via `CredentialsProvider.findCredentialById`
+  scoped to the running build — never from an env var or the stored placeholder text; if the
+  declared credential does not resolve (missing, or this build isn't permitted to use it) the build
+  fails loudly naming the credential ID, it never substitutes a placeholder or empty value. Non-secret
+  paths keep the simpler behavior: an env var whose name matches the dotted path wins if present,
+  otherwise the flattened effective-config value is used.
 
 ## Building and versioning
 
@@ -239,10 +243,20 @@ Run it yourself: `docker compose -f distribution/docker-compose.update-center-te
 Jenkins is at `http://localhost:8080` (no login — setup wizard is skipped for this disposable
 container) and the static site at `http://localhost:8090/update-center.json`.
 
+## Admin UI
+
+A full Stapler/Jelly admin UI is implemented (not out of scope): `/configTemplates` lists Config
+Projects; each project has a common edit page and one edit page per environment. Both edit pages
+share the same Monaco-based JSON editor (with an in-place Compare/diff mode against any two prior
+versions), version-history table with per-version Activate/rollback, and a "Secrets manifest"
+section for binding a dotted path to a real, currently-registered Jenkins credential (picked from a
+`<select>`, never typed free-text). The env-level page additionally shows a read-only preview of the
+paired common Config Set's active content and a live, debounced three-panel RFC 7396 merge preview.
+
 ## Explicitly out of scope for this milestone
 
-No Stapler/Jelly admin UI, no Monaco editor integration, and no version-history
-retention/pruning policy (history is kept indefinitely by design — see the project's requirements
-documentation for the reasoning). The private Update Center above is now in place; making the
-repository public (required for it to work beyond local/owner testing) and pursuing official
-`jenkinsci`-org hosting remain explicit follow-ups for the owner to decide on.
+No version-history retention/pruning policy (history is kept indefinitely by design — see the
+project's requirements documentation for the reasoning), and no template-generation entry point
+(FR-15/FR-16) yet. The private Update Center above is now in place; making the repository public
+(required for it to work beyond local/owner testing) and pursuing official `jenkinsci`-org hosting
+remain explicit follow-ups for the owner to decide on.

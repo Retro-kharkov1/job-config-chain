@@ -11,10 +11,12 @@
 // "test-app-dev-db-password" credential:
 //   1. configTemplateValidate — checks the sample target file's #{Dotted.Path}# tokens
 //      against the effective (common+env merged) configuration.
-//   2. configTemplateSubstitute — replaces those tokens for real, resolving the secret
-//      value from the credential (bound to the env var "Database.Password" via withEnv,
-//      not via a dotted withCredentials `variable:` name — safer/more portable than
-//      relying on non-identifier-shaped binding variable names).
+//   2. configTemplateSubstitute — replaces those tokens for real. The Database.Password
+//      token is resolved EXCLUSIVELY from the "test-app-dev-db-password" Jenkins credential
+//      declared in the common ConfigSet's secrets manifest (FR-13/FR-21) — deliberately no
+//      withCredentials/withEnv wiring here anymore, to prove the step resolves it itself
+//      rather than depending on the calling Jenkinsfile to re-inject it under a matching
+//      env-var name.
 node {
     def targetFile = 'appsettings.json'
 
@@ -38,11 +40,7 @@ node {
     }
 
     stage('Substitute') {
-        withCredentials([string(credentialsId: 'test-app-dev-db-password', variable: 'DB_PASSWORD')]) {
-            withEnv(["Database.Password=${DB_PASSWORD}"]) {
-                configTemplateSubstitute(projectKey: 'test-app', environment: 'dev', file: targetFile, buildVersion: '1.0.0')
-            }
-        }
+        configTemplateSubstitute(projectKey: 'test-app', environment: 'dev', file: targetFile, buildVersion: '1.0.0')
     }
 
     stage('Show substituted file') {
