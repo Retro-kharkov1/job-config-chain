@@ -435,6 +435,158 @@ public class ConfigTemplatesUiTest {
                 "env edit page (multiline JSON seed)", envPage.getWebResponse().getContentAsString());
     }
 
+    // --- Generate Template (FR-15/16, FR-40-44) -------------------------------------------
+
+    @Test
+    public void commonPage_doRenderTemplate_returnsTokenizedActiveVersionContent() throws Exception {
+        seedCommon("uitest20", "{\"database\":{\"host\":\"db.internal\",\"password\":\""
+                + SecretPlaceholder.VALUE + "\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest20/common/renderTemplate");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        JSONObject template = json.getJSONObject("template");
+        assertEquals("#{database.host}#", template.getJSONObject("database").getString("host"));
+        assertEquals("secret leaf must render as the identical token, no special-casing (FR-42)",
+                "#{database.password}#", template.getJSONObject("database").getString("password"));
+    }
+
+    @Test
+    public void commonPage_doRenderTemplate_noActiveVersionReturnsClearErrorNotException() throws Exception {
+        // A Config Set that has never been created/activated: getConfigSet() is null, so
+        // getActiveVersionForTemplate() is null — must return a structured ok:false error, never
+        // throw an exception page (FR-40's "disabled-state message, not an exception page").
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest21-nonexistent/common/renderTemplate");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertFalse("no active version must be reported, not thrown as a server error", json.getBoolean("ok"));
+        assertNotNull(json.getString("error"));
+    }
+
+    @Test
+    public void envPage_doRenderTemplate_returnsTokenizedEffectiveMergedContent() throws Exception {
+        seedCommon("uitest22", "{\"database\":{\"host\":\"db.internal\",\"port\":5432}}", "seed");
+        seedEnv("uitest22", "dev", "{\"database\":{\"host\":null}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest22/dev/renderTemplate");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        JSONObject database = json.getJSONObject("template").getJSONObject("database");
+        assertFalse("null in the env overlay must remove the key before tokenization (RFC 7396)",
+                database.has("host"));
+        assertEquals("#{database.port}#", database.getString("port"));
+    }
+
+    @Test
+    public void envPage_doRenderTemplate_gatedOnlyByCommonActiveVersion_envWithNoActiveVersionStillWorks() throws Exception {
+        // FR-15b/tech-lead decision: the env layer's own active version is NOT required — an env
+        // Config Set with no active version yet is a legitimate empty overlay.
+        seedCommon("uitest23", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest23/dev/renderTemplate");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue("must succeed against common-only content when the env layer has no active version yet",
+                json.getBoolean("ok"));
+        assertEquals("#{database.host}#",
+                json.getJSONObject("template").getJSONObject("database").getString("host"));
+    }
+
+    @Test
+    public void envPage_doRenderTemplate_noActiveCommonVersionReturnsClearErrorNotException() throws Exception {
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest24-nonexistent/dev/renderTemplate");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertFalse(json.getBoolean("ok"));
+        assertNotNull(json.getString("error"));
+    }
+
+    @Test
+    public void commonEditPage_rendersGenerateTemplateButtonAndBanner() throws Exception {
+        seedCommon("uitest25", "{\"a\":1}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest25/common/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("global page must render the Generate Template toggle button (FR-40)",
+                html.contains("id=\"modeGenerateBtn\""));
+        assertTrue("global page must render the ACTIVE-version banner text (FR-16)",
+                html.contains("NOT this box's unsaved edits"));
+    }
+
+    @Test
+    public void commonEditPage_generateTemplateButtonDisabledWhenNoActiveVersion() throws Exception {
+        // A Config Set page rendered for a project key that has never been saved: isExists() is
+        // false, so isTemplateAvailable() is false — the button must render disabled with the
+        // "no active version yet" label (FR-40), never silently no-op on click.
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest26-nonexistent/common/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("Generate Template button must render disabled with an explanatory label (FR-40)",
+                html.contains("disabled=\"disabled\"") && html.contains("no active version yet"));
+    }
+
+    @Test
+    public void envEditPage_rendersGenerateTemplateButtonAboveThreePanelTable() throws Exception {
+        seedCommon("uitest27", "{\"a\":1}", "seed");
+        seedEnv("uitest27", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest27/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("env page must render a page-level Generate Template button (FR-41)",
+                html.contains("id=\"generateTemplateBtn\""));
+        assertTrue("env page must render the 3-panel table with its own id, replaced on click",
+                html.contains("id=\"threePanelTable\""));
+        assertTrue("env page must render the full-width generated-template panel container",
+                html.contains("id=\"generatedTemplatePanel\""));
+        assertTrue("env page must render the Back-to-3-panel-view affordance",
+                html.contains("id=\"backTo3PanelBtn\""));
+    }
+
+    @Test
+    public void envEditPage_generateTemplateButtonDisabledWhenNoActiveCommonVersion() throws Exception {
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest28-nonexistent/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("Generate Template button must render disabled when the common layer has no active version",
+                html.contains("disabled=\"disabled\"") && html.contains("no active version yet"));
+    }
+
+    @Test
+    public void commonEditPage_inlineScriptsAreSyntacticallyValidJs_withGenerateTemplateCode() throws Exception {
+        // Regression guard for the newly added switchToGenerateMode/copyGeneratedTemplate JS,
+        // matching the existing real-JS-engine syntax-check pattern for this test class.
+        seedCommon("uitest29", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest29/common/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue(html.contains("switchToGenerateMode"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (generate-template JS)", html);
+    }
+
+    @Test
+    public void envEditPage_inlineScriptsAreSyntacticallyValidJs_withGenerateTemplateCode() throws Exception {
+        seedCommon("uitest30", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+        seedEnv("uitest30", "dev", "{\"database\":{\"host\":\"db.dev.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest30/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue(html.contains("showGeneratedTemplateView"));
+        assertTrue(html.contains("backTo3PanelView"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("env edit page (generate-template JS)", html);
+    }
+
     @Test
     public void globalListPage_inlineScriptsAreSyntacticallyValidJs() throws Exception {
         seedCommon("uitest19", "{\"a\":1}", "seed");

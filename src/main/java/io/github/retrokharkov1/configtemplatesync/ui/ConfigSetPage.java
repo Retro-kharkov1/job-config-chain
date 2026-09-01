@@ -434,6 +434,88 @@ public abstract class ConfigSetPage {
     }
 
     /**
+     * AJAX (Stapler JS-proxy): generates a copy-paste-ready JSON template (FR-15, FR-40/41, FR-44)
+     * from the CURRENTLY ACTIVE version(s) of the relevant Config Set(s) — never an unsaved/
+     * in-progress editor buffer (FR-16). Shared, non-abstract on this base class (both scopes share
+     * identical permission-check/envelope/no-active-version-guard boilerplate); delegates the
+     * scope-specific computation to the abstract {@link #computeTemplate()} hook, implemented
+     * differently by {@link CommonConfigSetPage} (FR-15a) and {@link EnvConfigSetPage} (FR-15b) —
+     * mirroring the existing pattern where {@code getCommonConfigSet}/{@code previewMerge} live only
+     * on {@link EnvConfigSetPage}, not this shared base, because the two scopes genuinely compute
+     * differently.
+     *
+     * <p>Named {@code doRenderTemplate} (URL segment {@code renderTemplate}), deliberately NOT
+     * {@code doGenerateTemplate}, to avoid colliding with the
+     * {@code @JavaScriptMethod(name = "generateTemplate")} sibling below — see
+     * {@link #doActivateVersion(int)}'s javadoc for the full root-cause chain behind why that
+     * collision matters. {@code renderTemplate} and {@code generateTemplate} share no substring
+     * beyond "template," matching the deliberate word-choice divergence already used for the other
+     * three pairs (FR-44).</p>
+     *
+     * <p><b>{@code @StaplerDispatchable} required:</b> unlike its siblings ({@code
+     * doActivateVersion}, {@code doDiffVersions}, {@code doRegisterSecret}), this method has no
+     * {@code @QueryParameter}/{@code StaplerRequest} parameter to serve as Stapler's post-2.138.4/
+     * 2.154 "intended for routing" signal (see
+     * https://www.jenkins.io/doc/developer/handling-requests/actions/) — its zero-argument
+     * signature is a deliberate FR-16 guarantee (see {@link #jsGenerateTemplate()}'s javadoc), not
+     * an oversight, so the explicit {@code @StaplerDispatchable} opt-in is required instead of
+     * relying on an incidental parameter annotation.</p>
+     */
+    @jenkins.security.stapler.StaplerDispatchable
+    public JSONObject doRenderTemplate() {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        return renderTemplateImpl();
+    }
+
+    /**
+     * JS-proxy-facing sibling of {@link #doRenderTemplate()}; exposed as
+     * {@code proxy.generateTemplate(...)}. See {@link #doActivateVersion(int)} javadoc for the
+     * naming-collision root cause this pair avoids.
+     *
+     * <p><b>Deliberately takes NO parameters</b> — the single strongest guarantee against
+     * accidentally reading a draft/unsaved buffer (FR-16): contrast directly with
+     * {@link EnvConfigSetPage#jsPreviewMerge}, whose entire purpose is to accept the caller's
+     * current, possibly-unsaved {@code overlayJson} text. There is no argument through which a
+     * draft could reach this method even by a future accidental edit — the method body has no such
+     * parameter to read from in the first place.</p>
+     */
+    @JavaScriptMethod(name = "generateTemplate")
+    public JSONObject jsGenerateTemplate() {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        return renderTemplateImpl();
+    }
+
+    private JSONObject renderTemplateImpl() {
+        JSONObject result = new JSONObject();
+        if (getActiveVersionForTemplate() == null) {
+            // FR-40/41's "no active version" guard, re-asserted server-side (defense in depth —
+            // never trust the client-side disabled-button state alone).
+            result.put("ok", false);
+            result.put("error", "No active version yet — nothing to template.");
+            return result;
+        }
+        com.google.gson.JsonObject template = computeTemplate();
+        result.put("ok", true);
+        result.put("template", net.sf.json.JSONObject.fromObject(template.toString()));
+        return result;
+    }
+
+    /** FR-15a on {@link CommonConfigSetPage} / FR-15b on {@link EnvConfigSetPage} — see each override's javadoc. */
+    abstract com.google.gson.JsonObject computeTemplate();
+
+    /** The version whose absence blocks generation (FR-40/41's disabled-button guard). */
+    abstract ConfigSetVersion getActiveVersionForTemplate();
+
+    /**
+     * Jelly-visible (must be public, see the class-level visibility note above): whether the
+     * "Generate Template" action should render enabled (FR-40/41 — disabled with a "no active
+     * version yet" label when there is nothing to template).
+     */
+    public final boolean isTemplateAvailable() {
+        return getActiveVersionForTemplate() != null;
+    }
+
+    /**
      * Credential IDs available for the secrets-manifest picker (OQ-1): a real, existing Jenkins
      * credential, resolved from the standard credential store — structurally never a place a real
      * secret VALUE could be typed, only a reference by ID (FR-12/13, NFR-3). Scoped to the whole
