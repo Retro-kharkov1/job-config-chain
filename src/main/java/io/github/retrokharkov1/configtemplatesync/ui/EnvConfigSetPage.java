@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import io.github.retrokharkov1.configtemplatesync.merge.EffectiveConfigResolver;
+import io.github.retrokharkov1.configtemplatesync.merge.TemplateGenerator;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
@@ -128,5 +129,32 @@ public class EnvConfigSetPage extends ConfigSetPage {
             result.put("error", e.getMessage());
             return result;
         }
+    }
+
+    /**
+     * FR-15b: resolves the effective (merged) configuration from the two Config Sets' ACTIVE
+     * versions (never the live 3-panel "Merged result" panel's in-progress draft, per FR-16/FR-41)
+     * and tokenizes it. Both versions are re-fetched fresh from {@link #repository} via
+     * {@link #getCommonActiveVersion()}/{@link #getActiveVersion()} — no code path here touches
+     * anything Monaco-editor-supplied.
+     */
+    @Override
+    com.google.gson.JsonObject computeTemplate() {
+        ConfigSetVersion commonActive = getCommonActiveVersion();
+        ConfigSetVersion envActive = getActiveVersion();
+        String commonJson = commonActive.getContentJson();
+        String envJson = envActive == null ? null : envActive.getContentJson();
+        return TemplateGenerator.fromEffective(commonJson, envJson);
+    }
+
+    /**
+     * Only the COMMON side gates availability — an env layer with no active version yet is a
+     * legitimate empty overlay ({@link EffectiveConfigResolver} already treats a null/blank
+     * {@code envPatchJson} as {@code {}}), so the "disabled until something to template" guard from
+     * FR-40/41 is keyed on the COMMON Config Set's active version, not the env one.
+     */
+    @Override
+    ConfigSetVersion getActiveVersionForTemplate() {
+        return getCommonActiveVersion();
     }
 }
