@@ -1,10 +1,15 @@
 package io.github.retrokharkov1.configtemplatesync.steps;
 
+import com.cloudbees.plugins.credentials.CredentialsScope;
+import com.cloudbees.plugins.credentials.SystemCredentialsProvider;
 import hudson.model.Result;
+import hudson.util.Secret;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
+import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigDeploymentBindingRepository;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
+import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
@@ -13,7 +18,9 @@ import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class ConfigTemplateSubstituteStepTest {
 
@@ -36,6 +43,71 @@ public class ConfigTemplateSubstituteStepTest {
         env.activate(v);
         repository.save(env);
         return env;
+    }
+
+    /** Seeds a common Config Set whose content has a secret-manifest-declared placeholder leaf. */
+    private ConfigSet seedCommonWithSecret(String projectKey, String dottedPath, String credentialId,
+                                            String contentJsonWithPlaceholder) throws Exception {
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet common = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common");
+        common.putSecretManifestEntry(dottedPath, credentialId);
+        int v = common.addVersion(contentJsonWithPlaceholder, "seed", "test", 1L);
+        common.activate(v);
+        repository.save(common);
+        return common;
+    }
+
+    private void seedRealStringCredential(String id, String secretValue) throws Exception {
+        SystemCredentialsProvider.getInstance().getCredentials().add(new StringCredentialsImpl(
+                CredentialsScope.GLOBAL, id, "test credential seeded for substitute step test",
+                Secret.fromString(secretValue)));
+        SystemCredentialsProvider.getInstance().save();
+    }
+
+    @Test
+    public void secretManifestPath_resolvesRealCredentialValue_notEnvVarOrPlaceholder() throws Exception {
+        // FR-13/FR-21 fix: the real value must come from the Jenkins credential store, exclusively,
+        // even though NO env var named "Database.Password" is exported anywhere in this pipeline.
+        seedRealStringCredential("subproj7-db-pass", "S3cr3tDbPass!");
+        seedCommonWithSecret("subproj7", "Database.Password", "subproj7-db-pass",
+                "{\"Database\":{\"Password\":\"" + SecretPlaceholder.VALUE + "\"}}");
+        seedEnv("subproj7", "dev", "{}");
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-real-secret");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'password=#{Database.Password}#'\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj7', environment: 'dev', file: 'app.json')\n"
+                        + "  def content = readFile('app.json')\n"
+                        + "  echo \"RESULT:${content}\"\n"
+                        + "}", true));
+
+        WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        jenkins.assertLogContains("RESULT:password=S3cr3tDbPass!", run);
+        assertFalse("must never fall back to the raw placeholder text",
+                jenkins.getLog(run).contains("password=" + SecretPlaceholder.VALUE));
+    }
+
+    @Test
+    public void secretManifestPath_missingCredential_failsBuildLoudlyNamingIt() throws Exception {
+        // NFR-7: a declared-but-nonexistent/inaccessible credential must fail the build, never
+        // silently substitute the placeholder or an empty string.
+        seedCommonWithSecret("subproj8", "Database.Password", "does-not-exist-credential-id",
+                "{\"Database\":{\"Password\":\"" + SecretPlaceholder.VALUE + "\"}}");
+        seedEnv("subproj8", "dev", "{}");
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-missing-credential");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'password=#{Database.Password}#'\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj8', environment: 'dev', file: 'app.json')\n"
+                        + "}", true));
+
+        WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
+        jenkins.assertLogContains("does-not-exist-credential-id", run);
+        jenkins.assertLogContains("Database.Password", run);
+        assertTrue("must not report success while silently substituting a placeholder",
+                run.getResult() == Result.FAILURE);
     }
 
     @Test

@@ -6,6 +6,7 @@ import hudson.AbortException;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
+import hudson.model.Run;
 import hudson.model.TaskListener;
 import io.github.retrokharkov1.configtemplatesync.merge.JsonPaths;
 import io.github.retrokharkov1.configtemplatesync.merge.TokenExtractor;
@@ -36,9 +37,14 @@ import java.util.Set;
  * already ran in this Jenkinsfile. Per OQ-3/FR-25-27, build-version pinning is opt-in: it is only
  * consulted when {@code buildVersion} is explicitly supplied.</p>
  *
- * <p>This step does not resolve Jenkins credentials itself — secret values are expected to already
- * be present in the calling Jenkinsfile's environment (e.g. via {@code withCredentials}) and are
- * merged in by dotted-path key before substitution.</p>
+ * <p>Per FR-13/FR-21, any dotted path declared secret in the common and/or env Config Set's secrets
+ * manifest has its real value resolved <b>exclusively</b> from the Jenkins credential ID declared
+ * for that path — via {@link com.cloudbees.plugins.credentials.CredentialsProvider#findCredentialById}
+ * scoped to this build's {@link Run} — never from an env var the calling Jenkinsfile happens to have
+ * set. If the declared credential ID does not resolve, the build fails loudly (NFR-7) naming the
+ * missing credential; it never falls back to a placeholder or empty value. Non-secret paths keep the
+ * pre-existing behavior: an env var whose name matches the dotted path wins if present, otherwise
+ * the flattened effective-config value is used.</p>
  */
 public class ConfigTemplateSubstituteStep extends Step {
 
@@ -102,6 +108,7 @@ public class ConfigTemplateSubstituteStep extends Step {
             TaskListener listener = getContext().get(TaskListener.class);
             FilePath workspace = getContext().get(FilePath.class);
             EnvVars envVars = getContext().get(EnvVars.class);
+            Run<?, ?> run = getContext().get(Run.class);
 
             ConfigSetRepository configSetRepository = StepSupport.newRepository();
             ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
@@ -156,7 +163,8 @@ public class ConfigTemplateSubstituteStep extends Step {
             // than trusting that configTemplateValidate already ran earlier in this pipeline.
             StepSupport.validateOrThrow(effective, originalContent, listener);
 
-            String substituted = substitute(effective, originalContent, envVars);
+            Map<String, String> secretsManifest = StepSupport.mergedSecretsManifest(common, env);
+            String substituted = substitute(effective, originalContent, envVars, secretsManifest, run);
 
             if (TokenExtractor.containsAnyToken(substituted)) {
                 Set<String> remaining = TokenExtractor.extractTokenPaths(substituted);
@@ -182,7 +190,8 @@ public class ConfigTemplateSubstituteStep extends Step {
             return null;
         }
 
-        private String substitute(JsonObject effective, String content, EnvVars envVars) {
+        private String substitute(JsonObject effective, String content, EnvVars envVars,
+                                   Map<String, String> secretsManifest, Run<?, ?> run) throws AbortException {
             Map<String, JsonElement> flattened = JsonPaths.flatten(effective);
             String result = content;
             for (Map.Entry<String, JsonElement> entry : flattened.entrySet()) {
@@ -192,9 +201,16 @@ public class ConfigTemplateSubstituteStep extends Step {
                     continue;
                 }
                 String value;
-                if (envVars != null && envVars.containsKey(dottedPath)) {
-                    // Merge in a value already present in the calling Jenkinsfile's environment
-                    // (e.g. supplied via withCredentials) — this step does not resolve credentials itself.
+                String credentialId = secretsManifest.get(dottedPath);
+                if (credentialId != null) {
+                    // FR-13/FR-21: a manifest-declared secret path's real value is resolved EXCLUSIVELY
+                    // from the declared Jenkins credential ID — never from an env var, never the raw
+                    // (placeholder) JSON leaf. Fails the build loudly (NFR-7) if the credential is
+                    // missing/inaccessible rather than silently substituting anything else.
+                    value = StepSupport.resolveSecretOrThrow(dottedPath, credentialId, run);
+                } else if (envVars != null && envVars.containsKey(dottedPath)) {
+                    // Non-secret paths keep the pre-existing override behavior: a value already present
+                    // in the calling Jenkinsfile's environment wins over the flattened JSON leaf.
                     value = envVars.get(dottedPath);
                 } else {
                     value = JsonPaths.leafAsString(entry.getValue());
@@ -224,6 +240,7 @@ public class ConfigTemplateSubstituteStep extends Step {
             context.add(TaskListener.class);
             context.add(FilePath.class);
             context.add(EnvVars.class);
+            context.add(Run.class);
             return Collections.unmodifiableSet(context);
         }
 
