@@ -3,6 +3,7 @@ package io.github.retrokharkov1.configtemplatesync.model;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -109,5 +110,28 @@ public class ConfigSetTest {
                         + "\"B\":{\"Secret\":\"" + SecretPlaceholder.VALUE + "\"}}",
                 "shared credential reused", "alice", 1L);
         assertEquals(1, version);
+    }
+
+    @Test
+    public void removeSecretManifestEntry_removesABoundPathAndReturnsTrue() {
+        // OQ-1 CRUD completion: a bound secret path can be unbound again, no longer appearing in
+        // getSecretsManifest(), without disturbing any other manifest entry.
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        configSet.putSecretManifestEntry("A.Secret", "cred-a");
+        configSet.putSecretManifestEntry("B.Secret", "cred-b");
+
+        boolean removed = configSet.removeSecretManifestEntry("A.Secret");
+
+        assertTrue(removed);
+        assertFalse("removed path must no longer appear in the manifest",
+                configSet.getSecretsManifest().containsKey("A.Secret"));
+        assertEquals("unrelated manifest entries must be untouched",
+                "cred-b", configSet.getSecretsManifest().get("B.Secret"));
+    }
+
+    @Test
+    public void removeSecretManifestEntry_returnsFalseWhenPathWasNeverBound() {
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        assertFalse(configSet.removeSecretManifestEntry("Never.Bound"));
     }
 }
