@@ -4,16 +4,89 @@
     <l:main-panel>
       <st:bind var="proxy" value="${it}"/>
 
+      <style>
+        /* Scoped to this page only (never a global Jenkins button-style override) — button
+           spacing polish (owner report, 2026-09-01 UI-polish pass): consistent margin on all
+           sides so buttons never touch each other or the panel edge. */
+        .ctsync-page .jenkins-button { margin: 4px 6px 4px 0; }
+        .ctsync-page table.jenkins-table .jenkins-button { margin: 2px 4px; }
+        .ctsync-section-header { margin: 12px 0 4px; }
+        .ctsync-btn-row { margin: 4px 0 12px; }
+        /* "Add / update secret path" — one line, not stacked (owner report item 2).
+           `!important` on width is deliberate here: Jenkins core's own `.setting-input`/
+           `.jenkins-select` classes set an explicit `width: 100%`, which — being a real
+           `width` declaration, not just a flex-basis — wins over `flex: 1 1 ...` and forces
+           each child onto its own row regardless of flex-wrap. Scoped to this page only. */
+        .ctsync-secret-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; }
+        .ctsync-secret-form .ctsync-secret-path-input { flex: 1 1 240px; min-width: 180px; width: auto !important; }
+        .ctsync-secret-form .jenkins-select { flex: 0 0 auto; width: auto !important; }
+        .ctsync-secret-form .jenkins-select__input { width: auto !important; }
+        /* Compare interaction redesign (2026-09-01, owner report) — click-a-row-to-compare,
+           with no checkbox anywhere in the history table. The whole row is the click target,
+           so it needs a pointer cursor and a clear "currently being compared" highlight. */
+        .ctsync-history-row { cursor: pointer; }
+        .ctsync-history-row:hover { background-color: var(--table-hover-color, #f0f6ff); }
+        .ctsync-history-row--selected,
+        .ctsync-history-row--selected:hover { background-color: var(--table-highlight-color, #d9edf7); }
+        /* Button-layout convention pass (owner report, 2026-09-01): the primary/secondary save
+           action pair reads as a top-of-section action group and should sit right-aligned, the
+           same convention already used by this page's own Generate Template/Back row above —
+           not left-aligned in the page flow. */
+        .ctsync-btn-row--right { text-align: right; }
+        /* A banner that pairs a status message with a single follow-up action should present the
+           action on the opposite side from the message, not immediately inline after the text. */
+        .ctsync-banner-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+        /* Spacing fix (owner report, 2026-09-01): the compare-banner status text was reading as
+           crowded against the "Load into editor"/"Back to editing" buttons — give it its own
+           breathing room from the button group on both sides of the wrap breakpoint. */
+        .ctsync-banner-row > #compareBannerText { margin-right: 16px; }
+        /* Layout-fidelity pass (owner report, 2026-09-01): the "Env override" panel heading and
+           its primary save actions read as one action bar and belong on the same line,
+           right-aligned actions opposite the heading — not on a separate line below it. */
+        .ctsync-editor-header-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+        .ctsync-editor-header-row h3 { margin: 0; }
+        /* Responsive stacking (owner report, 2026-09-01): below this width the 3-panel merge
+           table stacks to a single column, preserving panel order (Global, Env override, Merged
+           result), and the version-history table degrades to a compact, labeled, one-value-per
+           -line row per version instead of overflowing or requiring horizontal scroll. */
+        @media (max-width: 1100px) {
+          .ctsync-page #threePanelTable,
+          .ctsync-page #threePanelTable tbody,
+          .ctsync-page #threePanelTable tr,
+          .ctsync-page #threePanelTable td { display: block; width: 100% !important; }
+          .ctsync-page #threePanelTable td { padding: 4px 0; }
+          .ctsync-page .ctsync-history-table thead { display: none; }
+          .ctsync-page .ctsync-history-table,
+          .ctsync-page .ctsync-history-table tbody,
+          .ctsync-page .ctsync-history-table tr,
+          .ctsync-page .ctsync-history-table td { display: block; width: 100% !important; }
+          .ctsync-page .ctsync-history-table tr { border-bottom: 1px solid var(--table-border-color, #ddd); padding: 6px 0; }
+          .ctsync-page .ctsync-history-table td { padding: 2px 4px; }
+          .ctsync-page .ctsync-history-table td[data-th]::before {
+            content: attr(data-th) ": ";
+            font-weight: 600;
+            display: inline-block;
+            min-width: 90px;
+          }
+          .ctsync-editor-header-row { justify-content: flex-start; }
+          /* At this width the banner's text and button group wrap onto separate lines, so the
+             right-margin gap above collapses to 0 — replace it with vertical breathing room. */
+          .ctsync-banner-row > #compareBannerText { margin-right: 0; margin-bottom: 8px; display: block; }
+        }
+      </style>
+
+      <div class="ctsync-page">
+
       <h1>${it.displayName}</h1>
       <j:if test="${!it.exists}">
-        <div class="alert alert-info">This env Config Set does not exist yet — Save creates it (FR-1).</div>
+        <div class="alert alert-info">This env Config Set does not exist yet — Save creates it.</div>
       </j:if>
 
       <p>
         Overrides Common Config Set:
         <j:choose>
           <j:when test="${it.commonPickerLocked}">
-            <code>${it.projectKey}-common</code> (locked after creation, FR-35)
+            <code>${it.projectKey}-common</code> (locked after creation)
           </j:when>
           <j:otherwise>
             <code>${it.projectKey}-common</code> (paired via projectKey, set at creation)
@@ -21,14 +94,53 @@
         </j:choose>
       </p>
 
+      <h2>Env override version history (independent of Global's)</h2>
+      <p>Click a row to compare it against the Env-override editor's current draft (no checkbox
+         required — click any row again to return to editing).</p>
+      <table class="jenkins-table ctsync-history-table" style="width:100%">
+        <thead><tr><th>Version</th><th>Created</th><th>Created by</th><th>Note</th><th>Active</th><th>Actions</th></tr></thead>
+        <tbody>
+          <j:forEach var="v" items="${it.versions}">
+            <tr id="historyRow-${v.versionNumber}" class="ctsync-history-row"
+                tabindex="0" role="button"
+                onclick="selectHistoryRow(${v.versionNumber});"
+                onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectHistoryRow(${v.versionNumber}); }">
+              <td data-th="Version">v${v.versionNumber}</td>
+              <td data-th="Created">${v.timestampEpochMillis}</td>
+              <td data-th="Created by">${v.author}</td>
+              <td data-th="Note">${v.note}</td>
+              <td data-th="Active">
+                <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
+                  &#9679; active
+                </j:if>
+              </td>
+              <td data-th="Actions">
+                <j:choose>
+                  <j:when test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
+                    <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
+                            disabled="disabled" data-always-disabled="true"
+                            title="Already the active version">Activate</button>
+                  </j:when>
+                  <j:otherwise>
+                    <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
+                            title="Activate version ${v.versionNumber} without changing the editor content"
+                            onclick="event.stopPropagation(); activateVersion(${v.versionNumber});">Activate</button>
+                  </j:otherwise>
+                </j:choose>
+              </td>
+            </tr>
+          </j:forEach>
+        </tbody>
+      </table>
+
       <!-- FR-41/44: page-level action, deliberately NOT a 4th mode of the Env-override panel's own
            [Editing]/[Compare] row — see wireframe-layout.md's reasoning note. Clicking it temporarily
            replaces the whole 3-panel table below with one full-width read-only panel. -->
-      <div style="text-align:right;margin-bottom:4px">
+      <div class="ctsync-btn-row" style="text-align:right">
         <j:choose>
           <j:when test="${it.templateAvailable}">
             <button type="button" id="generateTemplateBtn" class="jenkins-button"
-                   title="Show a copy-paste-ready tokenized EFFECTIVE (merged) template from both Config Sets' ACTIVE versions (FR-15b)"
+                   title="Show a copy-paste-ready tokenized EFFECTIVE (merged) template from both Config Sets' ACTIVE versions"
                    onclick="showGeneratedTemplateView();">&#128203; Generate Template</button>
           </j:when>
           <j:otherwise>
@@ -43,7 +155,7 @@
 
       <div id="generateBanner" class="alert alert-info" style="display:none">
         Effective template from <code>${it.projectKey}-common</code> ACTIVE ⊕ <code>${it.displayName}</code>
-        ACTIVE — NOT the Env-override panel's in-progress unsaved edits (FR-16).
+        ACTIVE — NOT the Env-override panel's in-progress unsaved edits.
       </div>
 
       <div id="generatedTemplatePanel" style="display:none">
@@ -62,17 +174,32 @@
           <div id="globalEditor" style="height:380px;border:1px solid #ccc"/>
         </td>
         <td style="width:33%;vertical-align:top;padding:4px">
-          <h3>Env override</h3>
-          <div>
+          <div class="ctsync-editor-header-row">
+            <h3>Env override</h3>
+            <span class="ctsync-btn-row" style="margin:0">
+              <button type="submit" form="ctsyncSaveForm" id="saveBtn" class="jenkins-button jenkins-button--primary"
+                      title="Save the editor content as a new version">Save</button>
+              <button type="submit" form="ctsyncSaveForm" id="saveActivateBtn"
+                      onclick="document.getElementById('activateFlag').value='true';"
+                      class="jenkins-button"
+                      title="Save the editor content as a new version and immediately activate it">Save &amp; Activate</button>
+            </span>
+          </div>
+          <div class="ctsync-btn-row">
             <button type="button" id="modeEditBtn"
                    class="jenkins-button jenkins-button--primary" title="Switch to the editable JSON editor"
                    onclick="switchToEditMode();">&#9998; Editing</button>
-            <button type="button" id="modeCompareBtn"
-                   class="jenkins-button" title="Compare the two versions checked below in the history table"
-                   onclick="switchToCompareMode();">&#8644; Compare</button>
           </div>
-          <div id="compareBanner" class="alert alert-info" style="display:none">
-            Select exactly two versions below, then click "Compare".
+          <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
+            <span id="compareBannerText"/>
+            <span>
+              <button type="button" id="loadComparedBtn" class="jenkins-button jenkins-button--primary"
+                     title="Accept the version being compared into the editor as the new draft"
+                     onclick="loadComparedIntoEditor();">Load into editor</button>
+              <button type="button" id="backToEditingBtn" class="jenkins-button"
+                     title="Discard the comparison and return to editing — the draft is left unchanged"
+                     onclick="switchToEditMode();">Back to editing</button>
+            </span>
           </div>
           <div id="overrideEditor" style="height:380px;border:1px solid #ccc"/>
         </td>
@@ -85,80 +212,54 @@
         </td>
       </tr></table>
 
-      <form method="post" action="save" onsubmit="return prepareSubmit();">
+      <form method="post" action="save" id="ctsyncSaveForm" onsubmit="return prepareSubmit();">
         <textarea name="content" id="contentField" style="display:none"/>
         <f:entry title="Change note (required)">
           <input class="setting-input" type="text" name="note" required="required"/>
         </f:entry>
-        <div style="margin-top:1em">
-          <button type="submit" id="saveBtn" class="jenkins-button jenkins-button--primary"
-                  title="Save the editor content as a new version">Save</button>
-          <button type="submit" id="saveActivateBtn"
-                  onclick="document.getElementById('activateFlag').value='true';"
-                  class="jenkins-button"
-                  title="Save the editor content as a new version and immediately activate it">Save &amp; Activate</button>
-        </div>
         <input type="hidden" name="activate" id="activateFlag" value=""/>
       </form>
 
-      <h2>Secrets manifest (OQ-1)</h2>
+      <h2>Secrets manifest</h2>
       <p>A path listed here is structurally locked: the JSON editor above may only hold the literal
          <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
          value is supplied only via the Jenkins credential picked below, never typed here. This
          manifest is independent of the paired Common Config Set's manifest — env overrides declare
          their own secret paths.</p>
       <table class="jenkins-table" style="width:60%">
-        <thead><tr><th>Dotted path</th><th>Credential</th></tr></thead>
+        <thead><tr><th>Dotted path</th><th>Credential</th><th/></tr></thead>
         <tbody>
           <j:if test="${it.exists}">
             <j:forEach var="entry" items="${it.configSet.secretsManifest.entrySet()}">
               <tr>
                 <td>${entry.key}</td>
                 <td>${entry.value}</td>
+                <td>
+                  <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
+                          data-secret-path="${entry.key}"
+                          title="Remove this secret path binding"
+                          onclick="removeSecret(this.getAttribute('data-secret-path'));">&#128465; Remove</button>
+                </td>
               </tr>
             </j:forEach>
           </j:if>
         </tbody>
       </table>
       <f:entry title="Add / update secret path">
-        <input class="setting-input" type="text" id="secretPath" placeholder="database.password"/>
-        <div class="jenkins-select">
-          <select class="jenkins-select__input" id="secretCredentialId">
-            <j:forEach var="cid" items="${it.availableCredentialIds}">
-              <option value="${cid}">${cid}</option>
-            </j:forEach>
-          </select>
+        <div class="ctsync-secret-form">
+          <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
+          <div class="jenkins-select">
+            <select class="jenkins-select__input" id="secretCredentialId">
+              <j:forEach var="cid" items="${it.availableCredentialIds}">
+                <option value="${cid}">${cid}</option>
+              </j:forEach>
+            </select>
+          </div>
+          <button type="button" class="jenkins-button"
+                  title="Bind the selected credential to this secret path"
+                  onclick="addSecret();">Bind credential</button>
         </div>
-        <button type="button" class="jenkins-button"
-                title="Bind the selected credential to this secret path"
-                onclick="addSecret();">Bind credential</button>
       </f:entry>
-
-      <h2>Env override version history (independent of Global's, FR-39)</h2>
-      <table class="jenkins-table" style="width:100%">
-        <thead><tr><th/><th>Version</th><th>When</th><th>Author</th><th>Note</th><th>Status</th><th/></tr></thead>
-        <tbody>
-          <j:forEach var="v" items="${it.versions}">
-            <tr>
-              <td><input type="checkbox" class="compareCheckbox" value="${v.versionNumber}"/></td>
-              <td>v${v.versionNumber}</td>
-              <td>${v.timestampEpochMillis}</td>
-              <td>${v.author}</td>
-              <td>${v.note}</td>
-              <td>
-                <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
-                  &#9679; active
-                </j:if>
-              </td>
-              <td>
-                <button type="button" class="jenkins-button"
-                        title="Activate version ${v.versionNumber} without changing the editor content"
-                        onclick="activateVersion(${v.versionNumber})">Activate</button>
-              </td>
-            </tr>
-          </j:forEach>
-        </tbody>
-      </table>
 
       <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
       <link rel="stylesheet" href="${rootURL}/plugin/config-template-sync/monaco/vs/editor/editor.main.css"/>
@@ -176,6 +277,11 @@
         // Env-override editor region (#overrideEditor), never a second editor.
         var editMode = true;
         var lastEditContent = __overrideSeed;
+        // Compare interaction redesign (2026-09-01): which single history version (if any) is
+        // currently being diffed against the Env-override draft — click-to-select, no checkbox.
+        // Re-clicking this same row exits back to edit mode.
+        var selectedCompareVersion = null;
+        var lastComparedVersionContent = '';
 
         require.config({ paths: { vs: '${rootURL}/plugin/config-template-sync/monaco/vs' } });
         require(['vs/editor/editor.main'], function () {
@@ -249,48 +355,89 @@
           attachOverrideChangeListener();
           recomputeMerge();
           editMode = true;
+          clearHistorySelection();
           document.getElementById('modeEditBtn').className = 'jenkins-button jenkins-button--primary';
-          document.getElementById('modeCompareBtn').className = 'jenkins-button';
           document.getElementById('compareBanner').style.display = 'none';
         }
 
-        function switchToCompareMode() {
-          var checked = document.querySelectorAll('.compareCheckbox:checked');
-          if (checked.length !== 2) {
-            document.getElementById('compareBanner').style.display = 'block';
+        // Click-driven Compare (2026-09-01 redesign, owner report): no checkbox anywhere —
+        // clicking an unselected version row diffs the CURRENT Env-override DRAFT against that
+        // one version; re-clicking the already-selected row deselects it (back to edit mode);
+        // clicking a different row while already comparing swaps the right-hand pane to the
+        // newly clicked version, without ever changing the left-hand pane (the draft is frozen
+        // at the moment Compare mode is entered — the plain editor is swapped out for the
+        // read-only diff editor, so there is no live typing to reflect while comparing anyway).
+        function selectHistoryRow(version) {
+          if (selectedCompareVersion === version) {
+            switchToEditMode();
             return;
           }
-          var v1 = parseInt(checked[0].value, 10);
-          var v2 = parseInt(checked[1].value, 10);
-          var oldVersion = Math.min(v1, v2);
-          var newVersion = Math.max(v1, v2);
-          // JS-proxy args are sent as a single JSON-string payload, not positional oldVersion/newVersion
-          // args — see ConfigSetPage#doActivate's javadoc for why (this Stapler version's JS-proxy
-          // dispatcher was empirically found to only reliably bind a single String-JSON parameter).
-          proxy.compareVersions(JSON.stringify({ oldVersion: oldVersion, newVersion: newVersion }), function (t) {
+          // JS-proxy args are sent as a single JSON-string payload, not a positional int arg — see
+          // ConfigSetPage#doActivate's javadoc for why (this Stapler version's JS-proxy dispatcher
+          // was empirically found to only reliably bind a single String-JSON parameter).
+          proxy.compareVersions(JSON.stringify({ version: version }), function (t) {
             var r = t.responseObject();
             if (!r.ok) {
               alert(r.error);
               return;
             }
-            if (overrideEditor) {
-              lastEditContent = overrideEditor.getValue();
-              overrideEditor.dispose();
-              overrideEditor = null;
-            }
-            var oldModel = monaco.editor.createModel(r.oldContent, 'json');
-            var newModel = monaco.editor.createModel(r.newContent, 'json');
-            diffEditor = monaco.editor.createDiffEditor(document.getElementById('overrideEditor'), {
-              readOnly: true,
-              automaticLayout: true,
-              renderSideBySide: true
-            });
-            diffEditor.setModel({ original: oldModel, modified: newModel });
-            editMode = false;
-            document.getElementById('modeEditBtn').className = 'jenkins-button';
-            document.getElementById('modeCompareBtn').className = 'jenkins-button jenkins-button--primary';
-            document.getElementById('compareBanner').style.display = 'none';
+            enterCompareMode(version, r.content);
           });
+        }
+
+        function enterCompareMode(version, versionContent) {
+          if (overrideEditor) {
+            lastEditContent = overrideEditor.getValue();
+            overrideEditor.dispose();
+            overrideEditor = null;
+          }
+          if (diffEditor) {
+            diffEditor.dispose();
+            diffEditor = null;
+          }
+          var draftModel = monaco.editor.createModel(lastEditContent, 'json');
+          var versionModel = monaco.editor.createModel(versionContent, 'json');
+          diffEditor = monaco.editor.createDiffEditor(document.getElementById('overrideEditor'), {
+            readOnly: true,
+            automaticLayout: true,
+            renderSideBySide: true
+          });
+          diffEditor.setModel({ original: draftModel, modified: versionModel });
+          editMode = false;
+          selectedCompareVersion = version;
+          lastComparedVersionContent = versionContent;
+          highlightSelectedHistoryRow(version);
+          document.getElementById('modeEditBtn').className = 'jenkins-button';
+          document.getElementById('compareBannerText').textContent =
+              'Comparing the current (unsaved) Env-override draft against v' + version + '.';
+          document.getElementById('compareBanner').style.display = 'block';
+        }
+
+        // Accepts the version currently being compared into the Env-override draft and returns to
+        // edit mode.
+        function loadComparedIntoEditor() {
+          if (!selectedCompareVersion) { return; }
+          lastEditContent = lastComparedVersionContent;
+          switchToEditMode();
+        }
+
+        function highlightSelectedHistoryRow(version) {
+          clearHistoryHighlightOnly();
+          var row = document.getElementById('historyRow-' + version);
+          if (row) { row.className = 'ctsync-history-row ctsync-history-row--selected'; }
+        }
+
+        function clearHistoryHighlightOnly() {
+          var rows = document.querySelectorAll('.ctsync-history-row--selected');
+          for (var i = 0; i &lt; rows.length; i++) {
+            rows[i].className = 'ctsync-history-row';
+          }
+        }
+
+        function clearHistorySelection() {
+          selectedCompareVersion = null;
+          lastComparedVersionContent = '';
+          clearHistoryHighlightOnly();
         }
 
         function recomputeMerge() {
@@ -311,6 +458,11 @@
         function prepareSubmit() {
           document.getElementById('contentField').value =
               (editMode &amp;&amp; overrideEditor) ? overrideEditor.getValue() : lastEditContent;
+          // FR-46: disable both save buttons for the duration of the submission — this is a
+          // classic form POST, not AJAX, so the page navigates away/reloads on completion
+          // regardless and there is no success path that needs to re-enable them.
+          document.getElementById('saveBtn').disabled = true;
+          document.getElementById('saveActivateBtn').disabled = true;
           return true;
         }
 
@@ -360,11 +512,30 @@
               generatedTemplateEditor ? generatedTemplateEditor.getValue() : lastGeneratedTemplateText);
         }
 
+        // FR-46: only one activate call may be in flight at a time for this Config Set — disable
+        // EVERY Activate button (not just the one clicked) before the call, and re-enable them all
+        // on failure (success reloads the page, so there's nothing to re-enable in that path).
+        function setActivateButtonsDisabled(disabled) {
+          var buttons = document.querySelectorAll('.ctsync-activate-btn');
+          for (var i = 0; i &lt; buttons.length; i++) {
+            // FR-47: the already-active row's button is permanently disabled — never re-enable it
+            // as a side effect of the busy-toggle finishing.
+            if (buttons[i].getAttribute('data-always-disabled') === 'true') { continue; }
+            buttons[i].disabled = disabled;
+          }
+        }
+
         function activateVersion(v) {
+          setActivateButtonsDisabled(true);
           // See compareVersions' comment above: single JSON-string payload, not a plain int arg.
           proxy.activate(JSON.stringify({ version: v }), function (t) {
             var r = t.responseObject();
-            if (r.ok) { location.reload(); } else { alert(r.error); }
+            if (r.ok) {
+              location.reload();
+            } else {
+              setActivateButtonsDisabled(false);
+              alert(r.error);
+            }
           });
         }
 
@@ -376,7 +547,19 @@
             if (r.ok) { location.reload(); } else { alert(r.error); }
           });
         }
+
+        // OQ-1 CRUD completion: unbind a previously-registered secret path. Reloads the page on
+        // success (same after-action shape as addSecret above) so the manifest table reflects the
+        // removal without a stale row lingering client-side.
+        function removeSecret(path) {
+          proxy.removeSecret(JSON.stringify({ path: path }), function (t) {
+            var r = t.responseObject();
+            if (r.ok) { location.reload(); } else { alert(r.error); }
+          });
+        }
       </script>
+
+      </div>
     </l:main-panel>
   </l:layout>
 </j:jelly>
