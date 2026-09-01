@@ -1,0 +1,39 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
+  <l:layout title="${it.projectKey} — Config Templates">
+    <l:main-panel>
+      <h1>${it.projectKey}</h1>
+      <p><a href="common">Open common (global) Config Set &#8594;</a></p>
+
+      <h2>Env Config Sets (FR-34)</h2>
+      <table class="jenkins-table sortable" style="width:100%">
+        <thead>
+          <tr>
+            <th>Environment</th>
+            <th>Active version</th>
+          </tr>
+        </thead>
+        <tbody>
+          <j:forEach var="cs" items="${it.envConfigSets}">
+            <tr>
+              <td><a href="${cs.environment}/">${cs.environment}</a></td>
+              <td>
+                <j:choose>
+                  <j:when test="${cs.activeVersion != null}">v${cs.activeVersion.versionNumber}</j:when>
+                  <j:otherwise>(no active version)</j:otherwise>
+                </j:choose>
+              </td>
+            </tr>
+          </j:forEach>
+        </tbody>
+      </table>
+
+      <h3>New Env Config Set</h3>
+      <p>Overrides common Config Set: <code>${it.projectKey}-common</code> (structural pairing, FR-35)</p>
+      <input type="text" id="newEnvName" placeholder="environment (e.g. dev)" class="setting-input"/>
+      <button type="button" class="jenkins-button jenkins-button--primary"
+              title="Open this environment's Config Set editor, creating it on first Save"
+              onclick="window.location.href = encodeURIComponent(document.getElementById('newEnvName').value) + '/';">Open / Create</button>
+    </l:main-panel>
+  </l:layout>
+</j:jelly>
