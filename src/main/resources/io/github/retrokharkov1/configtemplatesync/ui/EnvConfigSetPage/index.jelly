@@ -386,6 +386,15 @@
         }
 
         function enterCompareMode(version, versionContent) {
+          // Root-cause fix (owner report, live-recompute regression): onDidChangeModelContent's
+          // debounce (see attachOverrideChangeListener) can still have a pending setTimeout in
+          // flight from a keystroke typed just before this row was clicked. If left running, it
+          // fires 300ms later against a NOW-disposed/null overrideEditor
+          // (recomputeMerge -> overrideEditor.getValue() -> "Cannot read properties of null"),
+          // an uncaught exception — reproduced live via Playwright: type, then immediately click a
+          // history row before the debounce elapses. Cancel it here, at the exact moment
+          // overrideEditor is disposed, same as the diffEditor disposal just below.
+          clearTimeout(debounceHandle);
           if (overrideEditor) {
             lastEditContent = overrideEditor.getValue();
             overrideEditor.dispose();
@@ -441,6 +450,10 @@
         }
 
         function recomputeMerge() {
+          // Defensive guard for the same race the debounce-cancellation fix above targets: if any
+          // other path ever schedules/invokes a recompute while overrideEditor is transiently
+          // disposed (Compare mode), no-op instead of throwing on a null dereference.
+          if (!overrideEditor) { return; }
           proxy.previewMerge(overrideEditor.getValue(), function (t) {
             var r = t.responseObject();
             var indicator = document.getElementById('mergedStaleIndicator');
