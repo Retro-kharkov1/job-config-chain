@@ -102,6 +102,20 @@ public class ConfigSet implements Serializable {
                 Objects.requireNonNull(credentialId, "credentialId"));
     }
 
+    /**
+     * Removes a previously-bound secrets-manifest entry (OQ-1 CRUD completion). A pure in-place
+     * mutation of this Config Set's manifest map — mirrors {@link #putSecretManifestEntry} exactly
+     * (no new {@link ConfigSetVersion} is created; the manifest is metadata alongside the version
+     * history, not itself versioned), so the caller persists via the same
+     * {@code ConfigSetRepository#save(ConfigSet)} call already used after a put.
+     *
+     * @return {@code true} if an entry for {@code dottedPath} existed and was removed, {@code false}
+     *         if there was nothing bound at that path.
+     */
+    public boolean removeSecretManifestEntry(String dottedPath) {
+        return secretsManifest.remove(Objects.requireNonNull(dottedPath, "dottedPath")) != null;
+    }
+
     public List<ConfigSetVersion> getVersions() {
         return Collections.unmodifiableList(versions);
     }

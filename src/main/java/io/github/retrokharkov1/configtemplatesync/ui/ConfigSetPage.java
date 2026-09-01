@@ -321,6 +321,62 @@ public abstract class ConfigSetPage {
     }
 
     /**
+     * AJAX: removes (unbinds) a secrets-manifest entry — the CRUD-completion counterpart to
+     * {@link #doRegisterSecret} (OQ-1 follow-up, 2026-09-01). A pure manifest-metadata mutation,
+     * same persistence shape as add: mutate {@link ConfigSet#removeSecretManifestEntry(String)} in
+     * place, then {@code repository.save(configSet)} — no new {@link ConfigSetVersion} is created,
+     * exactly mirroring how {@link #addSecretImpl} persists a put (see that method's/{@link
+     * ConfigSet#removeSecretManifestEntry}'s javadoc for why the manifest is not itself versioned).
+     *
+     * <p>Named {@code doUnbindSecret} (URL segment {@code unbindSecret}), deliberately NOT
+     * {@code doRemoveSecret}, to avoid colliding with the
+     * {@code @JavaScriptMethod(name = "removeSecret")} sibling below — see
+     * {@link #doActivateVersion(int)}'s javadoc for the full root-cause chain behind why that
+     * collision matters (same reasoning that named the add pair {@code doRegisterSecret}/
+     * {@code addSecret} rather than {@code doAddSecret}/{@code addSecret}).</p>
+     */
+    public JSONObject doUnbindSecret(@QueryParameter String path) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        return removeSecretImpl(path);
+    }
+
+    /**
+     * JS-proxy-facing sibling of {@link #doUnbindSecret}; exposed as {@code proxy.removeSecret(...)}.
+     * See {@link #doActivateVersion(int)} javadoc.
+     */
+    @JavaScriptMethod(name = "removeSecret")
+    public JSONObject jsRemoveSecret(String payloadJson) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        JsonObject payload = parseJsPayloadObject(payloadJson);
+        if (payload == null || !payload.has("path")) {
+            JSONObject result = new JSONObject();
+            result.put("ok", false);
+            result.put("error", "Malformed request: expected {\"path\": <string>}");
+            return result;
+        }
+        return removeSecretImpl(payload.get("path").getAsString());
+    }
+
+    private JSONObject removeSecretImpl(String path) {
+        JSONObject result = new JSONObject();
+        if (path == null || path.trim().isEmpty()) {
+            result.put("ok", false);
+            result.put("error", "A dotted path is required");
+            return result;
+        }
+        ConfigSet configSet = getConfigSet();
+        if (configSet == null || !configSet.getSecretsManifest().containsKey(path)) {
+            result.put("ok", false);
+            result.put("error", "No such secret path bound: " + path);
+            return result;
+        }
+        configSet.removeSecretManifestEntry(path);
+        repository.save(configSet);
+        result.put("ok", true);
+        return result;
+    }
+
+    /**
      * Returns a clear rejection message if the Config Set's currently-active version already stores
      * a real (non-placeholder) value at {@code path}, or {@code null} if it is safe to newly declare
      * that path secret (path absent from the active content, or already holding the placeholder).
@@ -360,37 +416,47 @@ public abstract class ConfigSetPage {
     }
 
     /**
-     * AJAX: fetches two historical versions' raw {@code contentJson} so the client can feed them
-     * into {@code monaco.editor.createDiffEditor} as the "Compare" mode of the SAME editor region
-     * (wireframe `docs/design/wireframe-layout.md` — Compare is a mode toggle, never a second
-     * editor). Never throws on a bad/missing version number; returns a structured error instead so
-     * the client can surface it without a page-level failure.
+     * AJAX: fetches ONE historical version's raw {@code contentJson} so the client can diff it
+     * against the current (unsaved) editor draft in {@code monaco.editor.createDiffEditor}, as the
+     * "Compare" mode of the SAME editor region (wireframe `docs/design/wireframe-layout.md` —
+     * Compare is a mode toggle, never a second editor). Never throws on a bad/missing version
+     * number; returns a structured error instead so the client can surface it without a
+     * page-level failure.
+     *
+     * <p><b>Interaction redesign (2026-09-01, owner report):</b> the prior checkbox-based
+     * "select exactly two versions, then click Compare" flow was replaced with a simpler
+     * click-to-compare interaction — there is no checkbox at all; clicking a version row directly
+     * opens a diff of {@code draftBody} (the live, still-unsaved editor content) against that ONE
+     * clicked version. This endpoint's signature therefore dropped from two explicit version
+     * numbers to one — the "other side" of the diff is the client's own already-in-memory draft
+     * buffer, which never needs a round-trip to the server at all.</p>
      *
      * <p>Named {@code doDiffVersions} (URL segment {@code diffVersions}), deliberately NOT
      * {@code doCompareVersions}, to avoid colliding with the
      * {@code @JavaScriptMethod(name = "compareVersions")} sibling below — see
      * {@link #doActivateVersion(int)}'s javadoc for the full root-cause chain.</p>
      */
-    public JSONObject doDiffVersions(@QueryParameter int oldVersion, @QueryParameter int newVersion) {
+    public JSONObject doDiffVersions(@QueryParameter int version) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        return compareVersionsImpl(oldVersion, newVersion);
+        return compareVersionsImpl(version);
     }
 
     /**
      * JS-proxy-facing sibling of {@link #doDiffVersions}; exposed as {@code proxy.compareVersions(...)}.
-     * See {@link #doActivateVersion(int)} javadoc.
+     * See {@link #doActivateVersion(int)} javadoc and {@link #doDiffVersions(int)}'s 2026-09-01
+     * interaction-redesign note for why this only takes one version number now.
      */
     @JavaScriptMethod(name = "compareVersions")
     public JSONObject jsCompareVersions(String payloadJson) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         JsonObject payload = parseJsPayloadObject(payloadJson);
-        if (payload == null || !payload.has("oldVersion") || !payload.has("newVersion")) {
+        if (payload == null || !payload.has("version")) {
             JSONObject result = new JSONObject();
             result.put("ok", false);
-            result.put("error", "Malformed request: expected {\"oldVersion\": <number>, \"newVersion\": <number>}");
+            result.put("error", "Malformed request: expected {\"version\": <number>}");
             return result;
         }
-        return compareVersionsImpl(payload.get("oldVersion").getAsInt(), payload.get("newVersion").getAsInt());
+        return compareVersionsImpl(payload.get("version").getAsInt());
     }
 
     /**
@@ -410,7 +476,7 @@ public abstract class ConfigSetPage {
         }
     }
 
-    private JSONObject compareVersionsImpl(int oldVersion, int newVersion) {
+    private JSONObject compareVersionsImpl(int version) {
         JSONObject result = new JSONObject();
         ConfigSet configSet = getConfigSet();
         if (configSet == null) {
@@ -418,18 +484,15 @@ public abstract class ConfigSetPage {
             result.put("error", "No such Config Set");
             return result;
         }
-        ConfigSetVersion oldV = configSet.getVersion(oldVersion);
-        ConfigSetVersion newV = configSet.getVersion(newVersion);
-        if (oldV == null || newV == null) {
+        ConfigSetVersion v = configSet.getVersion(version);
+        if (v == null) {
             result.put("ok", false);
-            result.put("error", "No such version(s): " + oldVersion + ", " + newVersion);
+            result.put("error", "No such version: " + version);
             return result;
         }
         result.put("ok", true);
-        result.put("oldVersion", oldVersion);
-        result.put("newVersion", newVersion);
-        result.put("oldContent", oldV.getContentJson());
-        result.put("newContent", newV.getContentJson());
+        result.put("version", version);
+        result.put("content", v.getContentJson());
         return result;
     }
 
