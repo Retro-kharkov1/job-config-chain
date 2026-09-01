@@ -9,6 +9,11 @@ import jenkins.model.Jenkins;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Persists {@link ConfigSet}s as one {@code hudson.XmlFile}/{@code XStream2} document per Config
@@ -55,6 +60,70 @@ public class ConfigSetRepository {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to save ConfigSet " + configSet.getStorageKey(), e);
         }
+    }
+
+    /**
+     * Lists every persisted common Config Set (used by the global "Config Templates" admin list
+     * view, FR-30). Storage-key-driven, not a free-text scan — mirrors {@link ConfigSet#getStorageKey()}'s
+     * {@code <projectKey>--common} convention.
+     */
+    public List<ConfigSet> listAllCommon() {
+        List<ConfigSet> result = new ArrayList<>();
+        for (File f : listXmlFiles()) {
+            String name = baseName(f);
+            if (name.endsWith("--common")) {
+                ConfigSet loaded = load(name);
+                if (loaded != null) {
+                    result.add(loaded);
+                }
+            }
+        }
+        result.sort(Comparator.comparing(ConfigSet::getProjectKey));
+        return result;
+    }
+
+    /**
+     * Lists every persisted env Config Set for the given project (used by the env-level admin list
+     * view, FR-34).
+     */
+    public List<ConfigSet> listEnv(String projectKey) {
+        String prefix = projectKey + "--env--";
+        List<ConfigSet> result = new ArrayList<>();
+        for (File f : listXmlFiles()) {
+            String name = baseName(f);
+            if (name.startsWith(prefix)) {
+                ConfigSet loaded = load(name);
+                if (loaded != null) {
+                    result.add(loaded);
+                }
+            }
+        }
+        result.sort(Comparator.comparing(ConfigSet::getEnvironment));
+        return result;
+    }
+
+    /** Distinct project keys across every persisted Config Set of either role (NFR-5 portability). */
+    public Set<String> listProjectKeys() {
+        Set<String> keys = new LinkedHashSet<>();
+        for (File f : listXmlFiles()) {
+            String name = baseName(f);
+            if (name.endsWith("--common")) {
+                keys.add(name.substring(0, name.length() - "--common".length()));
+            } else if (name.contains("--env--")) {
+                keys.add(name.substring(0, name.indexOf("--env--")));
+            }
+        }
+        return keys;
+    }
+
+    private File[] listXmlFiles() {
+        File[] files = baseDir.listFiles((dir, name) -> name.endsWith(".xml"));
+        return files == null ? new File[0] : files;
+    }
+
+    private String baseName(File f) {
+        String name = f.getName();
+        return name.substring(0, name.length() - ".xml".length());
     }
 
     private ConfigSet load(String storageKey) {
