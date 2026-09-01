@@ -19,11 +19,31 @@
         <button type="button" id="modeCompareBtn"
                class="jenkins-button" title="Compare the two versions checked below in the history table"
                onclick="switchToCompareMode();">&#8644; Compare selected versions</button>
+        <j:choose>
+          <j:when test="${it.templateAvailable}">
+            <button type="button" id="modeGenerateBtn"
+                   class="jenkins-button" title="Show a copy-paste-ready tokenized template from the ACTIVE version (FR-15a)"
+                   onclick="switchToGenerateMode();">&#128203; Generate Template</button>
+          </j:when>
+          <j:otherwise>
+            <button type="button" id="modeGenerateBtn"
+                   class="jenkins-button" disabled="disabled"
+                   title="no active version yet">&#128203; Generate Template</button>
+          </j:otherwise>
+        </j:choose>
       </div>
       <div id="compareBanner" class="alert alert-info" style="display:none">
         Select exactly two versions in the history table below, then click "Compare selected versions".
       </div>
+      <div id="generateBanner" class="alert alert-info" style="display:none">
+        Common-only template from the ACTIVE version — NOT this box's unsaved edits, if any (FR-16).
+      </div>
       <div id="monacoEditor" style="height:420px;border:1px solid #ccc"/>
+      <div id="generateCopyRow" style="display:none;margin-top:4px">
+        <button type="button" id="copyTemplateBtn" class="jenkins-button"
+                title="Copy the generated template to the clipboard"
+                onclick="copyGeneratedTemplate();">&#128203; Copy to clipboard</button>
+      </div>
 
       <form method="post" action="save" onsubmit="return prepareSubmit();">
         <textarea name="content" id="contentField" style="display:none"/>
@@ -109,6 +129,10 @@
         // mode toggle, never a second editor instance (wireframe structural principle).
         var editMode = true;
         var lastEditContent = __seed;
+        // "Generate Template" is a third mode of the SAME editor box (wireframe v2, FR-40/42) —
+        // not a separate component. Tracked independently of editMode/diffEditor above.
+        var generateMode = false;
+        var lastGeneratedTemplateText = '';
 
         require.config({ paths: { vs: '${rootURL}/plugin/config-template-sync/monaco/vs' } });
         require(['vs/editor/editor.main'], function () {
@@ -163,6 +187,7 @@
         function switchToEditMode() {
           if (editMode) { return; }
           if (diffEditor) { diffEditor.dispose(); diffEditor = null; }
+          if (editor) { editor.dispose(); editor = null; }
           editor = monaco.editor.create(document.getElementById('monacoEditor'), {
             value: lastEditContent,
             language: 'json',
@@ -170,9 +195,13 @@
           });
           formatEditorContent(editor);
           editMode = true;
+          generateMode = false;
           document.getElementById('modeEditBtn').className = 'jenkins-button jenkins-button--primary';
           document.getElementById('modeCompareBtn').className = 'jenkins-button';
+          document.getElementById('modeGenerateBtn').className = 'jenkins-button';
           document.getElementById('compareBanner').style.display = 'none';
+          document.getElementById('generateBanner').style.display = 'none';
+          document.getElementById('generateCopyRow').style.display = 'none';
         }
 
         function switchToCompareMode() {
@@ -208,10 +237,54 @@
             });
             diffEditor.setModel({ original: oldModel, modified: newModel });
             editMode = false;
+            generateMode = false;
             document.getElementById('modeEditBtn').className = 'jenkins-button';
             document.getElementById('modeCompareBtn').className = 'jenkins-button jenkins-button--primary';
+            document.getElementById('modeGenerateBtn').className = 'jenkins-button';
             document.getElementById('compareBanner').style.display = 'none';
+            document.getElementById('generateBanner').style.display = 'none';
+            document.getElementById('generateCopyRow').style.display = 'none';
           });
+        }
+
+        // FR-40/42/44: swaps the SAME editor box into a read-only Monaco instance seeded with the
+        // walked-and-tokenized ACTIVE version content. Zero-argument proxy.generateTemplate() call
+        // (server-side signature has no overlayJson/contentJson parameter at all — FR-16) so there
+        // is structurally no way this can read an unsaved draft.
+        function switchToGenerateMode() {
+          proxy.generateTemplate(function (t) {
+            var r = t.responseObject();
+            if (!r.ok) {
+              alert(r.error);
+              return;
+            }
+            if (editor) { lastEditContent = editor.getValue(); editor.dispose(); editor = null; }
+            if (diffEditor) { diffEditor.dispose(); diffEditor = null; }
+            lastGeneratedTemplateText = JSON.stringify(r.template, null, 2);
+            editor = monaco.editor.create(document.getElementById('monacoEditor'), {
+              value: lastGeneratedTemplateText,
+              language: 'json',
+              readOnly: true,
+              automaticLayout: true
+            });
+            formatEditorContent(editor);
+            editMode = false;
+            generateMode = true;
+            document.getElementById('modeEditBtn').className = 'jenkins-button';
+            document.getElementById('modeCompareBtn').className = 'jenkins-button';
+            document.getElementById('modeGenerateBtn').className = 'jenkins-button jenkins-button--primary';
+            document.getElementById('compareBanner').style.display = 'none';
+            document.getElementById('generateBanner').style.display = 'block';
+            document.getElementById('generateCopyRow').style.display = 'block';
+          });
+        }
+
+        // FR-42: standard browser Clipboard API, copies the exact editor text verbatim — no added
+        // marker/comment on secret-bound lines (JSON has no comment syntax; any marker would break
+        // paste-ready validity).
+        function copyGeneratedTemplate() {
+          var text = (generateMode &amp;&amp; editor) ? editor.getValue() : lastGeneratedTemplateText;
+          navigator.clipboard.writeText(text);
         }
 
         function activateVersion(v) {

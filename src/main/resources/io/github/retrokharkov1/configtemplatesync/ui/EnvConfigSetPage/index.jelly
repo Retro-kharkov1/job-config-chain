@@ -21,7 +21,42 @@
         </j:choose>
       </p>
 
-      <table style="width:100%"><tr>
+      <!-- FR-41/44: page-level action, deliberately NOT a 4th mode of the Env-override panel's own
+           [Editing]/[Compare] row — see wireframe-layout.md's reasoning note. Clicking it temporarily
+           replaces the whole 3-panel table below with one full-width read-only panel. -->
+      <div style="text-align:right;margin-bottom:4px">
+        <j:choose>
+          <j:when test="${it.templateAvailable}">
+            <button type="button" id="generateTemplateBtn" class="jenkins-button"
+                   title="Show a copy-paste-ready tokenized EFFECTIVE (merged) template from both Config Sets' ACTIVE versions (FR-15b)"
+                   onclick="showGeneratedTemplateView();">&#128203; Generate Template</button>
+          </j:when>
+          <j:otherwise>
+            <button type="button" id="generateTemplateBtn" class="jenkins-button" disabled="disabled"
+                   title="no active version yet">&#128203; Generate Template</button>
+          </j:otherwise>
+        </j:choose>
+        <button type="button" id="backTo3PanelBtn" class="jenkins-button" style="display:none"
+               title="Return to the Global | Env override | Merged result 3-panel view"
+               onclick="backTo3PanelView();">&#8592; Back to 3-panel view</button>
+      </div>
+
+      <div id="generateBanner" class="alert alert-info" style="display:none">
+        Effective template from <code>${it.projectKey}-common</code> ACTIVE ⊕ <code>${it.displayName}</code>
+        ACTIVE — NOT the Env-override panel's in-progress unsaved edits (FR-16).
+      </div>
+
+      <div id="generatedTemplatePanel" style="display:none">
+        <h3>Generated template (read-only)</h3>
+        <div id="generatedTemplateEditor" style="height:420px;border:1px solid #ccc"/>
+        <div style="margin-top:4px">
+          <button type="button" id="copyTemplateBtn" class="jenkins-button"
+                  title="Copy the generated template to the clipboard"
+                  onclick="copyGeneratedTemplate();">&#128203; Copy to clipboard</button>
+        </div>
+      </div>
+
+      <table id="threePanelTable" style="width:100%"><tr>
         <td style="width:33%;vertical-align:top;padding:4px">
           <h3>Global (read-only)</h3>
           <div id="globalEditor" style="height:380px;border:1px solid #ccc"/>
@@ -131,6 +166,12 @@
         var __globalSeed = <j:out value="${it.commonActiveVersionContentJsonForScript}"/>;
         var __overrideSeed = <j:out value="${it.editorSeedJsonForScript}"/>;
         var globalEditor, overrideEditor, mergedEditor, debounceHandle, diffEditor;
+        // FR-41/42/44: the generated-template full-width panel is a separate Monaco instance from
+        // the 3-panel table's three editors (never a 4th mode of the override panel — see the
+        // page-level button's placement comment above), shown/hidden by toggling #threePanelTable
+        // vs. #generatedTemplatePanel.
+        var generatedTemplateEditor;
+        var lastGeneratedTemplateText = '';
         // Same structural principle as the Global edit page: Compare is a mode toggle on the
         // Env-override editor region (#overrideEditor), never a second editor.
         var editMode = true;
@@ -271,6 +312,52 @@
           document.getElementById('contentField').value =
               (editMode &amp;&amp; overrideEditor) ? overrideEditor.getValue() : lastEditContent;
           return true;
+        }
+
+        // FR-41: zero-argument proxy.generateTemplate() call (server-side signature has no
+        // overlayJson/contentJson parameter at all — FR-16), so there is structurally no way this
+        // can read the override panel's in-progress unsaved buffer, even though that buffer sits
+        // right there two columns over in the 3-panel table this replaces.
+        function showGeneratedTemplateView() {
+          proxy.generateTemplate(function (t) {
+            var r = t.responseObject();
+            if (!r.ok) {
+              alert(r.error);
+              return;
+            }
+            lastGeneratedTemplateText = JSON.stringify(r.template, null, 2);
+            document.getElementById('threePanelTable').style.display = 'none';
+            document.getElementById('generateBanner').style.display = 'block';
+            document.getElementById('generatedTemplatePanel').style.display = 'block';
+            document.getElementById('generateTemplateBtn').style.display = 'none';
+            document.getElementById('backTo3PanelBtn').style.display = 'inline-block';
+            if (generatedTemplateEditor) {
+              generatedTemplateEditor.setValue(lastGeneratedTemplateText);
+            } else {
+              generatedTemplateEditor = monaco.editor.create(document.getElementById('generatedTemplateEditor'), {
+                value: lastGeneratedTemplateText,
+                language: 'json',
+                readOnly: true,
+                automaticLayout: true
+              });
+            }
+          });
+        }
+
+        // Restores the normal 3-panel layout exactly as it was — the override panel's in-progress
+        // edits are untouched underneath, since the generated-template view never disturbed them.
+        function backTo3PanelView() {
+          document.getElementById('threePanelTable').style.display = '';
+          document.getElementById('generateBanner').style.display = 'none';
+          document.getElementById('generatedTemplatePanel').style.display = 'none';
+          document.getElementById('generateTemplateBtn').style.display = 'inline-block';
+          document.getElementById('backTo3PanelBtn').style.display = 'none';
+        }
+
+        // FR-42: standard browser Clipboard API, copies the exact editor text verbatim.
+        function copyGeneratedTemplate() {
+          navigator.clipboard.writeText(
+              generatedTemplateEditor ? generatedTemplateEditor.getValue() : lastGeneratedTemplateText);
         }
 
         function activateVersion(v) {
