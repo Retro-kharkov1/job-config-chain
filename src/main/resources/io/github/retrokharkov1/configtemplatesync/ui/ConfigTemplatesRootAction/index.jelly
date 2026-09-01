@@ -1,0 +1,53 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
+  <l:layout title="Config Templates">
+    <l:main-panel>
+      <h1>Config Templates</h1>
+      <p>
+        Global (common) Config Sets. Click a row to open its editor; open a project's env layer
+        from that project's page.
+      </p>
+
+      <table class="jenkins-table sortable" style="width:100%">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Active version</th>
+            <th>Last modified</th>
+          </tr>
+        </thead>
+        <tbody>
+          <j:forEach var="cs" items="${it.commonConfigSets}">
+            <tr>
+              <td>
+                <a href="${rootURL}/${it.urlName}/${cs.projectKey}/common">${cs.projectKey}-common</a>
+              </td>
+              <td>
+                <j:choose>
+                  <j:when test="${cs.activeVersion != null}">v${cs.activeVersion.versionNumber}</j:when>
+                  <j:otherwise>(no active version)</j:otherwise>
+                </j:choose>
+              </td>
+              <td>
+                <j:choose>
+                  <j:when test="${cs.activeVersion != null}">
+                    ${cs.activeVersion.author}
+                  </j:when>
+                  <j:otherwise>&#8212;</j:otherwise>
+                </j:choose>
+              </td>
+            </tr>
+          </j:forEach>
+        </tbody>
+      </table>
+
+      <h2>New Config Set</h2>
+      <p>Enter a project key (e.g. <code>my-app</code>) and open its common Config Set editor
+         (it is created on first Save):</p>
+      <input type="text" name="projectKey" id="newProjectKey" placeholder="projectKey" class="setting-input"/>
+      <button type="button" class="jenkins-button jenkins-button--primary"
+              title="Open this project's common Config Set editor, creating it on first Save"
+              onclick="window.location.href = '${rootURL}/${it.urlName}/' + encodeURIComponent(document.getElementById('newProjectKey').value) + '/common/';">Open / Create</button>
+    </l:main-panel>
+  </l:layout>
+</j:jelly>
