@@ -177,14 +177,28 @@
       <artifactId>credentials</artifactId>
     </dependency>
     <dependency>
+      <!-- StringCredentials is resolved at Pipeline Step *runtime* (ConfigTemplateSubstituteStep,
+           via CredentialsProvider.findCredentialById), not just from test fixtures/e2e seed data —
+           this must be a normal compile-scope dependency, not test-only. -->
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>plain-credentials</artifactId>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
       <version>2.10.1</version>
+    </dependency>
+    <dependency>
+      <!-- Standalone Nashorn (removed from the JDK itself since 15; this build runs on a newer
+           JDK per maven -v). Used ONLY in test scope to compile (syntax-check, never execute)
+           each admin page's rendered inline <script> blocks — a real-JS-engine regression guard
+           for the class of "raw newline/HTML-entity breaks the JS string literal" bug fixed in
+           ConfigSetPage#toJsScriptStringLiteral, since HtmlUnit's own embedded JS engine did not
+           catch it (see ConfigTemplatesUiTest's existing notes on that limitation). -->
+      <groupId>org.openjdk.nashorn</groupId>
+      <artifactId>nashorn-core</artifactId>
+      <version>15.7</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>

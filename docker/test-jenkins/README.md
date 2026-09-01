@@ -41,8 +41,11 @@ docker compose down -v
   test instance only.
 - **Pipeline job** `config-template-sync-e2e` — runs `configTemplateValidate` then
   `configTemplateSubstitute` against a sample `appsettings.json`-shaped file with matching
-  `#{Path}#` tokens, resolving the secret from the credential above. **Not auto-triggered**
-  — click **Build Now** on the job yourself to watch it run.
+  `#{Path}#` tokens. `configTemplateSubstitute` resolves `Database.Password` exclusively
+  from the `test-app-dev-db-password` credential above (FR-13/FR-21) — the Jenkinsfile does
+  **not** manually inject it via `withCredentials`/`withEnv`, proving the step resolves the
+  manifest-declared secret itself. **Not auto-triggered** — click **Build Now** on the job
+  yourself to watch it run.
 
 Re-running `docker compose up` against the same (already-seeded) volume does not error or
 duplicate anything — the seed script checks for existing data before creating it.
