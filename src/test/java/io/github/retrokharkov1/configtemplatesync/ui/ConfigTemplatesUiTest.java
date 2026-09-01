@@ -158,7 +158,7 @@ public class ConfigTemplatesUiTest {
     }
 
     @Test
-    public void doCompareVersions_returnsBothVersionsContentForDiffMode() throws Exception {
+    public void doCompareVersions_returnsOneVersionsContentForDiffAgainstTheCurrentDraft() throws Exception {
         ConfigSet common = seedCommon("uitest8", "{\"a\":1}", "v1");
         ConfigSetRepository repository = new ConfigSetRepository();
         ConfigSet reloaded = repository.findCommon("uitest8");
@@ -166,20 +166,22 @@ public class ConfigTemplatesUiTest {
         repository.save(reloaded);
 
         // Server-side reachability check for the Compare mode toggle (wireframe: the SAME editor
-        // region switches to monaco.editor.createDiffEditor fed by these two versions' content).
-        // Full Monaco JS execution (createDiffEditor itself) is not exercisable here: the vendored
-        // AMD loader/bundle uses ES2015+ syntax the embedded legacy HtmlUnit JS engine can't run
-        // (same limitation already documented on editPage_loadsActiveVersionContent above) — this
-        // test instead proves the exact data contract the client-side diff view is wired to.
+        // region switches to monaco.editor.createDiffEditor). Interaction redesign (2026-09-01,
+        // owner report): click one history row to diff it against the CURRENT DRAFT, no checkbox
+        // pair required — this endpoint now only fetches ONE
+        // version's content — the other side of the diff is the client's own already-in-memory
+        // draft buffer, never round-tripped to the server. Full Monaco JS execution
+        // (createDiffEditor itself) is not exercisable here: the vendored AMD loader/bundle uses
+        // ES2015+ syntax the embedded legacy HtmlUnit JS engine can't run (same limitation already
+        // documented on editPage_loadsActiveVersionContent above) — this test instead proves the
+        // exact data contract the client-side diff view is wired to.
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest8/common/diffVersions?oldVersion=1&newVersion=" + v2);
+                + "configTemplates/uitest8/common/diffVersions?version=" + v2);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
-        assertEquals(1, json.getInt("oldVersion"));
-        assertEquals(v2, json.getInt("newVersion"));
-        assertEquals("{\"a\":1}", json.getString("oldContent"));
-        assertEquals("{\"a\":2}", json.getString("newContent"));
+        assertEquals(v2, json.getInt("version"));
+        assertEquals("{\"a\":2}", json.getString("content"));
     }
 
     @Test
@@ -188,7 +190,7 @@ public class ConfigTemplatesUiTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest9/common/diffVersions?oldVersion=1&newVersion=99");
+                + "configTemplates/uitest9/common/diffVersions?version=99");
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertFalse("a nonexistent version number must be reported, not thrown as a server error",
                 json.getBoolean("ok"));
@@ -322,6 +324,108 @@ public class ConfigTemplatesUiTest {
                 repository.findEnv("uitest15", "dev").getSecretsManifest().get("database.password"));
         assertTrue("the common Config Set's own manifest must remain untouched",
                 repository.findCommon("uitest15").getSecretsManifest().isEmpty());
+    }
+
+    // --- Secrets manifest delete/unbind (OQ-1 CRUD completion, 2026-09-01) -----------------
+
+    @Test
+    public void doUnbindSecret_removesAnExistingManifestEntryAndPersists() throws Exception {
+        seedRealCredential("uitest31-real-cred");
+        ConfigSet common = seedCommon("uitest31", "{\"database\":{\"password\":\""
+                + SecretPlaceholder.VALUE + "\"}}", "seed");
+        common.putSecretManifestEntry("database.password", "uitest31-real-cred");
+        new ConfigSetRepository().save(common);
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest31/common/unbindSecret?path=database.password");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        assertTrue("the manifest entry must no longer be present after removal",
+                repository.findCommon("uitest31").getSecretsManifest().isEmpty());
+    }
+
+    @Test
+    public void doUnbindSecret_reportsErrorForAPathNeverBoundWithoutThrowing() throws Exception {
+        seedCommon("uitest32", "{\"a\":1}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest32/common/unbindSecret?path=never.bound");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertFalse("unbinding a path that was never bound must be reported, not thrown as a server error",
+                json.getBoolean("ok"));
+        assertNotNull(json.getString("error"));
+    }
+
+    @Test
+    public void envEditPage_doUnbindSecret_removesMappingOnTheEnvConfigSetItself() throws Exception {
+        // Mirrors envEditPage_doAddSecret_persistsMappingOnTheEnvConfigSetItself: confirms the
+        // env-level page's delete action is wired to the SAME doUnbindSecret contract as the
+        // common page, and mutates only the ENV Config Set's own manifest.
+        seedRealCredential("uitest33-real-cred");
+        seedCommon("uitest33", "{\"a\":1}", "seed");
+        ConfigSet env = seedEnv("uitest33", "dev", "{\"database\":{\"password\":\""
+                + SecretPlaceholder.VALUE + "\"}}", "seed");
+        env.putSecretManifestEntry("database.password", "uitest33-real-cred");
+        new ConfigSetRepository().save(env);
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest33/dev/unbindSecret?path=database.password");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        assertTrue("the env Config Set's own manifest entry must be removed",
+                repository.findEnv("uitest33", "dev").getSecretsManifest().isEmpty());
+    }
+
+    @Test
+    public void commonEditPage_rendersARemoveButtonPerManifestEntry() throws Exception {
+        seedRealCredential("uitest34-real-cred");
+        ConfigSet common = seedCommon("uitest34", "{\"database\":{\"password\":\""
+                + SecretPlaceholder.VALUE + "\"}}", "seed");
+        common.putSecretManifestEntry("database.password", "uitest34-real-cred");
+        new ConfigSetRepository().save(common);
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest34/common/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("a manifest row must render a delete control (CRUD completion)",
+                html.contains("ctsync-remove-secret-btn"));
+        assertTrue("the delete control must carry the dotted path so removeSecret() can read it",
+                html.contains("data-secret-path=\"database.password\""));
+    }
+
+    @Test
+    public void commonEditPage_inlineScriptsAreSyntacticallyValidJs_withRemoveSecretCode() throws Exception {
+        // Regression guard for the newly added removeSecret JS, matching the existing real-JS-engine
+        // syntax-check pattern for this test class.
+        seedCommon("uitest35", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest35/common/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue(html.contains("function removeSecret"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (remove-secret JS)", html);
+    }
+
+    @Test
+    public void envEditPage_inlineScriptsAreSyntacticallyValidJs_withRemoveSecretCode() throws Exception {
+        seedCommon("uitest36", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+        seedEnv("uitest36", "dev", "{\"database\":{\"host\":\"db.dev.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest36/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue(html.contains("function removeSecret"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("env edit page (remove-secret JS)", html);
     }
 
     @Test
@@ -585,6 +689,140 @@ public class ConfigTemplatesUiTest {
         assertTrue(html.contains("showGeneratedTemplateView"));
         assertTrue(html.contains("backTo3PanelView"));
         assertAllInlineScriptsAreSyntacticallyValidJs("env edit page (generate-template JS)", html);
+    }
+
+    // --- Compare-mode state machine and busy/disabled states (FR-45/46/47, 2026-09-01 audit) ----
+
+    @Test
+    public void commonEditPage_rendersExplicitBackToEditingButtonInCompareBanner() throws Exception {
+        // FR-45(a): a "Back to editing" button MUST exist alongside "Load into editor" in the
+        // compare banner, distinct from it, wired to the same switchToEditMode() no-op-exit
+        // function the re-click-the-selected-row path (FR-45(b)) already uses.
+        seedCommon("uitest40", "{\"a\":1}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest40/common/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("compare banner must render an explicit 'Back to editing' button (FR-45a)",
+                html.contains("id=\"backToEditingBtn\""));
+        assertTrue("'Back to editing' must be wired to switchToEditMode(), the same no-op-exit "
+                + "function the re-click-same-row path already calls (FR-45b)",
+                html.contains("onclick=\"switchToEditMode();\""));
+        assertTrue("'Load into editor' must remain present and distinct (FR-45c)",
+                html.contains("id=\"loadComparedBtn\""));
+    }
+
+    @Test
+    public void envEditPage_rendersExplicitBackToEditingButtonInCompareBanner() throws Exception {
+        seedCommon("uitest41", "{\"a\":1}", "seed");
+        seedEnv("uitest41", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest41/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("env compare banner must render an explicit 'Back to editing' button (FR-45a)",
+                html.contains("id=\"backToEditingBtn\""));
+        assertTrue("'Back to editing' must be wired to switchToEditMode() (FR-45b)",
+                html.contains("onclick=\"switchToEditMode();\""));
+        assertTrue("'Load into editor' must remain present and distinct (FR-45c)",
+                html.contains("id=\"loadComparedBtn\""));
+    }
+
+    @Test
+    public void commonEditPage_activateButtonDisabledOnTheAlreadyActiveRow() throws Exception {
+        // FR-47: the Activate button for the currently-active version MUST render disabled at the
+        // control level, with an explanatory title — not merely a harmless server-side no-op.
+        ConfigSet common = seedCommon("uitest42", "{\"a\":1}", "v1");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet reloaded = repository.findCommon("uitest42");
+        reloaded.addVersion("{\"a\":2}", "v2", "seed-author", 2L);
+        repository.save(reloaded);
+        int activeVersion = reloaded.getActiveVersionNumber();
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest42/common/");
+        String html = page.getWebResponse().getContentAsString();
+
+        Pattern activeRow = Pattern.compile(
+                "id=\"historyRow-" + activeVersion + "\"[\\s\\S]*?</tr>");
+        Matcher matcher = activeRow.matcher(html);
+        assertTrue("must find the active version's history row in the rendered HTML", matcher.find());
+        String rowHtml = matcher.group();
+        assertTrue("the already-active row's Activate button must render disabled (FR-47)",
+                rowHtml.contains("disabled=\"disabled\""));
+        assertTrue("the disabled Activate button must explain why",
+                rowHtml.contains("Already the active version"));
+
+        int inactiveVersion = activeVersion == 1 ? 2 : 1;
+        Pattern inactiveRow = Pattern.compile(
+                "id=\"historyRow-" + inactiveVersion + "\"[\\s\\S]*?</tr>");
+        Matcher inactiveMatcher = inactiveRow.matcher(html);
+        assertTrue(inactiveMatcher.find());
+        assertFalse("a non-active row's Activate button must remain enabled",
+                inactiveMatcher.group().contains("disabled=\"disabled\""));
+    }
+
+    @Test
+    public void envEditPage_activateButtonDisabledOnTheAlreadyActiveRow() throws Exception {
+        seedCommon("uitest43", "{\"a\":1}", "seed");
+        ConfigSet env = seedEnv("uitest43", "dev", "{\"a\":1}", "v1");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet reloaded = repository.findEnv("uitest43", "dev");
+        reloaded.addVersion("{\"a\":2}", "v2", "seed-author", 2L);
+        repository.save(reloaded);
+        int activeVersion = reloaded.getActiveVersionNumber();
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest43/dev/");
+        String html = page.getWebResponse().getContentAsString();
+
+        Pattern activeRow = Pattern.compile(
+                "id=\"historyRow-" + activeVersion + "\"[\\s\\S]*?</tr>");
+        Matcher matcher = activeRow.matcher(html);
+        assertTrue("must find the active version's history row in the rendered HTML", matcher.find());
+        String rowHtml = matcher.group();
+        assertTrue("the already-active row's Activate button must render disabled (FR-47)",
+                rowHtml.contains("disabled=\"disabled\""));
+        assertTrue("the disabled Activate button must explain why",
+                rowHtml.contains("Already the active version"));
+    }
+
+    @Test
+    public void commonEditPage_inlineScriptsAreSyntacticallyValidJs_withBusyDisableGuardCode() throws Exception {
+        // Regression guard for the newly added FR-46 busy/disable guard JS (prepareSubmit's
+        // save-button disable + activateVersion's all-rows-disable), matching the existing
+        // real-JS-engine syntax-check pattern for this test class.
+        seedCommon("uitest44", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest44/common/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("prepareSubmit must disable both save buttons (FR-46)",
+                html.contains("document.getElementById('saveBtn').disabled = true"));
+        assertTrue("activateVersion must disable every Activate button, not just the clicked one (FR-46)",
+                html.contains("function setActivateButtonsDisabled"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (busy-disable-guard JS)", html);
+    }
+
+    @Test
+    public void envEditPage_inlineScriptsAreSyntacticallyValidJs_withBusyDisableGuardCode() throws Exception {
+        seedCommon("uitest45", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+        seedEnv("uitest45", "dev", "{\"database\":{\"host\":\"db.dev.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest45/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("prepareSubmit must disable both save buttons (FR-46)",
+                html.contains("document.getElementById('saveBtn').disabled = true"));
+        assertTrue("activateVersion must disable every Activate button, not just the clicked one (FR-46)",
+                html.contains("function setActivateButtonsDisabled"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("env edit page (busy-disable-guard JS)", html);
     }
 
     @Test
