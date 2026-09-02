@@ -6,6 +6,7 @@ import org.htmlunit.HttpMethod;
 import org.htmlunit.Page;
 import org.htmlunit.WebRequest;
 import org.htmlunit.html.HtmlPage;
+import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder;
@@ -848,5 +849,140 @@ public class ConfigTemplatesUiTest {
             assertAllInlineScriptsAreSyntacticallyValidJs(
                     "common list page", page.getWebResponse().getContentAsString());
         }
+    }
+
+    // --- Multi-base config chain UI (FR-51/FR-55/FR-56/FR-57/FR-58) ------------------------
+
+    @Test
+    public void envEditPage_rendersBaseChainEditorMarkup() throws Exception {
+        seedCommon("uitest50", "{\"a\":1}", "seed");
+        seedEnv("uitest50", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest50/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("env page must render the base-chain editor rows table",
+                html.contains("id=\"baseChainRowsTable\""));
+        assertTrue("env page must render the Add-base row control",
+                html.contains("id=\"addBaseChainRowBtn\""));
+        assertTrue("env page must render the Inspect-chain drawer toggle",
+                html.contains("id=\"inspectChainToggle\""));
+        assertTrue("env page must render the Inspect-chain drawer container",
+                html.contains("id=\"inspectChainDrawer\""));
+        assertTrue("env page must render the hidden baseChainJson form field",
+                html.contains("name=\"baseChainJson\""));
+        assertTrue("env page must expose the available common project keys as row-picker seed data",
+                html.contains("__availableProjectKeys"));
+    }
+
+    @Test
+    public void envEditPage_brandNewConfigSet_baseChainEditorDefaultsToOneRow() throws Exception {
+        // FR-56: a brand-new env Config Set (never saved) must default its chain editor to exactly
+        // one row — this env's own project, ACTIVE — with no manual interaction. Exercised directly
+        // against the accessor (same package, package-private constructor) rather than scraping the
+        // rendered/JS-escaped HTML, since the seed value is itself a Gson-JSON-string-encoded JS
+        // string literal — asserting the underlying data contract is more robust than re-parsing
+        // escaped inline-script text.
+        seedCommon("uitest51", "{\"a\":1}", "seed");
+        // deliberately no seedEnv call — the env Config Set does not exist yet.
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        EnvConfigSetPage page = new EnvConfigSetPage("uitest51", "dev", repository);
+        String seedLiteral = page.getBaseChainSeedJsonForScript();
+        // seedLiteral is a complete JS string-literal expression (Gson-encoded, quotes included) —
+        // decode it back to the raw JSON array text via Gson, exactly mirroring the client-side
+        // JSON.parse(__baseChainSeed) contract this accessor feeds.
+        String jsonArrayText = new com.google.gson.Gson().fromJson(seedLiteral, String.class);
+        com.google.gson.JsonArray seededChain = com.google.gson.JsonParser.parseString(jsonArrayText).getAsJsonArray();
+
+        assertEquals("a brand-new env Config Set must seed exactly one default base-chain row (FR-56)",
+                1, seededChain.size());
+        com.google.gson.JsonObject row = seededChain.get(0).getAsJsonObject();
+        assertEquals("uitest51", row.get("projectKey").getAsString());
+        assertEquals("ACTIVE", row.get("pinMode").getAsString());
+    }
+
+    @Test
+    public void envEditPage_versionHistoryRendersBaseChainMarkerPerVersion() throws Exception {
+        // FR-58: each historical version's own frozen base chain renders a "[N bases]" marker,
+        // expandable inline with no additional AJAX call.
+        seedCommon("uitest52", "{\"a\":1}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet env = new ConfigSet("uitest52", ConfigSetRole.ENV, "dev", "Env");
+        int v = env.addVersion("{}", "seed", "seed-author", 1L, java.util.Arrays.asList(
+                BaseConfigReference.active("uitest52"),
+                BaseConfigReference.pinned("uitest52", 1)));
+        env.activate(v);
+        repository.save(env);
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest52/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("version-history row must render a [N bases] marker (FR-58)",
+                html.contains("2 bases"));
+        assertTrue("expandable detail must include the PINNED entry's resolved version number",
+                html.contains("(v1)"));
+    }
+
+    @Test
+    public void envEditPage_inlineScriptsAreSyntacticallyValidJs_withBaseChainEditorCode() throws Exception {
+        // Regression guard for the newly added base-chain editor JS, matching the existing
+        // real-JS-engine syntax-check pattern for this test class.
+        seedCommon("uitest53", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+        seedEnv("uitest53", "dev", "{\"database\":{\"host\":\"db.dev.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest53/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue(html.contains("function addBaseChainRow"));
+        assertTrue(html.contains("function renderInspectDrawer"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("env edit page (base-chain editor JS)", html);
+    }
+
+    @Test
+    public void envPage_doComputeMerge_multiBaseChainFoldsAllBasesBeforeOverlay() throws Exception {
+        seedCommon("uitest54", "{\"a\":1}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common");
+        int bV = teamB.addVersion("{\"b\":2}", "seed", "seed-author", 1L);
+        teamB.activate(bV);
+        repository.save(teamB);
+        seedEnv("uitest54", "dev", "{}", "seed");
+
+        String baseChainJson = "[{\"projectKey\":\"uitest54\",\"pinMode\":\"ACTIVE\"},"
+                + "{\"projectKey\":\"team-b-common\",\"pinMode\":\"ACTIVE\"}]";
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest54/dev/computeMerge?overlayJson="
+                + java.net.URLEncoder.encode("{}", "UTF-8")
+                + "&baseChainJson=" + java.net.URLEncoder.encode(baseChainJson, "UTF-8"));
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        assertEquals(1, json.getJSONObject("merged").getInt("a"));
+        assertEquals(2, json.getJSONObject("merged").getInt("b"));
+        assertEquals("perReference must carry one entry per resolved chain member (FR-57)",
+                2, json.getJSONArray("perReference").size());
+    }
+
+    @Test
+    public void envPage_doComputeMerge_unresolvableChainReferenceReportsErrorWithoutThrowing() throws Exception {
+        seedCommon("uitest55", "{\"a\":1}", "seed");
+        seedEnv("uitest55", "dev", "{}", "seed");
+
+        String baseChainJson = "[{\"projectKey\":\"no-such-common-project\",\"pinMode\":\"ACTIVE\"}]";
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest55/dev/computeMerge?overlayJson="
+                + java.net.URLEncoder.encode("{}", "UTF-8")
+                + "&baseChainJson=" + java.net.URLEncoder.encode(baseChainJson, "UTF-8"));
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertFalse("an unresolvable base-chain reference must be reported, not thrown as a server error",
+                json.getBoolean("ok"));
+        assertNotNull(json.getString("error"));
     }
 }

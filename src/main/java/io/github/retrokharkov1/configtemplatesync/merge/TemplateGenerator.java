@@ -74,6 +74,19 @@ public final class TemplateGenerator {
      */
     public static JsonObject fromEffective(String commonContentJson, String envPatchJson) {
         JsonObject effective = EffectiveConfigResolver.resolve(commonContentJson, envPatchJson);
+        return fromEffective(effective);
+    }
+
+    /**
+     * FR-15b generalized to a multi-base chain (FR-51): applies the identical leaf-tokenization walk
+     * to an already-resolved effective (merged) configuration — e.g. one computed by
+     * {@link EffectiveConfigResolver#resolveChain}, so callers resolving a base chain never need to
+     * re-flatten common+env content just to reach this class's tokenization logic.
+     *
+     * @param effective an already-computed effective (merged) configuration.
+     * @return the same nested shape, every leaf replaced by its dotted-path token.
+     */
+    public static JsonObject fromEffective(JsonObject effective) {
         JsonElement tokenized = tokenize(effective, "");
         return tokenized.getAsJsonObject();
     }
