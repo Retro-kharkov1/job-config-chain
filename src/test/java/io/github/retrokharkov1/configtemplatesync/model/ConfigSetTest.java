@@ -2,6 +2,10 @@ package io.github.retrokharkov1.configtemplatesync.model;
 
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -133,5 +137,35 @@ public class ConfigSetTest {
     public void removeSecretManifestEntry_returnsFalseWhenPathWasNeverBound() {
         ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
         assertFalse(configSet.removeSecretManifestEntry("Never.Bound"));
+    }
+
+    @Test
+    public void addVersionWithBaseChainPersistsAndIsRetrievable() {
+        // FR-51: an env Config Set's declared base chain is part of that version's own record.
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.ENV, "dev", "Dev");
+        List<BaseConfigReference> chain = Arrays.asList(
+                BaseConfigReference.active("team-a-common"),
+                BaseConfigReference.pinned("team-b-common", 3));
+
+        int version = configSet.addVersion("{\"a\":1}", "multi-base", "alice", 1L, chain);
+
+        assertEquals(chain, configSet.getVersion(version).getBaseChain());
+    }
+
+    @Test
+    public void addVersionRejectsNonEmptyBaseChainOnCommonRole() {
+        // FR-53: a COMMON-role Config Set is always the root of a chain, never a chain member itself.
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        List<BaseConfigReference> chain = Collections.singletonList(BaseConfigReference.active("team-a-common"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> configSet.addVersion("{}", "should be rejected", "alice", 1L, chain));
+    }
+
+    @Test
+    public void fourArgAddVersionYieldsEmptyBaseChain() {
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        int version = configSet.addVersion("{\"a\":1}", "no chain", "alice", 1L);
+        assertTrue(configSet.getVersion(version).getBaseChain().isEmpty());
     }
 }

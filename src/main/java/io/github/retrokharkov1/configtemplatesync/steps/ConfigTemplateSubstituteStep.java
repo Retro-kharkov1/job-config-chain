@@ -8,11 +8,15 @@ import hudson.Extension;
 import hudson.FilePath;
 import hudson.model.Run;
 import hudson.model.TaskListener;
+import io.github.retrokharkov1.configtemplatesync.merge.EffectiveConfigResolver;
 import io.github.retrokharkov1.configtemplatesync.merge.JsonPaths;
 import io.github.retrokharkov1.configtemplatesync.merge.TokenExtractor;
+import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigDeploymentBinding;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
+import io.github.retrokharkov1.configtemplatesync.model.PinMode;
+import io.github.retrokharkov1.configtemplatesync.model.ResolvedBaseVersion;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigDeploymentBindingRepository;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 import org.jenkinsci.plugins.workflow.steps.Step;
@@ -23,8 +27,10 @@ import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -113,45 +119,80 @@ public class ConfigTemplateSubstituteStep extends Step {
             ConfigSetRepository configSetRepository = StepSupport.newRepository();
             ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
 
-            ConfigSet common = StepSupport.requireCommon(configSetRepository, projectKey);
             ConfigSet env = StepSupport.requireEnv(configSetRepository, projectKey, environment);
 
-            ConfigSetVersion commonVersion;
+            JsonObject effective;
+            List<ResolvedBaseVersion> resolvedBaseChain;
+            List<ConfigSet> resolvedBaseConfigSets;
             ConfigSetVersion envVersion;
             boolean pinned = false;
-            ConfigDeploymentBinding existingBinding = null;
+            boolean hasBuildVersion = buildVersion != null && !buildVersion.trim().isEmpty();
+            ConfigDeploymentBinding existingBinding = hasBuildVersion
+                    ? bindingRepository.find(projectKey, environment, buildVersion)
+                    : null;
 
-            if (buildVersion != null && !buildVersion.trim().isEmpty()) {
-                existingBinding = bindingRepository.find(projectKey, environment, buildVersion);
-                if (existingBinding != null) {
-                    commonVersion = common.getVersion(existingBinding.getCommonVersionNumber());
-                    envVersion = env.getVersion(existingBinding.getEnvVersionNumber());
-                    pinned = true;
-                    listener.getLogger().println(
-                            "[configTemplateSync] buildVersion '" + buildVersion
-                                    + "' is pinned to common v" + existingBinding.getCommonVersionNumber()
-                                    + " / env v" + existingBinding.getEnvVersionNumber());
-                } else {
-                    // FR-26: fall back to active AND surface that this happened, explicitly.
+            if (existingBinding != null) {
+                // Branch 1: buildVersion given, binding exists -> resolve the FROZEN chain directly,
+                // by (projectKey, versionNumber) lookups. No ACTIVE/PINNED branching needed — the
+                // binding already recorded concrete version numbers. A pinned project/version that's
+                // since vanished must fail loud rather than silently substitute wrong/empty content.
+                List<String> baseContents = new ArrayList<>();
+                resolvedBaseChain = new ArrayList<>();
+                resolvedBaseConfigSets = new ArrayList<>();
+                for (ResolvedBaseVersion rv : existingBinding.getResolvedBaseChain()) {
+                    ConfigSet baseConfigSet = configSetRepository.findCommon(rv.getProjectKey());
+                    if (baseConfigSet == null) {
+                        throw new AbortException("No common Config Set found for projectKey '"
+                                + rv.getProjectKey() + "' (frozen in deployment binding for buildVersion '"
+                                + buildVersion + "')");
+                    }
+                    ConfigSetVersion baseVersion = baseConfigSet.getVersion(rv.getVersionNumber());
+                    if (baseVersion == null) {
+                        throw new AbortException("Common Config Set '" + rv.getProjectKey()
+                                + "' has no version " + rv.getVersionNumber()
+                                + " (frozen in deployment binding for buildVersion '" + buildVersion + "')");
+                    }
+                    baseContents.add(baseVersion.getContentJson());
+                    resolvedBaseChain.add(rv);
+                    resolvedBaseConfigSets.add(baseConfigSet);
+                }
+                envVersion = env.getVersion(existingBinding.getEnvVersionNumber());
+                pinned = true;
+                effective = EffectiveConfigResolver.resolveChain(
+                        baseContents, envVersion == null ? null : envVersion.getContentJson());
+                listener.getLogger().println(
+                        "[configTemplateSync] buildVersion '" + buildVersion
+                                + "' is pinned to base chain [" + joinChain(resolvedBaseChain)
+                                + "] / env v" + existingBinding.getEnvVersionNumber());
+            } else {
+                envVersion = env.getActiveVersion();
+                List<BaseConfigReference> chain = StepSupport.effectiveBaseChain(projectKey, envVersion);
+                StepSupport.ResolvedEffective resolved =
+                        StepSupport.resolveEffective(configSetRepository, chain, envVersion);
+                effective = resolved.mergedConfig;
+                resolvedBaseChain = resolved.resolvedBaseChain;
+                resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
+
+                if (hasBuildVersion) {
+                    // Branch 2: buildVersion given, no binding -> live resolution, with per-reference
+                    // fallback logging (FR-26).
                     listener.getLogger().println(
                             "[configTemplateSync][WARN] No deployment binding found for buildVersion '"
                                     + buildVersion + "' (projectKey '" + projectKey + "', environment '"
-                                    + environment + "'); falling back to the currently active versions.");
-                    commonVersion = common.getActiveVersion();
-                    envVersion = env.getActiveVersion();
+                                    + environment + "'); falling back to the currently active/pinned "
+                                    + "base chain.");
+                    for (int i = 0; i < chain.size(); i++) {
+                        BaseConfigReference ref = chain.get(i);
+                        ResolvedBaseVersion rv = resolvedBaseChain.get(i);
+                        String how = ref.getPinMode() == PinMode.PINNED ? "PINNED" : "was ACTIVE";
+                        listener.getLogger().println(
+                                "[configTemplateSync] projectKey '" + ref.getProjectKey() + "' resolved to v"
+                                        + rv.getVersionNumber() + " (" + how + ")");
+                    }
                 }
-            } else {
-                // FR-27: no buildVersion given at all -> currently-active versions, no pinning behavior.
-                commonVersion = common.getActiveVersion();
-                envVersion = env.getActiveVersion();
+                // Branch 3 (no buildVersion at all) falls through here identically, minus the extra
+                // per-reference logging above (FR-27, unchanged default path).
             }
-
-            if (commonVersion == null) {
-                throw new AbortException(
-                        "Common Config Set '" + projectKey + "' has no active (or pinned) version to substitute");
-            }
-
-            JsonObject effective = StepSupport.resolveEffective(commonVersion, envVersion);
 
             FilePath target = workspace.child(file);
             if (!target.exists()) {
@@ -163,7 +204,7 @@ public class ConfigTemplateSubstituteStep extends Step {
             // than trusting that configTemplateValidate already ran earlier in this pipeline.
             StepSupport.validateOrThrow(effective, originalContent, listener);
 
-            Map<String, String> secretsManifest = StepSupport.mergedSecretsManifest(common, env);
+            Map<String, String> secretsManifest = StepSupport.mergedSecretsManifest(resolvedBaseConfigSets, env);
             String substituted = substitute(effective, originalContent, envVars, secretsManifest, run);
 
             if (TokenExtractor.containsAnyToken(substituted)) {
@@ -175,19 +216,34 @@ public class ConfigTemplateSubstituteStep extends Step {
             target.write(substituted, null);
             listener.getLogger().println(
                     "[configTemplateSync] Substituted " + file + " for projectKey '" + projectKey
-                            + "', environment '" + environment + "' using common v" + commonVersion.getVersionNumber()
-                            + " / env v" + (envVersion == null ? "(none)" : envVersion.getVersionNumber())
+                            + "', environment '" + environment + "' using base chain [" + joinChain(resolvedBaseChain)
+                            + "] / env v" + (envVersion == null ? "(none)" : envVersion.getVersionNumber())
                             + (pinned ? " (pinned)" : ""));
 
             // FR-23: only a successful REAL substitution run with a buildVersion supplied
-            // creates/updates a deployment binding — never a validate-only or dry-run call.
-            if (buildVersion != null && !buildVersion.trim().isEmpty()) {
+            // creates/updates a deployment binding — never a validate-only or dry-run call. Runs
+            // unconditionally in all 3 branches whenever buildVersion is present, including the
+            // pinned-and-unchanged branch 1 case, which is then a no-op-content re-save that only
+            // refreshes deployedAtUtcEpochMillis (preserves the existing "always touch the binding's
+            // timestamp on a successful real substitution" behavior).
+            if (hasBuildVersion) {
                 int envVersionNumber = envVersion == null ? 0 : envVersion.getVersionNumber();
                 bindingRepository.save(projectKey, environment, buildVersion,
-                        commonVersion.getVersionNumber(), envVersionNumber, System.currentTimeMillis());
+                        resolvedBaseChain, envVersionNumber, System.currentTimeMillis());
             }
 
             return null;
+        }
+
+        private static String joinChain(List<ResolvedBaseVersion> resolvedBaseChain) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < resolvedBaseChain.size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append(resolvedBaseChain.get(i).toString());
+            }
+            return sb.toString();
         }
 
         private String substitute(JsonObject effective, String content, EnvVars envVars,

@@ -84,6 +84,21 @@
            whole page to scroll. Applied to the wrapper div, never the table element itself —
            overflow on a table element directly has known sticky-header/border quirks. */
         .ctsync-scroll-table { max-height: 50vh; overflow-y: auto; }
+        /* Base-chain editor (FR-51/FR-55/FR-56/FR-57, wireframe Page 2). */
+        .ctsync-basechain-table { width: 100%; margin-bottom: 8px; }
+        .ctsync-basechain-table th, .ctsync-basechain-table td { padding: 4px 6px; text-align: left; }
+        .ctsync-basechain-row select, .ctsync-basechain-row input[type="radio"] { vertical-align: middle; }
+        .ctsync-basechain-reorder-btn, .ctsync-basechain-remove-btn { min-width: 28px; }
+        .ctsync-inspect-drawer { border: 1px solid #ccc; margin-top: 8px; padding: 8px; }
+        .ctsync-inspect-drawer-panel { margin-bottom: 12px; }
+        .ctsync-inspect-drawer-panel h4 { margin: 0 0 4px; }
+        .ctsync-inspect-drawer-panel pre { max-height: 220px; overflow: auto; background: #f6f6f6; padding: 6px; }
+        .ctsync-basechain-history-detail { margin-top: 4px; padding-left: 16px; font-size: 0.9em; }
+        @media (max-width: 480px) {
+          .ctsync-basechain-table, .ctsync-basechain-table tbody, .ctsync-basechain-table tr,
+          .ctsync-basechain-table td { display: block; width: 100% !important; }
+          .ctsync-basechain-row { border-bottom: 1px solid var(--table-border-color, #ddd); padding: 6px 0; }
+        }
       </style>
 
       <div class="ctsync-page">
@@ -92,18 +107,6 @@
       <j:if test="${!it.exists}">
         <div class="alert alert-info">This env Config Set does not exist yet — Save creates it.</div>
       </j:if>
-
-      <p>
-        Overrides Common Config Set:
-        <j:choose>
-          <j:when test="${it.commonPickerLocked}">
-            <code>${it.projectKey}-common</code> (locked after creation)
-          </j:when>
-          <j:otherwise>
-            <code>${it.projectKey}-common</code> (paired via projectKey, set at creation)
-          </j:otherwise>
-        </j:choose>
-      </p>
 
       <details id="secretsManifestDetails">
         <summary>Secrets manifest</summary>
@@ -156,7 +159,7 @@
            required — click any row again to return to editing).</p>
         <div class="ctsync-scroll-table">
           <table class="jenkins-table ctsync-history-table" style="width:100%">
-            <thead><tr><th>Version</th><th>Created</th><th>Created by</th><th>Note</th><th>Active</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Version</th><th>Created</th><th>Created by</th><th>Note</th><th>Base chain</th><th>Active</th><th>Actions</th></tr></thead>
             <tbody>
               <j:forEach var="v" items="${it.versions}">
                 <tr id="historyRow-${v.versionNumber}" class="ctsync-history-row"
@@ -167,6 +170,29 @@
                   <td data-th="Created">${v.timestampEpochMillis}</td>
                   <td data-th="Created by">${v.author}</td>
                   <td data-th="Note">${v.note}</td>
+                  <td data-th="Base chain">
+                    <!-- FR-58: each historical version's own FROZEN baseChain is already available
+                         server-side at render time — no AJAX call needed to show it. -->
+                    <a href="#" class="ctsync-basechain-toggle"
+                       onclick="event.stopPropagation(); event.preventDefault(); toggleBaseChainDetail(${v.versionNumber});">
+                      &#9656; ${v.baseChain.size()} bases
+                    </a>
+                    <div id="baseChainDetail-${v.versionNumber}" class="ctsync-basechain-history-detail" style="display:none">
+                      <j:choose>
+                        <j:when test="${v.baseChain.isEmpty()}">
+                          <div>(no declared chain — resolves to this env's own project, ACTIVE)</div>
+                        </j:when>
+                        <j:otherwise>
+                          <j:forEach var="ref" items="${v.baseChain}">
+                            <div>
+                              ${ref.projectKey} &#8212; ${ref.pinMode}
+                              <j:if test="${ref.pinMode == 'PINNED'}">(v${ref.pinnedVersionNumber})</j:if>
+                            </div>
+                          </j:forEach>
+                        </j:otherwise>
+                      </j:choose>
+                    </div>
+                  </td>
                   <td data-th="Active">
                     <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
                       &#9679; active
@@ -231,10 +257,36 @@
           </div>
         </div>
 
+        <div id="baseChainEditor">
+          <h3>Base chain (FR-51/FR-55)</h3>
+          <p>Ordered list of base Config Sets folded left-to-right before this env's own overlay is
+             applied — later rows win on overlapping keys. Each row either always tracks its
+             project's currently-ACTIVE version, or pins to one specific historical version.</p>
+          <table class="jenkins-table ctsync-basechain-table" id="baseChainRowsTable">
+            <thead><tr><th>#</th><th>Project</th><th>Mode</th><th>Pinned version</th><th/></tr></thead>
+            <tbody id="baseChainRowsBody"/>
+          </table>
+          <div class="ctsync-btn-row">
+            <button type="button" id="addBaseChainRowBtn" class="jenkins-button"
+                    title="Add another base Config Set to the chain"
+                    onclick="addBaseChainRow();">&#10133; Add base</button>
+          </div>
+        </div>
+
         <table id="threePanelTable" style="width:100%"><tr>
           <td style="width:33%;vertical-align:top;padding:4px">
-            <h3>Global (read-only)</h3>
-            <div id="globalEditor" style="height:380px;border:1px solid #ccc"/>
+            <h3>Effective base (read-only, collapsed)</h3>
+            <p>
+              <a href="#" id="inspectChainToggle" onclick="event.preventDefault(); toggleInspectDrawer();">
+                &#9656; Inspect chain (<span id="inspectChainCount">0</span> bases)
+              </a>
+            </p>
+            <div id="globalEditor" style="height:340px;border:1px solid #ccc">
+              <div style="padding:8px;color:#666">Every base's individually-resolved content is
+                available via "Inspect chain" above — the fold of all bases before this env's own
+                overlay is applied is shown live in the "Merged result" panel once this env's
+                overlay is taken into account.</div>
+            </div>
           </td>
           <td style="width:33%;vertical-align:top;padding:4px">
             <div class="ctsync-editor-header-row">
@@ -275,21 +327,28 @@
           </td>
         </tr></table>
 
+        <!-- FR-57: the Inspect-chain drawer renders from the SAME doComputeMerge/previewMerge
+             response's perReference field as the Merged-result panel — no separate AJAX call. -->
+        <div id="inspectChainDrawer" class="ctsync-inspect-drawer" style="display:none"/>
+
         <form method="post" action="save" id="ctsyncSaveForm" onsubmit="return prepareSubmit();">
           <textarea name="content" id="contentField" style="display:none"/>
           <f:entry title="Change note (required)">
             <input class="setting-input" type="text" name="note" required="required"/>
           </f:entry>
           <input type="hidden" name="activate" id="activateFlag" value=""/>
+          <input type="hidden" name="baseChainJson" id="baseChainField" value=""/>
         </form>
       </details>
 
       <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
       <link rel="stylesheet" href="${rootURL}/plugin/config-template-sync/monaco/vs/editor/editor.main.css"/>
       <script>
-        var __globalSeed = <j:out value="${it.commonActiveVersionContentJsonForScript}"/>;
         var __overrideSeed = <j:out value="${it.editorSeedJsonForScript}"/>;
-        var globalEditor, overrideEditor, mergedEditor, debounceHandle, diffEditor;
+        var __availableProjectKeys = <j:out value="${it.availableCommonProjectKeysJsonForScript}"/>;
+        var __baseChainSeed = <j:out value="${it.baseChainSeedJsonForScript}"/>;
+        var __commonVersionCatalog = <j:out value="${it.commonVersionCatalogJsonForScript}"/>;
+        var overrideEditor, mergedEditor, debounceHandle, diffEditor;
         // FR-41/42/44: the generated-template full-width panel is a separate Monaco instance from
         // the 3-panel table's three editors (never a 4th mode of the override panel — see the
         // page-level button's placement comment above), shown/hidden by toggling #threePanelTable
@@ -306,13 +365,20 @@
         var selectedCompareVersion = null;
         var lastComparedVersionContent = '';
 
+        // Base-chain editor draft state (FR-51/FR-55): an ordered array of
+        // { projectKey, pinMode: 'ACTIVE'|'PINNED', pinnedVersionNumber } rows, seeded from
+        // __baseChainSeed (FR-56: exactly one default row for a brand-new env Config Set) and kept
+        // in sync with the rendered #baseChainRowsBody tbody on every add/remove/reorder/
+        // project-change/mode-change/pin-version-change.
+        var availableProjectKeys = JSON.parse(__availableProjectKeys);
+        var commonVersionCatalog = JSON.parse(__commonVersionCatalog);
+        var baseChainRows = JSON.parse(__baseChainSeed);
+        var lastPerReference = [];
+
         require.config({ paths: { vs: '${rootURL}/plugin/config-template-sync/monaco/vs' } });
         require(['vs/editor/editor.main'], function () {
           monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
             validate: true, allowComments: false, schemas: []
-          });
-          globalEditor = monaco.editor.create(document.getElementById('globalEditor'), {
-            value: __globalSeed, language: 'json', readOnly: true, automaticLayout: true
           });
           overrideEditor = monaco.editor.create(document.getElementById('overrideEditor'), {
             value: __overrideSeed, language: 'json', automaticLayout: true
@@ -321,9 +387,197 @@
           mergedEditor = monaco.editor.create(document.getElementById('mergedEditor'), {
             value: '', language: 'json', readOnly: true, automaticLayout: true
           });
+          renderBaseChainRows();
           recomputeMerge();
           attachOverrideChangeListener();
         });
+
+        // ---- Base-chain editor (FR-51/FR-55/FR-56/FR-57) ----
+
+        function addBaseChainRow() {
+          var defaultProject = availableProjectKeys.length > 0 ? availableProjectKeys[0] : '';
+          baseChainRows.push({ projectKey: defaultProject, pinMode: 'ACTIVE', pinnedVersionNumber: 0 });
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        function removeBaseChainRow(index) {
+          baseChainRows.splice(index, 1);
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        function moveBaseChainRow(index, delta) {
+          var target = index + delta;
+          if (target &lt; 0 || target >= baseChainRows.length) { return; }
+          var row = baseChainRows.splice(index, 1)[0];
+          baseChainRows.splice(target, 0, row);
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        function onBaseChainProjectChange(index, projectKey) {
+          baseChainRows[index].projectKey = projectKey;
+          baseChainRows[index].pinMode = 'ACTIVE';
+          baseChainRows[index].pinnedVersionNumber = 0;
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        function onBaseChainModeChange(index, mode) {
+          baseChainRows[index].pinMode = mode;
+          if (mode === 'ACTIVE') {
+            baseChainRows[index].pinnedVersionNumber = 0;
+          } else {
+            var versions = commonVersionCatalog[baseChainRows[index].projectKey] || [];
+            baseChainRows[index].pinnedVersionNumber = versions.length > 0 ? versions[0].version : 0;
+          }
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        function onBaseChainPinnedVersionChange(index, versionNumber) {
+          baseChainRows[index].pinnedVersionNumber = parseInt(versionNumber, 10);
+          recomputeMerge();
+        }
+
+        function renderBaseChainRows() {
+          var body = document.getElementById('baseChainRowsBody');
+          body.innerHTML = '';
+          for (var i = 0; i &lt; baseChainRows.length; i++) {
+            body.appendChild(buildBaseChainRowElement(baseChainRows[i], i));
+          }
+          document.getElementById('baseChainField').value = JSON.stringify(baseChainRows);
+        }
+
+        function buildBaseChainRowElement(row, index) {
+          var tr = document.createElement('tr');
+          tr.className = 'ctsync-basechain-row';
+
+          var idxTd = document.createElement('td');
+          idxTd.textContent = (index + 1);
+          tr.appendChild(idxTd);
+
+          var projectTd = document.createElement('td');
+          var projectSelect = document.createElement('select');
+          projectSelect.className = 'jenkins-select__input';
+          for (var p = 0; p &lt; availableProjectKeys.length; p++) {
+            var opt = document.createElement('option');
+            opt.value = availableProjectKeys[p];
+            opt.text = availableProjectKeys[p];
+            if (availableProjectKeys[p] === row.projectKey) { opt.selected = true; }
+            projectSelect.appendChild(opt);
+          }
+          projectSelect.onchange = (function (idx) {
+            return function () { onBaseChainProjectChange(idx, this.value); };
+          })(index);
+          projectTd.appendChild(projectSelect);
+          tr.appendChild(projectTd);
+
+          var modeTd = document.createElement('td');
+          modeTd.appendChild(buildModeRadio(row, index, 'ACTIVE', 'Active'));
+          modeTd.appendChild(buildModeRadio(row, index, 'PINNED', 'Pin'));
+          tr.appendChild(modeTd);
+
+          var versionTd = document.createElement('td');
+          if (row.pinMode === 'PINNED') {
+            var versionSelect = document.createElement('select');
+            versionSelect.className = 'jenkins-select__input';
+            var versions = commonVersionCatalog[row.projectKey] || [];
+            for (var v = 0; v &lt; versions.length; v++) {
+              var vopt = document.createElement('option');
+              vopt.value = versions[v].version;
+              vopt.text = 'v' + versions[v].version + ' — ' + versions[v].note;
+              if (versions[v].version === row.pinnedVersionNumber) { vopt.selected = true; }
+              versionSelect.appendChild(vopt);
+            }
+            versionSelect.onchange = (function (idx) {
+              return function () { onBaseChainPinnedVersionChange(idx, this.value); };
+            })(index);
+            versionTd.appendChild(versionSelect);
+          }
+          tr.appendChild(versionTd);
+
+          var actionsTd = document.createElement('td');
+          var upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
+          upBtn.title = 'Move up (higher precedence rows come later)';
+          upBtn.innerHTML = '&#9650;';
+          upBtn.disabled = (index === 0);
+          upBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, -1); }; })(index);
+          actionsTd.appendChild(upBtn);
+
+          var downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
+          downBtn.title = 'Move down (later rows win on overlapping keys)';
+          downBtn.innerHTML = '&#9660;';
+          downBtn.disabled = (index === baseChainRows.length - 1);
+          downBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, 1); }; })(index);
+          actionsTd.appendChild(downBtn);
+
+          var removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.className = 'jenkins-button jenkins-button--destructive ctsync-basechain-remove-btn';
+          removeBtn.title = 'Remove this base from the chain';
+          removeBtn.innerHTML = '&#10005;';
+          removeBtn.onclick = (function (idx) { return function () { removeBaseChainRow(idx); }; })(index);
+          actionsTd.appendChild(removeBtn);
+
+          tr.appendChild(actionsTd);
+          return tr;
+        }
+
+        function buildModeRadio(row, index, value, label) {
+          var wrapper = document.createElement('label');
+          wrapper.style.marginRight = '8px';
+          var radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.name = 'baseChainMode-' + index;
+          radio.checked = (row.pinMode === value);
+          radio.onchange = (function (idx, v) { return function () { onBaseChainModeChange(idx, v); }; })(index, value);
+          wrapper.appendChild(radio);
+          wrapper.appendChild(document.createTextNode(' ' + label));
+          return wrapper;
+        }
+
+        function toggleBaseChainDetail(versionNumber) {
+          var el = document.getElementById('baseChainDetail-' + versionNumber);
+          if (el) { el.style.display = (el.style.display === 'none') ? 'block' : 'none'; }
+        }
+
+        function toggleInspectDrawer() {
+          var drawer = document.getElementById('inspectChainDrawer');
+          var isOpen = drawer.style.display !== 'none';
+          if (isOpen) {
+            drawer.style.display = 'none';
+            return;
+          }
+          renderInspectDrawer();
+          drawer.style.display = 'block';
+        }
+
+        function renderInspectDrawer() {
+          var drawer = document.getElementById('inspectChainDrawer');
+          drawer.innerHTML = '';
+          if (lastPerReference.length === 0) {
+            drawer.innerHTML = '&lt;p&gt;No resolvable base chain entries to inspect.&lt;/p&gt;';
+            return;
+          }
+          for (var i = 0; i &lt; lastPerReference.length; i++) {
+            var ref = lastPerReference[i];
+            var panel = document.createElement('div');
+            panel.className = 'ctsync-inspect-drawer-panel';
+            var heading = document.createElement('h4');
+            heading.textContent = ref.projectKey + ' — ' + ref.pinMode + ' (v' + ref.resolvedVersionNumber + ')';
+            panel.appendChild(heading);
+            var pre = document.createElement('pre');
+            pre.textContent = JSON.stringify(JSON.parse(ref.contentJson), null, 2);
+            panel.appendChild(pre);
+            drawer.appendChild(panel);
+          }
+        }
 
         // Accordion layout (2026-09-02): Monaco measures its container's computed size at
         // creation time, so an editor created while its ancestor details element is closed can render
@@ -335,7 +589,6 @@
         // Template has been used at least once).
         document.getElementById('editorDetails').addEventListener('toggle', function (evt) {
           if (!evt.target.open) { return; }
-          if (globalEditor) { globalEditor.layout(); }
           if (overrideEditor) { overrideEditor.layout(); }
           if (mergedEditor) { mergedEditor.layout(); }
           if (diffEditor) { diffEditor.layout(); }
@@ -345,8 +598,8 @@
         // Auto pretty-print JSON content whenever it's (re)loaded into the editable override
         // editor, so the user never sees a minified/however-it-was-stored blob and never has to
         // trigger formatting manually. Fire-and-forget: nothing downstream depends on the
-        // formatted state finishing, and formatting is idempotent. Not applied to globalEditor /
-        // mergedEditor: they're readOnly, and Monaco's format action does not reliably run on
+        // formatted state finishing, and formatting is idempotent. Not applied to
+        // mergedEditor: it's readOnly, and Monaco's format action does not reliably run on
         // readOnly editors (microsoft/monaco-editor#978) — mergedEditor is already pretty-printed
         // via JSON.stringify(r.merged, null, 2) in recomputeMerge below.
         function formatEditorContent(ed) {
@@ -494,15 +747,21 @@
           // other path ever schedules/invokes a recompute while overrideEditor is transiently
           // disposed (Compare mode), no-op instead of throwing on a null dereference.
           if (!overrideEditor) { return; }
-          proxy.previewMerge(overrideEditor.getValue(), function (t) {
+          document.getElementById('baseChainField').value = JSON.stringify(baseChainRows);
+          proxy.previewMerge(overrideEditor.getValue(), JSON.stringify(baseChainRows), function (t) {
             var r = t.responseObject();
             var indicator = document.getElementById('mergedStaleIndicator');
             if (r.ok) {
               mergedEditor.setValue(JSON.stringify(r.merged, null, 2));
               indicator.style.display = 'none';
+              lastPerReference = r.perReference || [];
+              document.getElementById('inspectChainCount').textContent = lastPerReference.length;
+              if (document.getElementById('inspectChainDrawer').style.display !== 'none') {
+                renderInspectDrawer();
+              }
             } else {
               // Finding 1 (tech-lead review): retain the last successfully computed merge —
-              // never blank/error the panel while the override is transiently invalid JSON.
+              // never blank/error the panel while the override or base chain is transiently invalid.
               indicator.style.display = 'block';
             }
           });
@@ -511,6 +770,7 @@
         function prepareSubmit() {
           document.getElementById('contentField').value =
               (editMode &amp;&amp; overrideEditor) ? overrideEditor.getValue() : lastEditContent;
+          document.getElementById('baseChainField').value = JSON.stringify(baseChainRows);
           // FR-46: disable both save buttons for the duration of the submission — this is a
           // classic form POST, not AJAX, so the page navigates away/reloads on completion
           // regardless and there is no success path that needs to re-enable them.
