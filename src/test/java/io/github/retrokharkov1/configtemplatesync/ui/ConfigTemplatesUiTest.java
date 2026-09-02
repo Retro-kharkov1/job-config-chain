@@ -2,6 +2,7 @@ package io.github.retrokharkov1.configtemplatesync.ui;
 
 import com.cloudbees.plugins.credentials.CredentialsScope;
 import com.cloudbees.plugins.credentials.SystemCredentialsProvider;
+import hudson.model.ManagementLink;
 import org.htmlunit.HttpMethod;
 import org.htmlunit.Page;
 import org.htmlunit.WebRequest;
@@ -65,6 +66,54 @@ public class ConfigTemplatesUiTest {
         return env;
     }
 
+    // --- Entry point: ManagementLink under /manage/, not a top-nav RootAction (owner request,
+    // 2026-09-02) ----------------------------------------------------------------------------
+
+    @Test
+    public void rootAction_isNotRegisteredAsATopNavAction() throws Exception {
+        // Jenkins' top-right nav bar icon strip is populated exclusively from Jenkins#getActions(),
+        // which core only ever fills from RootAction extensions (see
+        // jenkins.model.Jenkins#getActions() javadoc). This screen must no longer appear there.
+        boolean stillATopNavAction = jenkins.jenkins.getActions().stream()
+                .anyMatch(a -> a instanceof ConfigTemplatesRootAction);
+        assertFalse("the plugin's entry point must no longer be a top-nav RootAction",
+                stillATopNavAction);
+    }
+
+    @Test
+    public void rootAction_isRegisteredAsAManagementLinkUnderToolsCategory() throws Exception {
+        ConfigTemplatesRootAction managementLink = ManagementLink.all().stream()
+                .filter(ConfigTemplatesRootAction.class::isInstance)
+                .map(ConfigTemplatesRootAction.class::cast)
+                .findFirst()
+                .orElse(null);
+        assertNotNull("the plugin must register itself as a ManagementLink extension", managementLink);
+        assertEquals("configTemplates", managementLink.getUrlName());
+        assertEquals("Config Templates", managementLink.getDisplayName());
+        assertEquals("closest fit in ManagementLink's fixed Category enum (see class javadoc)",
+                ManagementLink.Category.TOOLS, managementLink.getCategory());
+    }
+
+    @Test
+    public void managePage_listsTheConfigTemplatesEntry() throws Exception {
+        HtmlPage page = jenkins.createWebClient().goTo("manage");
+        assertTrue("the Manage Jenkins page must list an entry for this plugin",
+                page.asNormalizedText().contains("Config Templates"));
+    }
+
+    @Test
+    public void rootUrl_stillResolvesToTheSameConfigTemplatesScreen_viaManagementLinkNowInsteadOfRootAction()
+            throws Exception {
+        // Jenkins' root object resolves a bare /<urlName> token against both its RootAction AND its
+        // ManagementLink extensions (Jenkins#getManagementLinks()/ManagementLink.all()) — confirming
+        // the URL space is unchanged even though the extension point backing it changed.
+        seedCommon("uitest70", "{\"a\":1}", "seed");
+
+        HtmlPage page = jenkins.createWebClient().goTo("configTemplates");
+        assertTrue("existing /configTemplates URL must still resolve to the same list page",
+                page.asNormalizedText().contains("uitest70-common"));
+    }
+
     @Test
     public void globalListPage_rendersSeededCommonConfigSets() throws Exception {
         seedCommon("uitest1", "{\"a\":1}", "seed");
@@ -100,7 +149,7 @@ public class ConfigTemplatesUiTest {
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
 
-        URL url = new URL(wc.getContextPath() + "configTemplates/uitest4/common/save");
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest4/common/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         request.setRequestParameters(java.util.List.of(
                 new org.htmlunit.util.NameValuePair("content", "{ not valid json"),
@@ -212,7 +261,7 @@ public class ConfigTemplatesUiTest {
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
 
-        URL url = new URL(wc.getContextPath() + "configTemplates/uitest7/common/save");
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest7/common/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         request.setRequestParameters(java.util.List.of(
                 new org.htmlunit.util.NameValuePair(
@@ -878,8 +927,11 @@ public class ConfigTemplatesUiTest {
                 html.contains("id=\"inspectChainToggle\""));
         assertTrue("env page must render the Inspect-chain drawer container",
                 html.contains("id=\"inspectChainDrawer\""));
-        assertTrue("env page must render the hidden baseChainJson form field",
-                html.contains("name=\"baseChainJson\""));
+        // In-place-update pass (2026-09-02): baseChainField is no longer a <form>-submitted field
+        // (Save now posts via proxy.save(...) AJAX, reading this element by id, not name) — assert
+        // on the id JS actually reads instead of a submission-era name attribute.
+        assertTrue("env page must render the hidden baseChainJson field",
+                html.contains("id=\"baseChainField\""));
         assertTrue("env page must expose the available common project keys as row-picker seed data",
                 html.contains("__availableProjectKeys"));
     }
@@ -1028,7 +1080,7 @@ public class ConfigTemplatesUiTest {
         // persisted-content-type assertion below, not any client-side behavior.
         wc.getOptions().setJavaScriptEnabled(false);
 
-        URL url = new URL(wc.getContextPath() + "configTemplates/uitest61/common/save");
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest61/common/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         request.setRequestParameters(java.util.List.of(
                 new org.htmlunit.util.NameValuePair("content", "<root><a>1</a></root>"),
@@ -1052,7 +1104,7 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
         wc.getOptions().setJavaScriptEnabled(false); // see doSave_firstSave_withContentTypeParameter... above
 
-        URL url = new URL(wc.getContextPath() + "configTemplates/uitest62/common/save");
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest62/common/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         // Attempting to smuggle a different contentType on a second save must have no effect —
         // the field is only meaningful when getConfigSet() == null (FR-59).
@@ -1083,7 +1135,7 @@ public class ConfigTemplatesUiTest {
         String baseChainJson = "[{\"projectKey\":\"uitest63\",\"pinMode\":\"ACTIVE\"},"
                 + "{\"projectKey\":\"uitest63-xml-common\",\"pinMode\":\"ACTIVE\"}]";
 
-        URL url = new URL(wc.getContextPath() + "configTemplates/uitest63/dev/save");
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest63/dev/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         request.setRequestParameters(java.util.List.of(
                 new org.htmlunit.util.NameValuePair("content", "{}"),
@@ -1125,7 +1177,7 @@ public class ConfigTemplatesUiTest {
 
         String baseChainJson = "[{\"projectKey\":\"uitest65\"}]"; // pinMode deliberately absent
 
-        URL url = new URL(wc.getContextPath() + "configTemplates/uitest65/dev/save");
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest65/dev/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         request.setRequestParameters(java.util.List.of(
                 new org.htmlunit.util.NameValuePair("content", "{}"),
