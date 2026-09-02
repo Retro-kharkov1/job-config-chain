@@ -4,6 +4,7 @@ import com.cloudbees.plugins.credentials.CredentialsScope;
 import com.cloudbees.plugins.credentials.SystemCredentialsProvider;
 import hudson.model.Result;
 import hudson.util.Secret;
+import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder;
@@ -16,6 +17,9 @@ import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+
+import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -40,6 +44,16 @@ public class ConfigTemplateSubstituteStepTest {
         ConfigSetRepository repository = new ConfigSetRepository();
         ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env");
         int v = env.addVersion(patchJson, "seed", "test", 1L);
+        env.activate(v);
+        repository.save(env);
+        return env;
+    }
+
+    private ConfigSet seedEnvWithChain(String projectKey, String environment, String patchJson,
+                                        java.util.List<BaseConfigReference> chain) throws Exception {
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env");
+        int v = env.addVersion(patchJson, "seed", "test", 1L, chain);
         env.activate(v);
         repository.save(env);
         return env;
@@ -179,8 +193,9 @@ public class ConfigTemplateSubstituteStepTest {
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
-        // FR-26: must surface, in build output, that it fell back to active versions.
-        jenkins.assertLogContains("falling back to the currently active versions", run);
+        // FR-26: must surface, in build output, that it fell back to the currently active/pinned chain.
+        jenkins.assertLogContains("falling back to the currently active/pinned base chain", run);
+        jenkins.assertLogContains("resolved to v1", run);
     }
 
     @Test
@@ -233,5 +248,74 @@ public class ConfigTemplateSubstituteStepTest {
                         + "}", true));
         WorkflowRun redeploy = jenkins.assertBuildStatus(Result.SUCCESS, rollbackRedeploy.scheduleBuild2(0));
         jenkins.assertLogContains("REDEPLOY:x=v1-value", redeploy);
+    }
+
+    @Test
+    public void multiEntryCrossProjectChainSubstitutesFromAllBases() throws Exception {
+        seedCommon("subproj9", "{\"a\":\"own\"}");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common");
+        int bV = teamB.addVersion("{\"b\":\"fromB\"}", "seed", "test", 1L);
+        teamB.activate(bV);
+        repository.save(teamB);
+
+        seedEnvWithChain("subproj9", "dev", "{}", Arrays.asList(
+                BaseConfigReference.active("subproj9"),
+                BaseConfigReference.active("team-b-common")));
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-multi-chain");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}#'\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj9', environment: 'dev', file: 'app.json')\n"
+                        + "  echo \"RESULT:${readFile('app.json')}\"\n"
+                        + "}", true));
+
+        WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        jenkins.assertLogContains("RESULT:x=own y=fromB", run);
+    }
+
+    @Test
+    public void fr54_pinnedBuildVersionSubstitutionIsByteIdenticalAcrossRepeatRuns() throws Exception {
+        // FR-54: substituting the same buildVersion twice, even after the referenced base's active
+        // version changes in between, must produce byte-identical output both times.
+        seedCommon("subproj10", "{\"a\":\"v1-value\"}");
+        seedEnv("subproj10", "dev", "{}");
+
+        WorkflowJob firstDeploy = jenkins.createProject(WorkflowJob.class, "fr54-first");
+        firstDeploy.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj10', environment: 'dev', file: 'app.json', buildVersion: 'b1')\n"
+                        + "  echo \"FIRST:${readFile('app.json')}\"\n"
+                        + "}", true));
+        WorkflowRun first = jenkins.assertBuildStatus(Result.SUCCESS, firstDeploy.scheduleBuild2(0));
+        jenkins.assertLogContains("FIRST:x=v1-value", first);
+        String firstOutput = jenkins.getLog(first).lines()
+                .filter(l -> l.contains("FIRST:"))
+                .findFirst().orElseThrow();
+
+        // Activate a different version of the referenced base common Config Set in between.
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet reloadedCommon = repository.findCommon("subproj10");
+        int v2 = reloadedCommon.addVersion("{\"a\":\"v2-value\"}", "bump", "test", 2L);
+        reloadedCommon.activate(v2);
+        repository.save(reloadedCommon);
+
+        WorkflowJob secondDeploy = jenkins.createProject(WorkflowJob.class, "fr54-second");
+        secondDeploy.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj10', environment: 'dev', file: 'app.json', buildVersion: 'b1')\n"
+                        + "  echo \"SECOND:${readFile('app.json')}\"\n"
+                        + "}", true));
+        WorkflowRun second = jenkins.assertBuildStatus(Result.SUCCESS, secondDeploy.scheduleBuild2(0));
+        String secondOutput = jenkins.getLog(second).lines()
+                .filter(l -> l.contains("SECOND:"))
+                .findFirst().orElseThrow();
+
+        assertEquals("re-substituting the same pinned buildVersion must be byte-identical",
+                firstOutput.replace("FIRST:", ""), secondOutput.replace("SECOND:", ""));
+        jenkins.assertLogContains("SECOND:x=v1-value", second);
     }
 }

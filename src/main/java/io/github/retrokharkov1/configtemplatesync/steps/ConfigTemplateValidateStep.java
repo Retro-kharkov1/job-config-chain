@@ -1,13 +1,15 @@
 package io.github.retrokharkov1.configtemplatesync.steps;
 
-import com.google.gson.JsonObject;
 import hudson.AbortException;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.model.TaskListener;
+import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
+
+import java.util.List;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
@@ -80,20 +82,21 @@ public class ConfigTemplateValidateStep extends Step {
             FilePath workspace = getContext().get(FilePath.class);
 
             ConfigSetRepository repository = StepSupport.newRepository();
-            ConfigSet common = StepSupport.requireCommon(repository, projectKey);
             ConfigSet env = StepSupport.requireEnv(repository, projectKey, environment);
-
-            ConfigSetVersion commonVersion = common.getActiveVersion();
             ConfigSetVersion envVersion = env.getActiveVersion();
-            if (commonVersion == null) {
-                throw new AbortException(
-                        "Common Config Set '" + projectKey + "' has no active version");
-            }
 
-            JsonObject effective = StepSupport.resolveEffective(commonVersion, envVersion);
+            // Live re-resolution of every reference in the chain (including PINNED ones — pinning is
+            // a property of the version, not of this step). A referenced project/version that does
+            // not exist surfaces as an AbortException from inside resolveEffective itself, per
+            // reference — requireCommon's old blanket "the one common set for projectKey exists"
+            // precondition no longer applies in general, since the chain may reference zero, one, or
+            // several common sets, not necessarily projectKey's own.
+            List<BaseConfigReference> chain = StepSupport.effectiveBaseChain(projectKey, envVersion);
+            StepSupport.ResolvedEffective resolved = StepSupport.resolveEffective(repository, chain, envVersion);
+
             String targetContent = readTargetFile(workspace);
 
-            StepSupport.validateOrThrow(effective, targetContent, listener);
+            StepSupport.validateOrThrow(resolved.mergedConfig, targetContent, listener);
             listener.getLogger().println(
                     "[configTemplateSync] Validation passed for projectKey '" + projectKey
                             + "', environment '" + environment + "'");

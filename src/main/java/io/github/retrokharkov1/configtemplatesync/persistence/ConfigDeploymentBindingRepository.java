@@ -3,6 +3,7 @@ package io.github.retrokharkov1.configtemplatesync.persistence;
 import hudson.XmlFile;
 import hudson.util.XStream2;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigDeploymentBinding;
+import io.github.retrokharkov1.configtemplatesync.model.ResolvedBaseVersion;
 import jenkins.model.Jenkins;
 
 import java.io.File;
@@ -47,7 +48,8 @@ public class ConfigDeploymentBindingRepository {
 
     /** Creates or updates (never duplicates) the binding for this (projectKey, environment, buildVersion). */
     public synchronized void save(String projectKey, String environment, String buildVersion,
-                                   int commonVersionNumber, int envVersionNumber, long deployedAtUtcEpochMillis) {
+                                   List<ResolvedBaseVersion> resolvedBaseChain, int envVersionNumber,
+                                   long deployedAtUtcEpochMillis) {
         List<ConfigDeploymentBinding> all = loadAll();
         ConfigDeploymentBinding existing = null;
         for (ConfigDeploymentBinding binding : all) {
@@ -57,10 +59,10 @@ public class ConfigDeploymentBindingRepository {
             }
         }
         if (existing != null) {
-            existing.update(commonVersionNumber, envVersionNumber, deployedAtUtcEpochMillis);
+            existing.update(resolvedBaseChain, envVersionNumber, deployedAtUtcEpochMillis);
         } else {
             all.add(new ConfigDeploymentBinding(projectKey, environment, buildVersion,
-                    commonVersionNumber, envVersionNumber, deployedAtUtcEpochMillis));
+                    resolvedBaseChain, envVersionNumber, deployedAtUtcEpochMillis));
         }
         writeAll(all);
     }

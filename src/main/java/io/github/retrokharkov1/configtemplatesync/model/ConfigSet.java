@@ -149,9 +149,27 @@ public class ConfigSet implements Serializable {
      * @return the newly assigned, monotonically increasing version number (FR-4).
      */
     public int addVersion(String contentJson, String note, String author, long timestampEpochMillis) {
+        return addVersion(contentJson, note, author, timestampEpochMillis, Collections.emptyList());
+    }
+
+    /**
+     * Appends a new version carrying an explicit base chain (FR-51). A COMMON-role Config Set can
+     * never declare a base chain of its own (FR-53) — common Config Sets are always the roots of a
+     * chain, never chain members themselves — so a non-empty {@code baseChain} on a COMMON-role
+     * Config Set is rejected before the existing secret-placeholder enforcement even runs.
+     *
+     * @return the newly assigned, monotonically increasing version number (FR-4).
+     */
+    public int addVersion(String contentJson, String note, String author, long timestampEpochMillis,
+                           List<BaseConfigReference> baseChain) {
+        if (role == ConfigSetRole.COMMON && baseChain != null && !baseChain.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "A COMMON-role Config Set must not declare a base chain of its own");
+        }
         enforceSecretPlaceholders(contentJson);
         int nextVersionNumber = nextVersionNumber();
-        versions.add(new ConfigSetVersion(nextVersionNumber, contentJson, note, author, timestampEpochMillis));
+        versions.add(new ConfigSetVersion(nextVersionNumber, contentJson, note, author, timestampEpochMillis,
+                baseChain));
         return nextVersionNumber;
     }
 

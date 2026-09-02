@@ -5,12 +5,16 @@ import com.google.gson.JsonObject;
 import hudson.AbortException;
 import hudson.model.Run;
 import hudson.model.TaskListener;
+import io.github.retrokharkov1.configtemplatesync.merge.BaseChainResolver;
 import io.github.retrokharkov1.configtemplatesync.merge.DriftChecker;
 import io.github.retrokharkov1.configtemplatesync.merge.DriftResult;
 import io.github.retrokharkov1.configtemplatesync.merge.EffectiveConfigResolver;
+import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
+import io.github.retrokharkov1.configtemplatesync.model.PinMode;
+import io.github.retrokharkov1.configtemplatesync.model.ResolvedBaseVersion;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 
@@ -50,11 +54,74 @@ final class StepSupport {
         return env;
     }
 
-    /** Resolves the effective config from a common ConfigSet's active version + an optional env version. */
-    static JsonObject resolveEffective(ConfigSetVersion commonVersion, ConfigSetVersion envVersion) {
-        String commonJson = commonVersion == null ? "{}" : commonVersion.getContentJson();
+    /**
+     * Return type of {@link #resolveEffective}: the merged JSON, the concrete
+     * {@link ResolvedBaseVersion} list to freeze into a {@code ConfigDeploymentBinding} (FR-23), and
+     * the resolved {@link ConfigSet} objects in the same chain order (reused by
+     * {@link #mergedSecretsManifest}, so the chain is fetched from the repository exactly once).
+     */
+    static final class ResolvedEffective {
+        final JsonObject mergedConfig;
+        final List<ResolvedBaseVersion> resolvedBaseChain;
+        final List<ConfigSet> resolvedBaseConfigSets;
+
+        ResolvedEffective(JsonObject mergedConfig, List<ResolvedBaseVersion> resolvedBaseChain,
+                           List<ConfigSet> resolvedBaseConfigSets) {
+            this.mergedConfig = mergedConfig;
+            this.resolvedBaseChain = resolvedBaseChain;
+            this.resolvedBaseConfigSets = resolvedBaseConfigSets;
+        }
+    }
+
+    /**
+     * Resolves an ordered {@code baseChain} (FR-51) to its actual base contents, folds them with the
+     * env version's content per {@link EffectiveConfigResolver#resolveChain}, and returns both the
+     * merged result and the concrete {@link ResolvedBaseVersion}s to freeze into a deployment binding
+     * (FR-23). Fails loud (NFR-7): throws {@link AbortException} naming the missing project/version
+     * for the first unresolvable chain entry encountered.
+     */
+    static ResolvedEffective resolveEffective(ConfigSetRepository repository, List<BaseConfigReference> baseChain,
+                                               ConfigSetVersion envVersion) throws AbortException {
+        List<BaseChainResolver.ResolvedReference> resolved = BaseChainResolver.resolve(repository, baseChain);
+        List<String> baseContents = new ArrayList<>();
+        List<ResolvedBaseVersion> resolvedBaseChain = new ArrayList<>();
+        List<ConfigSet> resolvedBaseConfigSets = new ArrayList<>();
+        for (BaseChainResolver.ResolvedReference r : resolved) {
+            if (r.configSet == null) {
+                throw new AbortException("No common Config Set found for projectKey '"
+                        + r.reference.getProjectKey() + "' (referenced by base chain)");
+            }
+            if (r.version == null) {
+                String what = r.reference.getPinMode() == PinMode.PINNED
+                        ? "version " + r.reference.getPinnedVersionNumber()
+                        : "an active version";
+                throw new AbortException("Base Config Set '" + r.reference.getProjectKey() + "' has no " + what
+                        + " to resolve (referenced by base chain)");
+            }
+            baseContents.add(r.version.getContentJson());
+            resolvedBaseChain.add(new ResolvedBaseVersion(r.reference.getProjectKey(), r.version.getVersionNumber()));
+            resolvedBaseConfigSets.add(r.configSet);
+        }
         String envPatch = envVersion == null ? null : envVersion.getContentJson();
-        return EffectiveConfigResolver.resolve(commonJson, envPatch);
+        JsonObject merged = EffectiveConfigResolver.resolveChain(baseContents, envPatch);
+        return new ResolvedEffective(merged, Collections.unmodifiableList(resolvedBaseChain),
+                Collections.unmodifiableList(resolvedBaseConfigSets));
+    }
+
+    /**
+     * FR-52's backward-compatibility default: an env version's own declared {@code baseChain} wins if
+     * non-empty, otherwise synthesize a single {@link BaseConfigReference#active} entry pointing at
+     * this projectKey's own common Config Set — exactly today's implicit single-base behavior,
+     * generalized.
+     */
+    static List<BaseConfigReference> effectiveBaseChain(String projectKey, ConfigSetVersion envVersion) {
+        if (envVersion != null) {
+            List<BaseConfigReference> declared = envVersion.getBaseChain();
+            if (declared != null && !declared.isEmpty()) {
+                return declared;
+            }
+        }
+        return Collections.singletonList(BaseConfigReference.active(projectKey));
     }
 
     /**
@@ -85,15 +152,21 @@ final class StepSupport {
     }
 
     /**
-     * Merges the common and (optional) env Config Sets' secrets manifests (dotted path -> Jenkins
-     * credential ID) into one lookup table for substitution (FR-13/FR-21). Env-declared entries take
-     * precedence over a common entry for the same dotted path, mirroring the same
-     * common-then-env-override precedence {@link EffectiveConfigResolver} already applies to content.
+     * Merges the resolved base chain's and (optional) env Config Set's secrets manifests (dotted
+     * path -> Jenkins credential ID) into one lookup table for substitution (FR-13/FR-21). Later
+     * entries in {@code resolvedBaseConfigSets} take precedence over earlier ones on a conflicting
+     * path, matching the same later-wins fold {@link EffectiveConfigResolver#resolveChain} already
+     * applies to content — the manifest is metadata about the same content tree the chain folds, so
+     * the precedence rule for "which base determines this path" is identical whether asking about the
+     * value or the secret-ness at that path. The env Config Set's own manifest still wins over every
+     * base.
      */
-    static Map<String, String> mergedSecretsManifest(ConfigSet common, ConfigSet env) {
+    static Map<String, String> mergedSecretsManifest(List<ConfigSet> resolvedBaseConfigSets, ConfigSet env) {
         Map<String, String> merged = new LinkedHashMap<>();
-        if (common != null) {
-            merged.putAll(common.getSecretsManifest());
+        for (ConfigSet base : resolvedBaseConfigSets) {
+            if (base != null) {
+                merged.putAll(base.getSecretsManifest());
+            }
         }
         if (env != null) {
             merged.putAll(env.getSecretsManifest());
