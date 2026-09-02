@@ -68,6 +68,17 @@
              right-margin gap above collapses to 0 — replace it with vertical breathing room. */
           .ctsync-banner-row > #compareBannerText { margin-right: 0; margin-bottom: 8px; display: block; }
         }
+        /* Accordion layout (owner-approved plan, 2026-09-02): Secrets manifest / Version history /
+           Editor are now independently collapsible details sections rather than one long
+           always-expanded scroll. Style the summary element to read as a natural evolution of the
+           existing h2 section-heading language, not a jarring new widget. */
+        .ctsync-page summary { font-size: 1.4em; font-weight: 600; margin: 12px 0 4px; cursor: pointer; }
+        .ctsync-page details { margin-bottom: 8px; }
+        /* Table-scroll behavior (same plan): contain a long Version-history/Secrets-manifest
+           table's growth so page buttons/sections below it stay reachable, without requiring the
+           whole page to scroll. Applied to the wrapper div, never the table element itself —
+           overflow on a table element directly has known sticky-header/border quirks. */
+        .ctsync-scroll-table { max-height: 50vh; overflow-y: auto; }
       </style>
 
       <div class="ctsync-page">
@@ -77,142 +88,154 @@
         <div class="alert alert-info">This Config Set does not exist yet — Save creates it.</div>
       </j:if>
 
-      <h2>Version history</h2>
-      <p>Click a row to compare it against the editor's current draft (no checkbox required —
-         click any row again to return to editing).</p>
-      <table class="jenkins-table ctsync-history-table" style="width:100%">
-        <thead><tr><th>Version</th><th>Created</th><th>Created by</th><th>Note</th><th>Active</th><th>Actions</th></tr></thead>
-        <tbody>
-          <j:forEach var="v" items="${it.versions}">
-            <tr id="historyRow-${v.versionNumber}" class="ctsync-history-row"
-                tabindex="0" role="button"
-                onclick="selectHistoryRow(${v.versionNumber});"
-                onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectHistoryRow(${v.versionNumber}); }">
-              <td data-th="Version">v${v.versionNumber}</td>
-              <td data-th="Created">${v.timestampEpochMillis}</td>
-              <td data-th="Created by">${v.author}</td>
-              <td data-th="Note">${v.note}</td>
-              <td data-th="Active">
-                <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
-                  &#9679; active
-                </j:if>
-              </td>
-              <td data-th="Actions">
-                <j:choose>
-                  <j:when test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
-                    <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
-                            disabled="disabled" data-always-disabled="true"
-                            title="Already the active version">Activate</button>
-                  </j:when>
-                  <j:otherwise>
-                    <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
-                            title="Activate version ${v.versionNumber} without changing the editor content"
-                            onclick="event.stopPropagation(); activateVersion(${v.versionNumber});">Activate</button>
-                  </j:otherwise>
-                </j:choose>
-              </td>
-            </tr>
-          </j:forEach>
-        </tbody>
-      </table>
-
-      <div id="saveBanner" class="alert alert-danger" style="display:none"></div>
-
-      <div class="ctsync-section-header ctsync-editor-header-row">
-        <b>Editor</b>
-        <span class="ctsync-btn-row" style="margin:0">
-          <button type="submit" form="ctsyncSaveForm" id="saveBtn" class="jenkins-button jenkins-button--primary"
-                  title="Save the editor content as a new version">Save</button>
-          <button type="submit" form="ctsyncSaveForm" id="saveActivateBtn"
-                  onclick="document.getElementById('activateFlag').value='true';"
-                  class="jenkins-button"
-                  title="Save the editor content as a new version and immediately activate it">Save &amp; Activate</button>
-        </span>
-      </div>
-      <div class="ctsync-btn-row">
-        <button type="button" id="modeEditBtn"
-               class="jenkins-button jenkins-button--primary" title="Switch to the editable JSON editor"
-               onclick="switchToEditMode();">&#9998; Editing</button>
-        <j:choose>
-          <j:when test="${it.templateAvailable}">
-            <button type="button" id="modeGenerateBtn"
-                   class="jenkins-button" title="Show a copy-paste-ready tokenized template from the ACTIVE version"
-                   onclick="switchToGenerateMode();">&#128203; Generate Template</button>
-          </j:when>
-          <j:otherwise>
-            <button type="button" id="modeGenerateBtn"
-                   class="jenkins-button" disabled="disabled"
-                   title="no active version yet">&#128203; Generate Template</button>
-          </j:otherwise>
-        </j:choose>
-      </div>
-      <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
-        <span id="compareBannerText"/>
-        <span>
-          <button type="button" id="loadComparedBtn" class="jenkins-button jenkins-button--primary"
-                 title="Accept the version being compared into the editor as the new draft"
-                 onclick="loadComparedIntoEditor();">Load into editor</button>
-          <button type="button" id="backToEditingBtn" class="jenkins-button"
-                 title="Discard the comparison and return to editing — the draft is left unchanged"
-                 onclick="switchToEditMode();">Back to editing</button>
-        </span>
-      </div>
-      <div id="generateBanner" class="alert alert-info" style="display:none">
-        Common-only template from the ACTIVE version — NOT this box's unsaved edits, if any.
-      </div>
-      <div id="monacoEditor" style="height:420px;border:1px solid #ccc"/>
-      <div id="generateCopyRow" style="display:none;margin-top:4px">
-        <button type="button" id="copyTemplateBtn" class="jenkins-button"
-                title="Copy the generated template to the clipboard"
-                onclick="copyGeneratedTemplate();">&#128203; Copy to clipboard</button>
-      </div>
-
-      <form method="post" action="save" id="ctsyncSaveForm" onsubmit="return prepareSubmit();">
-        <textarea name="content" id="contentField" style="display:none"/>
-        <f:entry title="Change note (required)">
-          <input class="setting-input" type="text" name="note" required="required"/>
-        </f:entry>
-        <input type="hidden" name="activate" id="activateFlag" value=""/>
-      </form>
-
-      <h2>Secrets manifest</h2>
-      <p>A path listed here is structurally locked: the JSON editor above may only hold the literal
-         <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
-         value is supplied only via the Jenkins credential picked below, never typed here.</p>
-      <table class="jenkins-table" style="width:60%">
-        <thead><tr><th>Dotted path</th><th>Credential</th><th/></tr></thead>
-        <tbody>
-          <j:if test="${it.exists}">
-            <j:forEach var="entry" items="${it.configSet.secretsManifest.entrySet()}">
-              <tr>
-                <td>${entry.key}</td>
-                <td>${entry.value}</td>
-                <td>
-                  <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
-                          data-secret-path="${entry.key}"
-                          title="Remove this secret path binding"
-                          onclick="removeSecret(this.getAttribute('data-secret-path'));">&#128465; Remove</button>
-                </td>
-              </tr>
-            </j:forEach>
-          </j:if>
-        </tbody>
-      </table>
-      <f:entry title="Add / update secret path">
-        <div class="ctsync-secret-form">
-          <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
-          <div class="jenkins-select">
-            <select class="jenkins-select__input" id="secretCredentialId">
-              <j:forEach var="cid" items="${it.availableCredentialIds}">
-                <option value="${cid}">${cid}</option>
-              </j:forEach>
-            </select>
-          </div>
-          <button type="button" class="jenkins-button"
-                  title="Bind the selected credential to this secret path"
-                  onclick="addSecret();">Bind credential</button>
+      <details id="secretsManifestDetails">
+        <summary>Secrets manifest</summary>
+        <p>A path listed here is structurally locked: the JSON editor below may only hold the literal
+           <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
+           value is supplied only via the Jenkins credential picked below, never typed here.</p>
+        <div class="ctsync-scroll-table">
+          <table class="jenkins-table" style="width:60%">
+            <thead><tr><th>Dotted path</th><th>Credential</th><th/></tr></thead>
+            <tbody>
+              <j:if test="${it.exists}">
+                <j:forEach var="entry" items="${it.configSet.secretsManifest.entrySet()}">
+                  <tr>
+                    <td>${entry.key}</td>
+                    <td>${entry.value}</td>
+                    <td>
+                      <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
+                              data-secret-path="${entry.key}"
+                              title="Remove this secret path binding"
+                              onclick="removeSecret(this.getAttribute('data-secret-path'));">&#128465; Remove</button>
+                    </td>
+                  </tr>
+                </j:forEach>
+              </j:if>
+            </tbody>
+          </table>
         </div>
-      </f:entry>
+        <f:entry title="Add / update secret path">
+          <div class="ctsync-secret-form">
+            <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
+            <div class="jenkins-select">
+              <select class="jenkins-select__input" id="secretCredentialId">
+                <j:forEach var="cid" items="${it.availableCredentialIds}">
+                  <option value="${cid}">${cid}</option>
+                </j:forEach>
+              </select>
+            </div>
+            <button type="button" class="jenkins-button"
+                    title="Bind the selected credential to this secret path"
+                    onclick="addSecret();">Bind credential</button>
+          </div>
+        </f:entry>
+      </details>
+
+      <details id="versionHistoryDetails">
+        <summary>Version history</summary>
+        <p>Click a row to compare it against the editor's current draft (no checkbox required —
+           click any row again to return to editing).</p>
+        <div class="ctsync-scroll-table">
+          <table class="jenkins-table ctsync-history-table" style="width:100%">
+            <thead><tr><th>Version</th><th>Created</th><th>Created by</th><th>Note</th><th>Active</th><th>Actions</th></tr></thead>
+            <tbody>
+              <j:forEach var="v" items="${it.versions}">
+                <tr id="historyRow-${v.versionNumber}" class="ctsync-history-row"
+                    tabindex="0" role="button"
+                    onclick="selectHistoryRow(${v.versionNumber});"
+                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectHistoryRow(${v.versionNumber}); }">
+                  <td data-th="Version">v${v.versionNumber}</td>
+                  <td data-th="Created">${v.timestampEpochMillis}</td>
+                  <td data-th="Created by">${v.author}</td>
+                  <td data-th="Note">${v.note}</td>
+                  <td data-th="Active">
+                    <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
+                      &#9679; active
+                    </j:if>
+                  </td>
+                  <td data-th="Actions">
+                    <j:choose>
+                      <j:when test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
+                        <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
+                                disabled="disabled" data-always-disabled="true"
+                                title="Already the active version">Activate</button>
+                      </j:when>
+                      <j:otherwise>
+                        <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
+                                title="Activate version ${v.versionNumber} without changing the editor content"
+                                onclick="event.stopPropagation(); activateVersion(${v.versionNumber});">Activate</button>
+                      </j:otherwise>
+                    </j:choose>
+                  </td>
+                </tr>
+              </j:forEach>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <details id="editorDetails" open="open">
+        <summary>Editor</summary>
+
+        <div id="saveBanner" class="alert alert-danger" style="display:none"></div>
+
+        <div class="ctsync-section-header ctsync-editor-header-row">
+          <b>Editor</b>
+          <span class="ctsync-btn-row" style="margin:0">
+            <button type="submit" form="ctsyncSaveForm" id="saveBtn" class="jenkins-button jenkins-button--primary"
+                    title="Save the editor content as a new version">Save</button>
+            <button type="submit" form="ctsyncSaveForm" id="saveActivateBtn"
+                    onclick="document.getElementById('activateFlag').value='true';"
+                    class="jenkins-button"
+                    title="Save the editor content as a new version and immediately activate it">Save &amp; Activate</button>
+          </span>
+        </div>
+        <div class="ctsync-btn-row">
+          <button type="button" id="modeEditBtn"
+                 class="jenkins-button jenkins-button--primary" title="Switch to the editable JSON editor"
+                 onclick="switchToEditMode();">&#9998; Editing</button>
+          <j:choose>
+            <j:when test="${it.templateAvailable}">
+              <button type="button" id="modeGenerateBtn"
+                     class="jenkins-button" title="Show a copy-paste-ready tokenized template from the ACTIVE version"
+                     onclick="switchToGenerateMode();">&#128203; Generate Template</button>
+            </j:when>
+            <j:otherwise>
+              <button type="button" id="modeGenerateBtn"
+                     class="jenkins-button" disabled="disabled"
+                     title="no active version yet">&#128203; Generate Template</button>
+            </j:otherwise>
+          </j:choose>
+        </div>
+        <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
+          <span id="compareBannerText"/>
+          <span>
+            <button type="button" id="loadComparedBtn" class="jenkins-button jenkins-button--primary"
+                   title="Accept the version being compared into the editor as the new draft"
+                   onclick="loadComparedIntoEditor();">Load into editor</button>
+            <button type="button" id="backToEditingBtn" class="jenkins-button"
+                   title="Discard the comparison and return to editing — the draft is left unchanged"
+                   onclick="switchToEditMode();">Back to editing</button>
+          </span>
+        </div>
+        <div id="generateBanner" class="alert alert-info" style="display:none">
+          Common-only template from the ACTIVE version — NOT this box's unsaved edits, if any.
+        </div>
+        <div id="monacoEditor" style="height:420px;border:1px solid #ccc"/>
+        <div id="generateCopyRow" style="display:none;margin-top:4px">
+          <button type="button" id="copyTemplateBtn" class="jenkins-button"
+                  title="Copy the generated template to the clipboard"
+                  onclick="copyGeneratedTemplate();">&#128203; Copy to clipboard</button>
+        </div>
+
+        <form method="post" action="save" id="ctsyncSaveForm" onsubmit="return prepareSubmit();">
+          <textarea name="content" id="contentField" style="display:none"/>
+          <f:entry title="Change note (required)">
+            <input class="setting-input" type="text" name="note" required="required"/>
+          </f:entry>
+          <input type="hidden" name="activate" id="activateFlag" value=""/>
+        </form>
+      </details>
 
       <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
       <link rel="stylesheet" href="${rootURL}/plugin/config-template-sync/monaco/vs/editor/editor.main.css"/>
@@ -246,6 +269,17 @@
             automaticLayout: true
           });
           formatEditorContent(editor);
+        });
+
+        // Accordion layout (2026-09-02): Monaco measures its container's computed size at
+        // creation time, so an editor created while its ancestor details element is closed can render
+        // at zero size. "Editor" is open by default so this isn't hit on initial load, but if a
+        // user collapses then reopens it, force every live Monaco instance in this section to
+        // re-measure via layout() so it never renders mis-sized.
+        document.getElementById('editorDetails').addEventListener('toggle', function (evt) {
+          if (!evt.target.open) { return; }
+          if (editor) { editor.layout(); }
+          if (diffEditor) { diffEditor.layout(); }
         });
 
         // Auto pretty-print JSON content whenever it's (re)loaded into the editable Monaco
