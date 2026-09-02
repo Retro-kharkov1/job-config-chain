@@ -3,6 +3,7 @@ package io.github.retrokharkov1.configtemplatesync.ui;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -11,9 +12,11 @@ import hudson.model.Failure;
 import hudson.model.User;
 import hudson.security.ACL;
 import io.github.retrokharkov1.configtemplatesync.merge.JsonPaths;
+import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
+import io.github.retrokharkov1.configtemplatesync.model.PinMode;
 import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 import jenkins.model.Jenkins;
@@ -25,6 +28,7 @@ import org.kohsuke.stapler.bind.JavaScriptMethod;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -138,9 +142,11 @@ public abstract class ConfigSetPage {
     public void doSave(StaplerRequest req, StaplerResponse rsp,
                         @QueryParameter String content,
                         @QueryParameter String note,
-                        @QueryParameter(fixEmpty = true) String activate) throws IOException {
+                        @QueryParameter(fixEmpty = true) String activate,
+                        @QueryParameter(fixEmpty = true) String baseChainJson) throws IOException {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         validateJsonSyntaxOrFail(content);
+        List<BaseConfigReference> baseChain = parseBaseChainOrFail(baseChainJson);
 
         ConfigSet configSet = getConfigSet();
         if (configSet == null) {
@@ -149,9 +155,10 @@ public abstract class ConfigSetPage {
         String author = currentAuthor();
         int newVersion;
         try {
-            newVersion = configSet.addVersion(content, note, author, System.currentTimeMillis());
+            newVersion = configSet.addVersion(content, note, author, System.currentTimeMillis(), baseChain);
         } catch (IllegalArgumentException e) {
-            // FR-14/OQ-1: structural secret-placeholder rejection surfaces here as a clear save error.
+            // FR-14/OQ-1: structural secret-placeholder rejection, and (FR-53) a non-empty baseChain
+            // on a COMMON-role Config Set, both surface here as a clear save error.
             throw new Failure("Save blocked: " + e.getMessage());
         }
         if (activate != null) {
@@ -159,6 +166,50 @@ public abstract class ConfigSetPage {
         }
         repository.save(configSet);
         rsp.sendRedirect2(".");
+    }
+
+    /**
+     * Parses the base-chain editor's draft JSON array (FR-51/FR-55) into
+     * {@link BaseConfigReference}s, or returns an empty list if the field is absent/blank — the
+     * global (common) page's Jelly never emits {@code baseChainJson} at all, so this is a
+     * no-behavior-change path there. Throws {@link Failure} (never a raw {@link RuntimeException})
+     * on malformed input, matching this page's existing save-time validation convention.
+     */
+    static List<BaseConfigReference> parseBaseChainOrFail(String baseChainJson) {
+        if (baseChainJson == null || baseChainJson.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            JsonArray array = JsonParser.parseString(baseChainJson).getAsJsonArray();
+            List<BaseConfigReference> result = new ArrayList<>();
+            for (JsonElement el : array) {
+                JsonObject row = el.getAsJsonObject();
+                String rowProjectKey = row.get("projectKey").getAsString();
+                PinMode mode = PinMode.valueOf(row.get("pinMode").getAsString());
+                int pinnedVersion = row.has("pinnedVersionNumber") ? row.get("pinnedVersionNumber").getAsInt() : 0;
+                result.add(new BaseConfigReference(rowProjectKey, mode, pinnedVersion));
+            }
+            return result;
+        } catch (RuntimeException e) {
+            // JsonSyntaxException, IllegalStateException, NullPointerException, IllegalArgumentException.
+            throw new Failure("Save blocked: malformed base chain — " + e.getMessage());
+        }
+    }
+
+    /**
+     * Non-throwing sibling of {@link #parseBaseChainOrFail} for endpoints that must never throw and
+     * instead report a structured {@code ok:false} (e.g. {@link EnvConfigSetPage}'s live merge
+     * preview) — reuses the single parsing implementation above rather than duplicating the
+     * JSON-array-walk logic, catching the {@link Failure} it throws on malformed input.
+     *
+     * @return the parsed chain, or {@code null} if {@code baseChainJson} was malformed.
+     */
+    static List<BaseConfigReference> tryParseBaseChain(String baseChainJson) {
+        try {
+            return parseBaseChainOrFail(baseChainJson);
+        } catch (Failure e) {
+            return null;
+        }
     }
 
     /**
