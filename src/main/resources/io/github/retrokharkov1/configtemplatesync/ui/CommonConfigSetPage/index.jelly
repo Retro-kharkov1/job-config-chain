@@ -207,6 +207,27 @@
             </j:otherwise>
           </j:choose>
         </div>
+
+        <!-- Content-type picker (FR-59, FR-68) — its own row directly below the mode-toggle row and
+             directly above the Monaco box, per the wireframe. Enabled only while this Config Set does
+             not exist yet (it.exists == false); becomes a disabled/read-only display of the committed
+             value the moment a first version exists. -->
+        <div class="ctsync-btn-row" id="contentTypeRow">
+          <label style="font-weight:600;margin-right:8px">Content type:</label>
+          <j:choose>
+            <j:when test="${it.contentTypeLocked}">
+              <span id="contentTypeLockedDisplay">${it.contentTypeValue}&#160;&#128274; (locked — set at first Save, immutable)</span>
+            </j:when>
+            <j:otherwise>
+              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="JSON" checked="checked" onclick="onContentTypeChange('JSON');"/> JSON</label>
+              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="XML" onclick="onContentTypeChange('XML');"/> XML</label>
+              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="YAML" onclick="onContentTypeChange('YAML');"/> YAML</label>
+              <span style="color:#666">&#9432; choose once — locked forever after the first Save</span>
+            </j:otherwise>
+          </j:choose>
+          <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
+        </div>
+
         <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
           <span id="compareBannerText"/>
           <span>
@@ -234,6 +255,7 @@
             <input class="setting-input" type="text" name="note" required="required"/>
           </f:entry>
           <input type="hidden" name="activate" id="activateFlag" value=""/>
+          <input type="hidden" name="contentType" id="contentTypeField" value="${it.contentTypeValue}"/>
         </form>
       </details>
 
@@ -241,8 +263,13 @@
       <link rel="stylesheet" href="${rootURL}/plugin/config-template-sync/monaco/vs/editor/editor.main.css"/>
       <script>
         var __seed = <j:out value="${it.editorSeedJsonForScript}"/>;
+        // FR-59/FR-63/FR-64: this Config Set's content type — committed and immutable once a first
+        // version exists, otherwise the picker's live selection (default JSON). Drives the Monaco
+        // `language` mode and which diagnostics/format provider attaches.
+        var currentContentType = '${it.contentTypeValue}';
         var editor;
         var diffEditor;
+        var yamlCheckTimer = null;
         // true = "Editing" mode (normal editable Monaco editor), false = "Compare" mode (read-only
         // Monaco diff editor). Both modes render into the SAME #monacoEditor container — this is a
         // mode toggle, never a second editor instance (wireframe structural principle).
@@ -258,18 +285,128 @@
         var selectedCompareVersion = null;
         var lastComparedVersionContent = '';
 
+        // FR-63/FR-64: JSON/XML/YAML all dispatch through this one language-mode lookup — no
+        // per-format special-casing anywhere else in this script beyond it.
+        function languageForType(type) {
+          if (type === 'XML') { return 'xml'; }
+          if (type === 'YAML') { return 'yaml'; }
+          return 'json';
+        }
+
         require.config({ paths: { vs: '${rootURL}/plugin/config-template-sync/monaco/vs' } });
         require(['vs/editor/editor.main'], function () {
           monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
             validate: true, allowComments: false, schemas: []
           });
+          registerXmlYamlFormatProviders();
           editor = monaco.editor.create(document.getElementById('monacoEditor'), {
             value: __seed,
-            language: 'json',
+            language: languageForType(currentContentType),
             automaticLayout: true
           });
+          wireLiveDiagnostics(editor);
           formatEditorContent(editor);
         });
+
+        // FR-59/FR-68: switching the (still-unlocked) content-type radio must re-create the Monaco
+        // editor instance with the newly chosen language so diagnostics/format match what will
+        // actually be validated on Save — not just change the submitted field.
+        function onContentTypeChange(type) {
+          if (currentContentType === type) { return; }
+          currentContentType = type;
+          document.getElementById('contentTypeField').value = type;
+          if (editMode &amp;&amp; editor) {
+            var val = editor.getValue();
+            editor.dispose();
+            editor = monaco.editor.create(document.getElementById('monacoEditor'), {
+              value: val,
+              language: languageForType(currentContentType),
+              automaticLayout: true
+            });
+            wireLiveDiagnostics(editor);
+          }
+        }
+
+        // FR-63: XML gets synchronous, client-side DOMParser diagnostics; YAML gets a debounced
+        // server round trip (doValidateContent) with the small non-blocking "Checking YAML…"
+        // indicator; JSON keeps Monaco's own built-in JSON diagnostics (already wired above), so
+        // this function is a no-op for JSON.
+        function wireLiveDiagnostics(ed) {
+          if (!ed) { return; }
+          ed.onDidChangeModelContent(function () {
+            if (currentContentType === 'XML') {
+              runXmlDiagnostics(ed);
+            } else if (currentContentType === 'YAML') {
+              scheduleYamlDiagnostics(ed);
+            }
+          });
+          if (currentContentType === 'XML') { runXmlDiagnostics(ed); }
+          if (currentContentType === 'YAML') { scheduleYamlDiagnostics(ed); }
+        }
+
+        function runXmlDiagnostics(ed) {
+          var markers = [];
+          try {
+            var doc = new DOMParser().parseFromString(ed.getValue(), 'application/xml');
+            var errorNode = doc.getElementsByTagName('parsererror')[0];
+            if (errorNode) {
+              markers.push({
+                severity: monaco.MarkerSeverity.Error,
+                message: errorNode.textContent || 'Malformed XML',
+                startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
+              });
+            }
+          } catch (e) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Error,
+              message: String(e),
+              startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
+            });
+          }
+          monaco.editor.setModelMarkers(ed.getModel(), 'ctsync-xml', markers);
+        }
+
+        function scheduleYamlDiagnostics(ed) {
+          if (yamlCheckTimer) { clearTimeout(yamlCheckTimer); }
+          var indicator = document.getElementById('checkingIndicator');
+          if (indicator) { indicator.style.display = 'inline'; }
+          var content = ed.getValue();
+          yamlCheckTimer = setTimeout(function () {
+            proxy.validateContent(JSON.stringify({ content: content, contentType: 'YAML' }), function (t) {
+              if (indicator) { indicator.style.display = 'none'; }
+              var r = t.responseObject();
+              var markers = [];
+              if (!r.ok) {
+                markers.push({
+                  severity: monaco.MarkerSeverity.Error,
+                  message: r.error || 'Malformed YAML',
+                  startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
+                });
+              }
+              monaco.editor.setModelMarkers(ed.getModel(), 'ctsync-yaml', markers);
+            });
+          }, 500);
+        }
+
+        // FR-64: XML/YAML "Format document" round-trips the same doFormatContent server endpoint
+        // used by the YAML "checking…" diagnostics' sibling — JSON keeps Monaco's own built-in
+        // formatter (unchanged), so no provider is registered for it here.
+        function registerXmlYamlFormatProviders() {
+          ['xml', 'yaml'].forEach(function (lang) {
+            monaco.languages.registerDocumentFormattingEditProvider(lang, {
+              provideDocumentFormattingEdits: function (model) {
+                return new Promise(function (resolve) {
+                  var type = lang === 'xml' ? 'XML' : 'YAML';
+                  proxy.formatContent(JSON.stringify({ content: model.getValue(), contentType: type }), function (t) {
+                    var r = t.responseObject();
+                    if (!r.ok) { resolve([]); return; }
+                    resolve([{ range: model.getFullModelRange(), text: r.formatted }]);
+                  });
+                });
+              }
+            });
+          });
+        }
 
         // Accordion layout (2026-09-02): Monaco measures its container's computed size at
         // creation time, so an editor created while its ancestor details element is closed can render
@@ -330,9 +467,10 @@
           if (editor) { editor.dispose(); editor = null; }
           editor = monaco.editor.create(document.getElementById('monacoEditor'), {
             value: lastEditContent,
-            language: 'json',
+            language: languageForType(currentContentType),
             automaticLayout: true
           });
+          wireLiveDiagnostics(editor);
           formatEditorContent(editor);
           editMode = true;
           generateMode = false;
@@ -380,8 +518,8 @@
             diffEditor.dispose();
             diffEditor = null;
           }
-          var draftModel = monaco.editor.createModel(lastEditContent, 'json');
-          var versionModel = monaco.editor.createModel(versionContent, 'json');
+          var draftModel = monaco.editor.createModel(lastEditContent, languageForType(currentContentType));
+          var versionModel = monaco.editor.createModel(versionContent, languageForType(currentContentType));
           diffEditor = monaco.editor.createDiffEditor(document.getElementById('monacoEditor'), {
             readOnly: true,
             automaticLayout: true,
@@ -441,10 +579,13 @@
             }
             if (editor) { lastEditContent = editor.getValue(); editor.dispose(); editor = null; }
             if (diffEditor) { diffEditor.dispose(); diffEditor = null; }
-            lastGeneratedTemplateText = JSON.stringify(r.template, null, 2);
+            // FR-64/§7: `template` is already serialized text in the resolved contentType, not a
+            // nested JSON object — the client sets it directly into the model rather than
+            // JSON.stringify-ing it.
+            lastGeneratedTemplateText = r.template;
             editor = monaco.editor.create(document.getElementById('monacoEditor'), {
               value: lastGeneratedTemplateText,
-              language: 'json',
+              language: languageForType(r.contentType),
               readOnly: true,
               automaticLayout: true
             });

@@ -11,11 +11,15 @@ import com.google.gson.JsonSyntaxException;
 import hudson.model.Failure;
 import hudson.model.User;
 import hudson.security.ACL;
-import io.github.retrokharkov1.configtemplatesync.merge.JsonPaths;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormat;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormats;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreePaths;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import io.github.retrokharkov1.configtemplatesync.model.PinMode;
 import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
@@ -103,6 +107,24 @@ public abstract class ConfigSetPage {
     }
 
     /**
+     * Jelly-visible: the committed {@link ContentType} once a first version exists, or {@code JSON}
+     * (FR-59's absent-picker default) before then — drives the content-type picker's initial radio
+     * selection AND the Monaco editor's initial {@code language} (FR-63/FR-64).
+     */
+    public String getContentTypeValue() {
+        ConfigSet cs = getConfigSet();
+        return cs == null ? ContentType.JSON.name() : cs.getContentType().name();
+    }
+
+    /**
+     * Jelly-visible: whether the content-type picker should render as the disabled/read-only
+     * "committed value + lock icon" display (FR-59) — true once a first version exists.
+     */
+    public final boolean isContentTypeLocked() {
+        return getConfigSet() != null;
+    }
+
+    /**
      * {@link #getEditorSeedJson()}, pre-encoded into a complete, ready-to-embed JS string literal
      * (quotes included) for the Monaco-editor seed {@code <script>} block. See
      * {@link #toJsScriptStringLiteral(String)} for why this must never be built via
@@ -143,14 +165,40 @@ public abstract class ConfigSetPage {
                         @QueryParameter String content,
                         @QueryParameter String note,
                         @QueryParameter(fixEmpty = true) String activate,
-                        @QueryParameter(fixEmpty = true) String baseChainJson) throws IOException {
+                        @QueryParameter(fixEmpty = true) String baseChainJson,
+                        @QueryParameter(fixEmpty = true) String contentType) throws IOException {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        validateJsonSyntaxOrFail(content);
-        List<BaseConfigReference> baseChain = parseBaseChainOrFail(baseChainJson);
 
         ConfigSet configSet = getConfigSet();
+        ContentType resolvedContentType;
         if (configSet == null) {
-            configSet = new ConfigSet(projectKey, getRole(), getEnvironment(), getDisplayNameSeed());
+            // FR-59/FR-68: only meaningful on first save, and only ever supplied by the COMMON page's
+            // Jelly (the env page's form never emits this field — its type is always resolved, never
+            // chosen, per FR-60). Default to JSON when absent, matching FR-59's literal wording.
+            resolvedContentType = (contentType == null || contentType.trim().isEmpty())
+                    ? ContentType.JSON : ContentType.valueOf(contentType);
+        } else {
+            // Immutable after first version (FR-59) — the field simply has no effect from here on,
+            // exactly mirroring projectKey's own existing immutability. Never re-read from the request.
+            resolvedContentType = configSet.getContentType();
+        }
+
+        List<BaseConfigReference> baseChain = parseBaseChainOrFail(baseChainJson);
+
+        // FR-61: cross-chain type-consistency, UI path — ENV role only (a COMMON-role Config Set never
+        // has a baseChain per FR-53, so this check is structurally a no-op there; guarding on role
+        // keeps the intent explicit rather than relying on baseChain always being empty for COMMON).
+        if (getRole() == ConfigSetRole.ENV) {
+            List<BaseConfigReference> resolvedChain = baseChain.isEmpty()
+                    ? Collections.singletonList(BaseConfigReference.active(projectKey))
+                    : baseChain;
+            checkChainTypeConsistencyOrFail(resolvedChain);
+        }
+
+        validateSyntaxOrFail(content, resolvedContentType);
+
+        if (configSet == null) {
+            configSet = new ConfigSet(projectKey, getRole(), getEnvironment(), getDisplayNameSeed(), resolvedContentType);
         }
         String author = currentAuthor();
         int newVersion;
@@ -169,11 +217,55 @@ public abstract class ConfigSetPage {
     }
 
     /**
+     * FR-61: resolves every referenced COMMON Config Set in {@code chain} and compares its
+     * {@link ContentType} against every other member. Fail-loud, naming every conflicting project +
+     * type, per the wireframe's exact message shape: {@code Save blocked: mismatched content types in
+     * base chain — <project> (<TYPE>), <project> (<TYPE>) must all share one content type.}
+     */
+    private void checkChainTypeConsistencyOrFail(List<BaseConfigReference> chain) {
+        List<String> mismatchParts = new ArrayList<>();
+        ContentType expected = null;
+        boolean allMatch = true;
+        for (BaseConfigReference ref : chain) {
+            ConfigSet base = repository.findCommon(ref.getProjectKey());
+            if (base == null) {
+                // Not this method's concern — BaseChainResolver-driven resolution failures (missing
+                // project/version) are reported by the existing preview/save flow separately; this
+                // check only compares types across chain members that DO resolve.
+                continue;
+            }
+            if (expected == null) {
+                expected = base.getContentType();
+            } else if (base.getContentType() != expected) {
+                allMatch = false;
+            }
+            mismatchParts.add(base.getProjectKey() + " (" + base.getContentType() + ")");
+        }
+        if (expected == null || allMatch) {
+            return;
+        }
+        throw new Failure("Save blocked: mismatched content types in base chain — "
+                + String.join(", ", mismatchParts) + " must all share one content type.");
+    }
+
+    /**
      * Parses the base-chain editor's draft JSON array (FR-51/FR-55) into
      * {@link BaseConfigReference}s, or returns an empty list if the field is absent/blank — the
      * global (common) page's Jelly never emits {@code baseChainJson} at all, so this is a
      * no-behavior-change path there. Throws {@link Failure} (never a raw {@link RuntimeException})
      * on malformed input, matching this page's existing save-time validation convention.
+     *
+     * <p><b>Defensive {@code pinMode} default (2026-09-02, secondary-bug investigation):</b> the
+     * base-chain editor's own row-creation JS ({@code addBaseChainRow} in
+     * {@code EnvConfigSetPage/index.jelly}) already unconditionally seeds every newly-added row with
+     * {@code pinMode: 'ACTIVE'} before it is ever serialized — confirmed by direct code inspection,
+     * so a row added via the "Add" button and never touched again already round-trips correctly and
+     * this path was NOT reproducible through the normal UI flow. A missing/blank {@code pinMode} is
+     * still defended here regardless (rather than left to throw a raw {@link NullPointerException}
+     * from {@link PinMode#valueOf}), matching the same ACTIVE default the client already applies, so
+     * any other caller of this shared parse path (e.g. a hand-crafted request, or a future UI change
+     * that stops setting the field) degrades to the same sensible default instead of a confusing
+     * server error.</p>
      */
     static List<BaseConfigReference> parseBaseChainOrFail(String baseChainJson) {
         if (baseChainJson == null || baseChainJson.trim().isEmpty()) {
@@ -185,7 +277,9 @@ public abstract class ConfigSetPage {
             for (JsonElement el : array) {
                 JsonObject row = el.getAsJsonObject();
                 String rowProjectKey = row.get("projectKey").getAsString();
-                PinMode mode = PinMode.valueOf(row.get("pinMode").getAsString());
+                PinMode mode = (row.has("pinMode") && !row.get("pinMode").isJsonNull())
+                        ? PinMode.valueOf(row.get("pinMode").getAsString())
+                        : PinMode.ACTIVE;
                 int pinnedVersion = row.has("pinnedVersionNumber") ? row.get("pinnedVersionNumber").getAsInt() : 0;
                 result.add(new BaseConfigReference(rowProjectKey, mode, pinnedVersion));
             }
@@ -363,7 +457,11 @@ public abstract class ConfigSetPage {
                 return result;
             }
         } else {
-            configSet = new ConfigSet(projectKey, getRole(), getEnvironment(), getDisplayNameSeed());
+            // FR-59: this fallback path never had a content-type picker's input to read (secrets are
+            // bound before any content is ever saved) — default to JSON, exactly doSave's own
+            // absent-picker default; a subsequent doSave still governs the Config Set's real,
+            // committed contentType once the first version is actually saved.
+            configSet = new ConfigSet(projectKey, getRole(), getEnvironment(), getDisplayNameSeed(), ContentType.JSON);
         }
         configSet.putSecretManifestEntry(path, credentialId);
         repository.save(configSet);
@@ -437,26 +535,24 @@ public abstract class ConfigSetPage {
         if (active == null) {
             return null;
         }
-        JsonElement parsed;
+        TreeNode parsed;
         try {
-            parsed = JsonParser.parseString(active.getContentJson());
-        } catch (JsonSyntaxException e) {
-            // an already-stored version is never expected to be invalid JSON, but if it somehow is,
-            // there is nothing structured to inspect here — do not block the manifest update on that.
+            parsed = TreeFormats.forType(configSet.getContentType()).parse(active.getContentJson());
+        } catch (RuntimeException e) {
+            // an already-stored version is never expected to be invalid for its own declared type, but
+            // if it somehow is, there is nothing structured to inspect here — do not block the
+            // manifest update on that.
             return null;
         }
-        if (!parsed.isJsonObject()) {
+        if (!parsed.isObject()) {
             return null;
         }
-        JsonObject root = parsed.getAsJsonObject();
-        JsonElement leaf = JsonPaths.get(root, path);
+        TreeNode leaf = TreePaths.get(parsed, path);
         if (leaf == null) {
             // absent leaf: nothing stored at this path yet, nothing to reject.
             return null;
         }
-        String asString = leaf.isJsonPrimitive() && leaf.getAsJsonPrimitive().isString()
-                ? leaf.getAsString()
-                : null;
+        String asString = !leaf.isObject() && !leaf.isNull() ? leaf.leafAsString() : null;
         if (asString != null && asString.equals(SecretPlaceholder.VALUE)) {
             return null;
         }
@@ -608,14 +704,19 @@ public abstract class ConfigSetPage {
             result.put("error", "No active version yet — nothing to template.");
             return result;
         }
-        com.google.gson.JsonObject template = computeTemplate();
+        ContentType type = getTemplateContentType();
+        TreeNode template = computeTemplate();
         result.put("ok", true);
-        result.put("template", net.sf.json.JSONObject.fromObject(template.toString()));
+        result.put("contentType", type.name()); // NEW field — client picks Monaco's language mode
+        result.put("template", TreeFormats.forType(type).serialize(template)); // serialized text now, not a nested object
         return result;
     }
 
     /** FR-15a on {@link CommonConfigSetPage} / FR-15b on {@link EnvConfigSetPage} — see each override's javadoc. */
-    abstract com.google.gson.JsonObject computeTemplate();
+    abstract TreeNode computeTemplate();
+
+    /** The {@link ContentType} to serialize {@link #computeTemplate()}'s result in. */
+    abstract ContentType getTemplateContentType();
 
     /** The version whose absence blocks generation (FR-40/41's disabled-button guard). */
     abstract ConfigSetVersion getActiveVersionForTemplate();
@@ -643,14 +744,139 @@ public abstract class ConfigSetPage {
                 .collect(Collectors.toList());
     }
 
-    static void validateJsonSyntaxOrFail(String content) {
+    static void validateSyntaxOrFail(String content, ContentType type) {
         try {
-            JsonElement parsed = JsonParser.parseString(content == null ? "" : content);
-            if (!parsed.isJsonObject()) {
-                throw new Failure("Save blocked: invalid JSON — content must be a JSON object");
+            TreeNode parsed = TreeFormats.forType(type).parse(content == null ? "" : content);
+            if (!parsed.isObject()) {
+                throw new Failure("Save blocked: invalid " + type
+                        + " — content must have a top-level object/root element");
             }
-        } catch (JsonSyntaxException e) {
-            throw new Failure("Save blocked: invalid JSON — " + e.getMessage());
+        } catch (RuntimeException e) {
+            // JsonSyntaxException / XmlSyntaxException / YAMLException — one catch clause covers all
+            // three, since every TreeFormat#parse implementation throws an unchecked RuntimeException
+            // rather than three format-specific catch branches.
+            if (e instanceof Failure) {
+                throw (Failure) e;
+            }
+            throw new Failure("Save blocked: invalid " + type + " — " + e.getMessage());
+        }
+    }
+
+    /**
+     * AJAX: syntax-validates arbitrary content against a declared {@link ContentType} — the YAML
+     * "checking…" debounced round trip's server side (FR-63), and reused for XML's own diagnostics
+     * call (client-side {@code DOMParser} handles XML synchronously in-browser, but this endpoint is
+     * format-agnostic so it works for any of the three without a second implementation).
+     *
+     * <p><b>Root-cause note (2026-09-02, real-browser Playwright regression):</b> this method was
+     * originally named {@code doValidateContent} (URL segment {@code validateContent}) — which,
+     * despite an earlier enumeration claiming otherwise, collides EXACTLY with the
+     * {@code @JavaScriptMethod(name = "validateContent")} sibling below, the precise trap described
+     * in {@link #doActivateVersion(int)}'s javadoc (a classic {@code do}-prefix method's derived URL
+     * segment must never equal a {@code @JavaScriptMethod}'s bound {@code name}). The classic
+     * dispatcher won the collision, silently absorbing every JS-proxy call with a {@code null}
+     * {@code contentType} query parameter and throwing {@code NullPointerException: Name is null}
+     * from {@link ContentType#valueOf(String)} — confirmed via a real-browser reproduction where the
+     * YAML live-diagnostics "Checking YAML…" indicator never resolved. <b>Fix:</b> renamed to
+     * {@code doCheckContentSyntax} (URL segment {@code checkContentSyntax}), distinct from every
+     * other segment/name on this class and its subclasses (see the full side-by-side table in this
+     * class's other {@code do*} javadocs / the git history for the audit) — the JS-proxy sibling's
+     * bound name ({@code validateContent}) is unaffected, since {@code index.jelly} calls
+     * {@code proxy.validateContent(...)}, never the classic method's Java name.</p>
+     */
+    public JSONObject doCheckContentSyntax(@QueryParameter String content, @QueryParameter String contentType) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        return validateContentImpl(content, ContentType.valueOf(contentType));
+    }
+
+    /**
+     * JS-proxy-facing sibling of {@link #doCheckContentSyntax}; exposed as {@code proxy.validateContent(...)}.
+     * See {@link #doActivateVersion(int)} javadoc for the naming-collision root cause this pair avoids.
+     */
+    @JavaScriptMethod(name = "validateContent")
+    public JSONObject jsValidateContent(String payloadJson) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        JsonObject payload = parseJsPayloadObject(payloadJson);
+        if (payload == null || !payload.has("content") || !payload.has("contentType")) {
+            JSONObject result = new JSONObject();
+            result.put("ok", false);
+            result.put("error", "Malformed request: expected {\"content\": <string>, \"contentType\": <JSON|XML|YAML>}");
+            return result;
+        }
+        return validateContentImpl(payload.get("content").getAsString(),
+                ContentType.valueOf(payload.get("contentType").getAsString()));
+    }
+
+    private JSONObject validateContentImpl(String content, ContentType type) {
+        JSONObject result = new JSONObject();
+        try {
+            TreeNode parsed = TreeFormats.forType(type).parse(content == null ? "" : content);
+            if (!parsed.isObject()) {
+                result.put("ok", false);
+                result.put("error", "content must have a top-level object/root element");
+                return result;
+            }
+            result.put("ok", true);
+            return result;
+        } catch (RuntimeException e) {
+            result.put("ok", false);
+            result.put("error", e.getMessage());
+            return result;
+        }
+    }
+
+    /**
+     * AJAX: FR-64's XML/YAML document-format round-trip — parses then re-serializes {@code content}
+     * in its declared {@link ContentType}'s canonical, pretty-printed form. Shares
+     * {@link TreeFormats}'s single dispatch point with {@link #doValidateContent}; JSON never needs
+     * this endpoint (Monaco's built-in JSON formatter already handles it client-side), but the
+     * endpoint itself is format-agnostic so nothing here special-cases JSON out.
+     *
+     * <p><b>Root-cause note (2026-09-02):</b> same collision trap as {@link #doCheckContentSyntax},
+     * originally named {@code doFormatContent} (URL segment {@code formatContent}) which collided
+     * with the {@code @JavaScriptMethod(name = "formatContent")} sibling below — the classic
+     * dispatcher silently absorbed the JS-proxy call, throwing {@code NullPointerException: Name is
+     * null} from {@link ContentType#valueOf(String)} and breaking XML/YAML auto-format-on-load
+     * (JSON's auto-format kept working only because it is Monaco's own built-in client-side action,
+     * not server-dependent). <b>Fix:</b> renamed to {@code doReformatContent} (URL segment
+     * {@code reformatContent}) — distinct from every other segment/name on this class and its
+     * subclasses; the JS-proxy sibling's bound name ({@code formatContent}) is unaffected.</p>
+     */
+    public JSONObject doReformatContent(@QueryParameter String content, @QueryParameter String contentType) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        return formatContentImpl(content, ContentType.valueOf(contentType));
+    }
+
+    /**
+     * JS-proxy-facing sibling of {@link #doReformatContent}; exposed as {@code proxy.formatContent(...)}.
+     * See {@link #doActivateVersion(int)} javadoc for the naming-collision root cause this pair avoids.
+     */
+    @JavaScriptMethod(name = "formatContent")
+    public JSONObject jsFormatContent(String payloadJson) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        JsonObject payload = parseJsPayloadObject(payloadJson);
+        if (payload == null || !payload.has("content") || !payload.has("contentType")) {
+            JSONObject result = new JSONObject();
+            result.put("ok", false);
+            result.put("error", "Malformed request: expected {\"content\": <string>, \"contentType\": <JSON|XML|YAML>}");
+            return result;
+        }
+        return formatContentImpl(payload.get("content").getAsString(),
+                ContentType.valueOf(payload.get("contentType").getAsString()));
+    }
+
+    private JSONObject formatContentImpl(String content, ContentType type) {
+        JSONObject result = new JSONObject();
+        try {
+            TreeFormat format = TreeFormats.forType(type);
+            TreeNode parsed = format.parse(content == null ? "" : content);
+            result.put("ok", true);
+            result.put("formatted", format.serialize(parsed));
+            return result;
+        } catch (RuntimeException e) {
+            result.put("ok", false);
+            result.put("error", e.getMessage());
+            return result;
         }
     }
 

@@ -1,6 +1,7 @@
 package io.github.retrokharkov1.configtemplatesync.merge;
 
-import com.google.gson.JsonObject;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreePaths;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -9,14 +10,18 @@ import java.util.Set;
  * The single flatten-and-compare implementation shared by {@code configTemplateValidate} (FR-17)
  * and the defensive re-check inside {@code configTemplateSubstitute} (OQ-7, resolved 2026-08-27:
  * substitute reuses this exact logic rather than duplicating it or trusting validate already ran).
+ *
+ * <p>The drift comparison itself is a plain string-set comparison (dotted paths vs. {@code #{...}#}
+ * tokens) and is entirely format-neutral — only the flattening of {@code effectiveConfig} into that
+ * dotted-path key set is format-aware, delegated to {@link TreePaths#flatten}.</p>
  */
 public final class DriftChecker {
 
     private DriftChecker() {
     }
 
-    public static DriftResult diff(JsonObject effectiveConfig, String targetFileContent) {
-        Set<String> expectedKeys = JsonPaths.flatten(effectiveConfig).keySet();
+    public static DriftResult diff(TreeNode effectiveConfig, String targetFileContent) {
+        Set<String> expectedKeys = TreePaths.flatten(effectiveConfig).keySet();
         Set<String> actualTokens = TokenExtractor.extractTokenPaths(targetFileContent);
 
         Set<String> missing = new LinkedHashSet<>(actualTokens);

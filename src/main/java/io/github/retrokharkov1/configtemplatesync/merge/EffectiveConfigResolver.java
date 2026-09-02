@@ -1,19 +1,25 @@
 package io.github.retrokharkov1.configtemplatesync.merge;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormat;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormats;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeMergePatch;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 
 import java.util.Collections;
 import java.util.List;
 
 /**
  * Computes the Effective (Merged) Configuration: an ordered chain of base Config Sets' content
- * folded left-to-right, then an env Config Set's active/pinned content applied as an RFC 7396 JSON
- * Merge Patch on top (FR-8/FR-9/FR-10). Always computed fresh — never persisted as a third,
+ * folded left-to-right, then an env Config Set's active/pinned content applied as an RFC 7396 merge
+ * patch on top (FR-8/FR-9/FR-10). Always computed fresh — never persisted as a third,
  * independently-updatable copy (FR-10). This is the single code path shared by validate, substitute,
  * template generation, and the admin UI's live merge preview (FR-16/FR-38) — there must never be a
  * second, divergent merge implementation.
+ *
+ * <p>Format-neutral over {@link TreeNode} (FR-66) — every base and the env patch share one resolved
+ * {@link ContentType} across the whole chain, enforced by callers BEFORE this class is reached
+ * (FR-61/FR-62); this class itself never inspects/mixes types.</p>
  */
 public final class EffectiveConfigResolver {
 
@@ -21,49 +27,37 @@ public final class EffectiveConfigResolver {
     }
 
     /**
-     * Folds an ordered list of base Config Sets' full-document JSON left-to-right (each later base
-     * overwrites the running fold's overlapping keys, FR-8), then applies {@code envPatchJson} as the
-     * final RFC 7396 merge patch on top (FR-9). An empty {@code baseContentsInOrder} folds to
-     * {@code {}}, so the env patch is then applied over an empty object — exactly today's
-     * one-implicit-base-with-nothing-there-yet behavior, generalized.
-     *
-     * @throws IllegalArgumentException if any entry in {@code baseContentsInOrder} does not parse to a
-     *                                   JSON object (names its 0-based position in the chain — callers
-     *                                   with richer context, e.g. a projectKey, wrap this with that
-     *                                   context before it reaches an operator; in practice this is
-     *                                   structurally unreachable via the UI/pipeline steps, since every
-     *                                   persisted {@code ConfigSetVersion}'s content is already
-     *                                   validated as a JSON object at save time — FR-33/{@code
-     *                                   ConfigSetPage#validateJsonSyntaxOrFail}).
+     * Folds an ordered list of base Config Sets' already-parsed content left-to-right (each later
+     * base overwrites the running fold's overlapping keys, FR-8), then applies {@code envPatchRaw}
+     * (parsed in {@code contentType}'s format) as the final RFC 7396 merge patch on top (FR-9). An
+     * empty {@code baseContentsInOrder} folds to an empty object, so the env patch is then applied
+     * over an empty object — exactly today's one-implicit-base-with-nothing-there-yet behavior,
+     * generalized.
      */
-    public static JsonObject resolveChain(List<String> baseContentsInOrder, String envPatchJson) {
-        JsonObject accumulator = new JsonObject();
-        int position = 0;
-        for (String baseContentJson : baseContentsInOrder) {
-            JsonElement base = JsonParser.parseString(baseContentJson);
-            if (!base.isJsonObject()) {
-                throw new IllegalArgumentException(
-                        "Base Config Set content at chain position " + position + " must be a JSON object");
-            }
-            JsonElement folded = JsonMergePatch.apply(accumulator, base);
-            accumulator = folded == null ? new JsonObject() : folded.getAsJsonObject();
-            position++;
+    public static TreeNode resolveChain(ContentType contentType, List<TreeNode> baseContentsInOrder,
+                                         String envPatchRaw) {
+        TreeFormat format = TreeFormats.forType(contentType);
+        TreeNode accumulator = format.emptyObject();
+        for (TreeNode base : baseContentsInOrder) {
+            TreeNode folded = TreeMergePatch.apply(accumulator, base);
+            accumulator = folded == null ? format.emptyObject() : folded;
         }
-        JsonElement patch = (envPatchJson == null || envPatchJson.trim().isEmpty())
-                ? new JsonObject()
-                : JsonParser.parseString(envPatchJson);
-        JsonElement merged = JsonMergePatch.apply(accumulator, patch);
-        return merged == null ? new JsonObject() : merged.getAsJsonObject();
+        TreeNode patch = (envPatchRaw == null || envPatchRaw.trim().isEmpty())
+                ? format.emptyObject() : format.parse(envPatchRaw);
+        TreeNode merged = TreeMergePatch.apply(accumulator, patch);
+        return merged == null ? format.emptyObject() : merged;
     }
 
     /**
-     * @param commonContentJson full nested JSON of the common Config Set's chosen version.
-     * @param envPatchJson      sparse RFC 7396 merge-patch overlay JSON of the env Config Set's
+     * @param commonContentRaw full nested content of the common Config Set's chosen version, in
+     *                          {@code contentType}'s format.
+     * @param envPatchRaw       sparse RFC 7396 merge-patch overlay content of the env Config Set's
      *                          chosen version, or {@code null}/blank if the env layer has no active
-     *                          version yet (treated as an empty overlay: {@code {}}).
-     * @return the effective merged configuration as a {@link JsonObject}.
+     *                          version yet (treated as an empty overlay).
+     * @return the effective merged configuration as a {@link TreeNode}.
      */
-    public static JsonObject resolve(String commonContentJson, String envPatchJson) {
-        return resolveChain(Collections.singletonList(commonContentJson), envPatchJson);
+    public static TreeNode resolve(ContentType contentType, String commonContentRaw, String envPatchRaw) {
+        return resolveChain(contentType,
+                Collections.singletonList(TreeFormats.forType(contentType).parse(commonContentRaw)), envPatchRaw);
     }
 }

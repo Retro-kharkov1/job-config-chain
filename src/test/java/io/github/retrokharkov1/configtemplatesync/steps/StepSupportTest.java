@@ -1,9 +1,11 @@
 package io.github.retrokharkov1.configtemplatesync.steps;
 
 import hudson.AbortException;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreePaths;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 import org.junit.Rule;
@@ -50,12 +52,12 @@ public class StepSupportTest {
     public void resolveEffectiveFoldsMultiEntryChainAndReturnsResolvedVersions() throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
 
-        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common");
+        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         int aV = teamA.addVersion("{\"a\":1}", "seed", "test", 1L);
         teamA.activate(aV);
         repository.save(teamA);
 
-        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common");
+        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common", ContentType.JSON);
         int bV = teamB.addVersion("{\"b\":2}", "seed", "test", 1L);
         teamB.activate(bV);
         repository.save(teamB);
@@ -70,9 +72,9 @@ public class StepSupportTest {
         assertEquals(2, resolved.resolvedBaseChain.size());
         assertEquals(aV, resolved.resolvedBaseChain.get(0).getVersionNumber());
         assertEquals(bV, resolved.resolvedBaseChain.get(1).getVersionNumber());
-        assertTrue(resolved.mergedConfig.get("a").getAsInt() == 1);
-        assertTrue(resolved.mergedConfig.get("b").getAsInt() == 2);
-        assertTrue(resolved.mergedConfig.get("c").getAsInt() == 3);
+        assertEquals("1", TreePaths.get(resolved.mergedConfig, "a").leafAsString());
+        assertEquals("2", TreePaths.get(resolved.mergedConfig, "b").leafAsString());
+        assertEquals("3", TreePaths.get(resolved.mergedConfig, "c").leafAsString());
     }
 
     @Test
@@ -88,7 +90,7 @@ public class StepSupportTest {
     @Test
     public void resolveEffectiveThrowsAbortExceptionForMissingPinnedVersion() throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
-        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common");
+        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         teamA.addVersion("{\"a\":1}", "seed", "test", 1L);
         repository.save(teamA);
 
@@ -101,9 +103,35 @@ public class StepSupportTest {
     }
 
     @Test
+    public void resolveEffectiveThrowsAbortExceptionForMismatchedContentTypesInChain() throws Exception {
+        // FR-62: pipeline-path half of the cross-chain type-consistency invariant.
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+
+        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
+        teamA.addVersion("{\"a\":1}", "seed", "test", 1L);
+        teamA.activate(1);
+        repository.save(teamA);
+
+        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common", ContentType.XML);
+        teamB.addVersion("<root><b>2</b></root>", "seed", "test", 1L);
+        teamB.activate(1);
+        repository.save(teamB);
+
+        List<BaseConfigReference> chain = Arrays.asList(
+                BaseConfigReference.active("team-a-common"),
+                BaseConfigReference.active("team-b-common"));
+
+        AbortException ex = assertThrows(AbortException.class,
+                () -> StepSupport.resolveEffective(repository, chain, null));
+        assertTrue(ex.getMessage().contains("Mismatched content types in base chain"));
+        assertTrue(ex.getMessage().contains("team-a-common (JSON)"));
+        assertTrue(ex.getMessage().contains("team-b-common (XML)"));
+    }
+
+    @Test
     public void resolveEffectiveThrowsAbortExceptionForMissingActiveVersion() throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
-        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common");
+        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         // no version added, never activated -> getActiveVersion() is null
         repository.save(teamA);
 

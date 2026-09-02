@@ -1,7 +1,8 @@
 package io.github.retrokharkov1.configtemplatesync.merge;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormats;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -10,9 +11,13 @@ import static org.junit.Assert.assertTrue;
 
 public class DriftCheckerTest {
 
+    private static TreeNode json(String content) {
+        return TreeFormats.forType(ContentType.JSON).parse(content);
+    }
+
     @Test
     public void detectsMissingTokenNotInEffectiveConfig() {
-        JsonObject effective = JsonParser.parseString("{\"a\":1}").getAsJsonObject();
+        TreeNode effective = json("{\"a\":1}");
         String fileContent = "value=#{a}# other=#{b}#";
 
         DriftResult result = DriftChecker.diff(effective, fileContent);
@@ -24,7 +29,7 @@ public class DriftCheckerTest {
 
     @Test
     public void detectsOrphanedKeyNotInFile() {
-        JsonObject effective = JsonParser.parseString("{\"a\":1,\"b\":2}").getAsJsonObject();
+        TreeNode effective = json("{\"a\":1,\"b\":2}");
         String fileContent = "value=#{a}#";
 
         DriftResult result = DriftChecker.diff(effective, fileContent);
@@ -36,7 +41,7 @@ public class DriftCheckerTest {
 
     @Test
     public void noDriftWhenSetsMatchExactly() {
-        JsonObject effective = JsonParser.parseString("{\"a\":1,\"b\":2}").getAsJsonObject();
+        TreeNode effective = json("{\"a\":1,\"b\":2}");
         String fileContent = "#{a}# #{b}#";
 
         DriftResult result = DriftChecker.diff(effective, fileContent);
