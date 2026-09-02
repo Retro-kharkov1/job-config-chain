@@ -1,7 +1,6 @@
 package io.github.retrokharkov1.configtemplatesync.steps;
 
 import com.cloudbees.plugins.credentials.CredentialsProvider;
-import com.google.gson.JsonObject;
 import hudson.AbortException;
 import hudson.model.Run;
 import hudson.model.TaskListener;
@@ -9,10 +8,13 @@ import io.github.retrokharkov1.configtemplatesync.merge.BaseChainResolver;
 import io.github.retrokharkov1.configtemplatesync.merge.DriftChecker;
 import io.github.retrokharkov1.configtemplatesync.merge.DriftResult;
 import io.github.retrokharkov1.configtemplatesync.merge.EffectiveConfigResolver;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormats;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import io.github.retrokharkov1.configtemplatesync.model.PinMode;
 import io.github.retrokharkov1.configtemplatesync.model.ResolvedBaseVersion;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
@@ -20,9 +22,11 @@ import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Logic shared by {@code configTemplateValidate} and the defensive re-check inside
@@ -61,13 +65,15 @@ final class StepSupport {
      * {@link #mergedSecretsManifest}, so the chain is fetched from the repository exactly once).
      */
     static final class ResolvedEffective {
-        final JsonObject mergedConfig;
+        final TreeNode mergedConfig;
+        final ContentType contentType;
         final List<ResolvedBaseVersion> resolvedBaseChain;
         final List<ConfigSet> resolvedBaseConfigSets;
 
-        ResolvedEffective(JsonObject mergedConfig, List<ResolvedBaseVersion> resolvedBaseChain,
+        ResolvedEffective(TreeNode mergedConfig, ContentType contentType, List<ResolvedBaseVersion> resolvedBaseChain,
                            List<ConfigSet> resolvedBaseConfigSets) {
             this.mergedConfig = mergedConfig;
+            this.contentType = contentType;
             this.resolvedBaseChain = resolvedBaseChain;
             this.resolvedBaseConfigSets = resolvedBaseConfigSets;
         }
@@ -78,14 +84,17 @@ final class StepSupport {
      * env version's content per {@link EffectiveConfigResolver#resolveChain}, and returns both the
      * merged result and the concrete {@link ResolvedBaseVersion}s to freeze into a deployment binding
      * (FR-23). Fails loud (NFR-7): throws {@link AbortException} naming the missing project/version
-     * for the first unresolvable chain entry encountered.
+     * for the first unresolvable chain entry encountered, and — FR-62, the pipeline-path half of the
+     * cross-chain type-consistency invariant (mirrors {@code ConfigSetPage#doSave}'s UI-path check) —
+     * if the resolved chain's base Config Sets don't all share one {@link ContentType}.
      */
     static ResolvedEffective resolveEffective(ConfigSetRepository repository, List<BaseConfigReference> baseChain,
                                                ConfigSetVersion envVersion) throws AbortException {
         List<BaseChainResolver.ResolvedReference> resolved = BaseChainResolver.resolve(repository, baseChain);
-        List<String> baseContents = new ArrayList<>();
         List<ResolvedBaseVersion> resolvedBaseChain = new ArrayList<>();
         List<ConfigSet> resolvedBaseConfigSets = new ArrayList<>();
+        Set<ContentType> distinctTypes = EnumSet.noneOf(ContentType.class);
+        List<String> typeReport = new ArrayList<>();
         for (BaseChainResolver.ResolvedReference r : resolved) {
             if (r.configSet == null) {
                 throw new AbortException("No common Config Set found for projectKey '"
@@ -98,13 +107,23 @@ final class StepSupport {
                 throw new AbortException("Base Config Set '" + r.reference.getProjectKey() + "' has no " + what
                         + " to resolve (referenced by base chain)");
             }
-            baseContents.add(r.version.getContentJson());
-            resolvedBaseChain.add(new ResolvedBaseVersion(r.reference.getProjectKey(), r.version.getVersionNumber()));
+            distinctTypes.add(r.configSet.getContentType());
+            typeReport.add(r.reference.getProjectKey() + " (" + r.configSet.getContentType() + ")");
             resolvedBaseConfigSets.add(r.configSet);
+            resolvedBaseChain.add(new ResolvedBaseVersion(r.reference.getProjectKey(), r.version.getVersionNumber()));
+        }
+        if (distinctTypes.size() > 1) {
+            throw new AbortException("[configTemplateSync] Mismatched content types in base chain — "
+                    + String.join(", ", typeReport) + " must all share one content type.");
+        }
+        ContentType resolvedType = distinctTypes.isEmpty() ? ContentType.JSON : distinctTypes.iterator().next();
+        List<TreeNode> baseContents = new ArrayList<>();
+        for (BaseChainResolver.ResolvedReference r : resolved) {
+            baseContents.add(TreeFormats.forType(resolvedType).parse(r.version.getContentJson()));
         }
         String envPatch = envVersion == null ? null : envVersion.getContentJson();
-        JsonObject merged = EffectiveConfigResolver.resolveChain(baseContents, envPatch);
-        return new ResolvedEffective(merged, Collections.unmodifiableList(resolvedBaseChain),
+        TreeNode merged = EffectiveConfigResolver.resolveChain(resolvedType, baseContents, envPatch);
+        return new ResolvedEffective(merged, resolvedType, Collections.unmodifiableList(resolvedBaseChain),
                 Collections.unmodifiableList(resolvedBaseConfigSets));
     }
 
@@ -129,7 +148,7 @@ final class StepSupport {
      * the target file has no matching key in the effective configuration. Orphaned keys are only
      * warned about, never fatal (FR-19).
      */
-    static void validateOrThrow(JsonObject effectiveConfig, String targetFileContent, TaskListener listener)
+    static void validateOrThrow(TreeNode effectiveConfig, String targetFileContent, TaskListener listener)
             throws AbortException {
         DriftResult result = DriftChecker.diff(effectiveConfig, targetFileContent);
         if (result.hasOrphanedKeys()) {

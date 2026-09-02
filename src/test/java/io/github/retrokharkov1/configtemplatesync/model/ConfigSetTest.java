@@ -17,28 +17,28 @@ public class ConfigSetTest {
     @Test
     public void commonRoleRejectsEnvironment() {
         assertThrows(IllegalArgumentException.class,
-                () -> new ConfigSet("proj", ConfigSetRole.COMMON, "dev", "Proj Common"));
+                () -> new ConfigSet("proj", ConfigSetRole.COMMON, "dev", "Proj Common", ContentType.JSON));
     }
 
     @Test
     public void envRoleRequiresEnvironment() {
         assertThrows(IllegalArgumentException.class,
-                () -> new ConfigSet("proj", ConfigSetRole.ENV, null, "Proj Dev"));
+                () -> new ConfigSet("proj", ConfigSetRole.ENV, null, "Proj Dev", ContentType.JSON));
         assertThrows(IllegalArgumentException.class,
-                () -> new ConfigSet("proj", ConfigSetRole.ENV, "  ", "Proj Dev"));
+                () -> new ConfigSet("proj", ConfigSetRole.ENV, "  ", "Proj Dev", ContentType.JSON));
     }
 
     @Test
     public void storageKeyIsDeterministicByProjectKey() {
-        ConfigSet common = new ConfigSet("sample-app", ConfigSetRole.COMMON, null, "Common");
-        ConfigSet env = new ConfigSet("sample-app", ConfigSetRole.ENV, "dev", "Dev");
+        ConfigSet common = new ConfigSet("sample-app", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
+        ConfigSet env = new ConfigSet("sample-app", ConfigSetRole.ENV, "dev", "Dev", ContentType.JSON);
         assertEquals("sample-app--common", common.getStorageKey());
         assertEquals("sample-app--env--dev", env.getStorageKey());
     }
 
     @Test
     public void versionNumbersAreMonotonicAndNeverReused() {
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         int v1 = configSet.addVersion("{\"a\":1}", "initial", "alice", 1L);
         int v2 = configSet.addVersion("{\"a\":2}", "second", "alice", 2L);
         configSet.activate(v2);
@@ -52,7 +52,7 @@ public class ConfigSetTest {
 
     @Test
     public void addVersionRejectsEmptyNote() {
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         assertThrows(IllegalArgumentException.class,
                 () -> configSet.addVersion("{}", "", "alice", 1L));
         assertThrows(IllegalArgumentException.class,
@@ -61,7 +61,7 @@ public class ConfigSetTest {
 
     @Test
     public void activateEnforcesExactlyOneActiveVersion() {
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         int v1 = configSet.addVersion("{\"a\":1}", "v1", "alice", 1L);
         int v2 = configSet.addVersion("{\"a\":2}", "v2", "alice", 2L);
 
@@ -75,7 +75,7 @@ public class ConfigSetTest {
 
     @Test
     public void noActiveVersionByDefault() {
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         assertEquals(0, configSet.getActiveVersionNumber());
         assertNull(configSet.getActiveVersion());
     }
@@ -84,7 +84,7 @@ public class ConfigSetTest {
     public void rejectsSaveWhereSecretPathHoldsRealValue() {
         // OQ-1: structural rejection — a manifest-declared secret path must hold the literal
         // placeholder, never a real value.
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         configSet.putSecretManifestEntry("ConnectionStrings.Default", "my-credential-id");
 
         assertThrows(IllegalArgumentException.class, () -> configSet.addVersion(
@@ -94,7 +94,7 @@ public class ConfigSetTest {
 
     @Test
     public void acceptsSaveWhereSecretPathHoldsPlaceholder() {
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         configSet.putSecretManifestEntry("ConnectionStrings.Default", "my-credential-id");
 
         int version = configSet.addVersion(
@@ -106,7 +106,7 @@ public class ConfigSetTest {
     @Test
     public void allowsSameCredentialIdReusedAcrossManifestEntries() {
         // OQ-5: no uniqueness constraint on credential ID reuse.
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         configSet.putSecretManifestEntry("A.Secret", "shared-credential-id");
         configSet.putSecretManifestEntry("B.Secret", "shared-credential-id");
         int version = configSet.addVersion(
@@ -120,7 +120,7 @@ public class ConfigSetTest {
     public void removeSecretManifestEntry_removesABoundPathAndReturnsTrue() {
         // OQ-1 CRUD completion: a bound secret path can be unbound again, no longer appearing in
         // getSecretsManifest(), without disturbing any other manifest entry.
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         configSet.putSecretManifestEntry("A.Secret", "cred-a");
         configSet.putSecretManifestEntry("B.Secret", "cred-b");
 
@@ -135,14 +135,14 @@ public class ConfigSetTest {
 
     @Test
     public void removeSecretManifestEntry_returnsFalseWhenPathWasNeverBound() {
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         assertFalse(configSet.removeSecretManifestEntry("Never.Bound"));
     }
 
     @Test
     public void addVersionWithBaseChainPersistsAndIsRetrievable() {
         // FR-51: an env Config Set's declared base chain is part of that version's own record.
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.ENV, "dev", "Dev");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.ENV, "dev", "Dev", ContentType.JSON);
         List<BaseConfigReference> chain = Arrays.asList(
                 BaseConfigReference.active("team-a-common"),
                 BaseConfigReference.pinned("team-b-common", 3));
@@ -155,7 +155,7 @@ public class ConfigSetTest {
     @Test
     public void addVersionRejectsNonEmptyBaseChainOnCommonRole() {
         // FR-53: a COMMON-role Config Set is always the root of a chain, never a chain member itself.
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         List<BaseConfigReference> chain = Collections.singletonList(BaseConfigReference.active("team-a-common"));
 
         assertThrows(IllegalArgumentException.class,
@@ -164,7 +164,7 @@ public class ConfigSetTest {
 
     @Test
     public void fourArgAddVersionYieldsEmptyBaseChain() {
-        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         int version = configSet.addVersion("{\"a\":1}", "no chain", "alice", 1L);
         assertTrue(configSet.getVersion(version).getBaseChain().isEmpty());
     }

@@ -9,6 +9,8 @@ import org.htmlunit.html.HtmlPage;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
+import io.github.retrokharkov1.configtemplatesync.model.PinMode;
 import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 import net.sf.json.JSONObject;
@@ -47,7 +49,7 @@ public class ConfigTemplatesUiTest {
 
     private ConfigSet seedCommon(String projectKey, String contentJson, String note) {
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet common = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common");
+        ConfigSet common = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         int v = common.addVersion(contentJson, note, "seed-author", 1L);
         common.activate(v);
         repository.save(common);
@@ -56,7 +58,7 @@ public class ConfigTemplatesUiTest {
 
     private ConfigSet seedEnv(String projectKey, String environment, String patchJson, String note) {
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env");
+        ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env", ContentType.JSON);
         int v = env.addVersion(patchJson, note, "seed-author", 1L);
         env.activate(v);
         repository.save(env);
@@ -145,9 +147,11 @@ public class ConfigTemplatesUiTest {
                 + java.net.URLEncoder.encode("{\"database\":{\"host\":null}}", "UTF-8"));
         JSONObject validJson = JSONObject.fromObject(valid.getWebResponse().getContentAsString());
         assertTrue(validJson.getBoolean("ok"));
+        assertEquals("JSON", validJson.getString("contentType"));
+        JSONObject merged = JSONObject.fromObject(validJson.getString("merged"));
         assertFalse("null in overlay must remove the key from the merged result (RFC 7396)",
-                validJson.getJSONObject("merged").getJSONObject("database").has("host"));
-        assertEquals(5432, validJson.getJSONObject("merged").getJSONObject("database").getInt("port"));
+                merged.getJSONObject("database").has("host"));
+        assertEquals(5432, merged.getJSONObject("database").getInt("port"));
 
         Page invalid = wc.getPage(wc.getContextPath()
                 + "configTemplates/uitest6/dev/computeMerge?overlayJson="
@@ -551,7 +555,10 @@ public class ConfigTemplatesUiTest {
         Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest20/common/renderTemplate");
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
-        JSONObject template = json.getJSONObject("template");
+        // §7/FR-64: `template` is now already-serialized text in the resolved contentType, plus a
+        // new `contentType` field — parse it here to inspect.
+        assertEquals("JSON", json.getString("contentType"));
+        JSONObject template = JSONObject.fromObject(json.getString("template"));
         assertEquals("#{database.host}#", template.getJSONObject("database").getString("host"));
         assertEquals("secret leaf must render as the identical token, no special-casing (FR-42)",
                 "#{database.password}#", template.getJSONObject("database").getString("password"));
@@ -578,7 +585,8 @@ public class ConfigTemplatesUiTest {
         Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest22/dev/renderTemplate");
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
-        JSONObject database = json.getJSONObject("template").getJSONObject("database");
+        JSONObject template = JSONObject.fromObject(json.getString("template"));
+        JSONObject database = template.getJSONObject("database");
         assertFalse("null in the env overlay must remove the key before tokenization (RFC 7396)",
                 database.has("host"));
         assertEquals("#{database.port}#", database.getString("port"));
@@ -595,8 +603,8 @@ public class ConfigTemplatesUiTest {
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue("must succeed against common-only content when the env layer has no active version yet",
                 json.getBoolean("ok"));
-        assertEquals("#{database.host}#",
-                json.getJSONObject("template").getJSONObject("database").getString("host"));
+        JSONObject template = JSONObject.fromObject(json.getString("template"));
+        assertEquals("#{database.host}#", template.getJSONObject("database").getString("host"));
     }
 
     @Test
@@ -909,7 +917,7 @@ public class ConfigTemplatesUiTest {
         // expandable inline with no additional AJAX call.
         seedCommon("uitest52", "{\"a\":1}", "seed");
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet env = new ConfigSet("uitest52", ConfigSetRole.ENV, "dev", "Env");
+        ConfigSet env = new ConfigSet("uitest52", ConfigSetRole.ENV, "dev", "Env", ContentType.JSON);
         int v = env.addVersion("{}", "seed", "seed-author", 1L, java.util.Arrays.asList(
                 BaseConfigReference.active("uitest52"),
                 BaseConfigReference.pinned("uitest52", 1)));
@@ -946,7 +954,7 @@ public class ConfigTemplatesUiTest {
     public void envPage_doComputeMerge_multiBaseChainFoldsAllBasesBeforeOverlay() throws Exception {
         seedCommon("uitest54", "{\"a\":1}", "seed");
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common");
+        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common", ContentType.JSON);
         int bV = teamB.addVersion("{\"b\":2}", "seed", "seed-author", 1L);
         teamB.activate(bV);
         repository.save(teamB);
@@ -962,8 +970,12 @@ public class ConfigTemplatesUiTest {
                 + "&baseChainJson=" + java.net.URLEncoder.encode(baseChainJson, "UTF-8"));
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
-        assertEquals(1, json.getJSONObject("merged").getInt("a"));
-        assertEquals(2, json.getJSONObject("merged").getInt("b"));
+        // §7: `merged` is now already-serialized text in the resolved chain's ContentType, not a
+        // nested JSON object — parse it here to inspect, and confirm the new `contentType` field.
+        assertEquals("JSON", json.getString("contentType"));
+        JSONObject merged = JSONObject.fromObject(json.getString("merged"));
+        assertEquals(1, merged.getInt("a"));
+        assertEquals(2, merged.getInt("b"));
         assertEquals("perReference must carry one entry per resolved chain member (FR-57)",
                 2, json.getJSONArray("perReference").size());
     }
@@ -984,5 +996,183 @@ public class ConfigTemplatesUiTest {
         assertFalse("an unresolvable base-chain reference must be reported, not thrown as a server error",
                 json.getBoolean("ok"));
         assertNotNull(json.getString("error"));
+    }
+
+    // ---- Multi-format content (FR-59-FR-70) ----
+
+    @Test
+    public void rootListPage_rendersTypeColumnForEachContentType() throws Exception {
+        seedCommon("uitest60", "{\"a\":1}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet xmlSet = new ConfigSet("uitest60-xml", ConfigSetRole.COMMON, null, "Common", ContentType.XML);
+        xmlSet.addVersion("<root><a>1</a></root>", "seed", "seed-author", 1L);
+        repository.save(xmlSet);
+
+        HtmlPage page = jenkins.createWebClient().goTo("configTemplates");
+        String text = page.asNormalizedText();
+        assertTrue("Type column must render JSON for a JSON Config Set (FR-67)", text.contains("JSON"));
+        assertTrue("Type column must render XML for an XML Config Set (FR-67)", text.contains("XML"));
+    }
+
+    @Test
+    public void doSave_firstSave_withContentTypeParameter_persistsChosenType() throws Exception {
+        // Raw WebRequest POSTs (no HtmlForm involved) must supply a valid crumb explicitly, or
+        // disable the crumb issuer for this test — same requirement as any other CSRF-protected
+        // Stapler POST endpoint (https://www.jenkins.io/doc/developer/security/csrf-protection/).
+        jenkins.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        // Save redirects to the edit page, which loads the vendored Monaco AMD loader — its ES2015+
+        // syntax is not parseable by HtmlUnit's embedded legacy JS engine (same limitation already
+        // documented on editPage_loadsActiveVersionContent above); this test only needs the
+        // persisted-content-type assertion below, not any client-side behavior.
+        wc.getOptions().setJavaScriptEnabled(false);
+
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest61/common/save");
+        WebRequest request = new WebRequest(url, HttpMethod.POST);
+        request.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "<root><a>1</a></root>"),
+                new org.htmlunit.util.NameValuePair("note", "first save, XML"),
+                new org.htmlunit.util.NameValuePair("contentType", "XML")
+        ));
+        wc.getPage(request);
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet saved = repository.findCommon("uitest61");
+        assertNotNull(saved);
+        assertEquals(ContentType.XML, saved.getContentType());
+    }
+
+    @Test
+    public void doSave_contentTypeIsImmutableAfterFirstVersion() throws Exception {
+        seedCommon("uitest62", "{\"a\":1}", "seed"); // JSON, per seedCommon
+
+        jenkins.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        wc.getOptions().setJavaScriptEnabled(false); // see doSave_firstSave_withContentTypeParameter... above
+
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest62/common/save");
+        WebRequest request = new WebRequest(url, HttpMethod.POST);
+        // Attempting to smuggle a different contentType on a second save must have no effect —
+        // the field is only meaningful when getConfigSet() == null (FR-59).
+        request.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "{\"a\":2}"),
+                new org.htmlunit.util.NameValuePair("note", "second save"),
+                new org.htmlunit.util.NameValuePair("contentType", "XML")
+        ));
+        wc.getPage(request);
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        assertEquals(ContentType.JSON, repository.findCommon("uitest62").getContentType());
+    }
+
+    @Test
+    public void doSave_envPage_rejectsMixedContentTypeBaseChainWithExactWireframeMessage() throws Exception {
+        seedCommon("uitest63", "{\"a\":1}", "seed"); // JSON
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet xmlBase = new ConfigSet("uitest63-xml-common", ConfigSetRole.COMMON, null, "Common", ContentType.XML);
+        xmlBase.addVersion("<root><b>2</b></root>", "seed", "seed-author", 1L);
+        xmlBase.activate(1);
+        repository.save(xmlBase);
+
+        jenkins.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+
+        String baseChainJson = "[{\"projectKey\":\"uitest63\",\"pinMode\":\"ACTIVE\"},"
+                + "{\"projectKey\":\"uitest63-xml-common\",\"pinMode\":\"ACTIVE\"}]";
+
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest63/dev/save");
+        WebRequest request = new WebRequest(url, HttpMethod.POST);
+        request.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "{}"),
+                new org.htmlunit.util.NameValuePair("note", "mixed chain"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", baseChainJson)
+        ));
+        Page result = wc.getPage(request);
+        assertFalse("Save blocked: mismatched content types must reject the save (FR-61)",
+                result.getWebResponse().getStatusCode() == 200);
+        String body = result.getWebResponse().getContentAsString();
+        assertTrue("exact wireframe message shape (FR-61)",
+                body.contains("Save blocked: mismatched content types in base chain — "
+                        + "uitest63 (JSON), uitest63-xml-common (XML) must all share one content type."));
+
+        assertEquals("no env Config Set version must have been persisted from the rejected save",
+                null, repository.findEnv("uitest63", "dev"));
+    }
+
+    @Test
+    public void doSave_envPage_baseChainRowMissingPinModeDefaultsToActive() throws Exception {
+        // Secondary-bug investigation (2026-09-02, owner report): "adding a new base-chain row
+        // without selecting an Active/Pin radio causes HTTP 400 + a JS TypeError". Not reproducible
+        // through the normal UI flow — EnvConfigSetPage/index.jelly's own addBaseChainRow() already
+        // seeds every newly-added row with pinMode:'ACTIVE' before it is ever serialized — but
+        // ConfigSetPage#parseBaseChainOrFail now also defensively defaults an absent/blank pinMode
+        // to ACTIVE (matching that same client default) rather than throwing a raw
+        // NullPointerException from PinMode#valueOf, for any other caller of this shared parse path.
+        seedCommon("uitest65", "{\"a\":1}", "seed");
+
+        jenkins.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        // A successful save redirects to the env page itself, which embeds the Monaco editor's
+        // loader.js — real ES2015+ syntax that HtmlUnit's Rhino-based JS engine cannot parse
+        // ("Script identifier is a reserved word: class"). Every other test in this class that
+        // exercises a page load disables JS for exactly this reason; this test does too, since it
+        // asserts on the save's HTTP status/persisted state, not on any client-side behavior.
+        wc.getOptions().setJavaScriptEnabled(false);
+
+        String baseChainJson = "[{\"projectKey\":\"uitest65\"}]"; // pinMode deliberately absent
+
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest65/dev/save");
+        WebRequest request = new WebRequest(url, HttpMethod.POST);
+        request.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "{}"),
+                new org.htmlunit.util.NameValuePair("note", "missing pinMode"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", baseChainJson),
+                // doSave() never activates a version by itself (ConfigSet#addVersion's own javadoc:
+                // "Never activates the new version by itself") — only the "Save & Activate" button
+                // sets this hidden field. This test asserts on the persisted ACTIVE version's base
+                // chain below, so it must exercise that same save-and-activate path, exactly like a
+                // real first save through the UI would if the admin wants an immediately-active
+                // version.
+                new org.htmlunit.util.NameValuePair("activate", "true")
+        ));
+        Page result = wc.getPage(request);
+        assertEquals("a base-chain row with no pinMode must default to ACTIVE and save successfully",
+                200, result.getWebResponse().getStatusCode());
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet envSet = repository.findEnv("uitest65", "dev");
+        assertNotNull(envSet);
+        assertEquals(PinMode.ACTIVE,
+                envSet.getActiveVersion().getBaseChain().get(0).getPinMode());
+    }
+
+    @Test
+    public void doCheckContentSyntax_and_doReformatContent_noCollisionWithExistingEndpoints() throws Exception {
+        seedCommon("uitest64", "{\"a\":1}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+
+        Page validPage = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest64/common/checkContentSyntax?content="
+                + java.net.URLEncoder.encode("<root><a>1</a></root>", "UTF-8") + "&contentType=XML");
+        JSONObject validJson = JSONObject.fromObject(validPage.getWebResponse().getContentAsString());
+        assertTrue("doCheckContentSyntax must accept syntactically valid XML", validJson.getBoolean("ok"));
+
+        Page invalidPage = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest64/common/checkContentSyntax?content="
+                + java.net.URLEncoder.encode("<root><a></root>", "UTF-8") + "&contentType=XML");
+        JSONObject invalidJson = JSONObject.fromObject(invalidPage.getWebResponse().getContentAsString());
+        assertFalse("doCheckContentSyntax must reject malformed XML", invalidJson.getBoolean("ok"));
+
+        Page formatPage = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest64/common/reformatContent?content="
+                + java.net.URLEncoder.encode("a: 1", "UTF-8") + "&contentType=YAML");
+        JSONObject formatJson = JSONObject.fromObject(formatPage.getWebResponse().getContentAsString());
+        assertTrue("doReformatContent must succeed for valid YAML", formatJson.getBoolean("ok"));
+        assertNotNull(formatJson.getString("formatted"));
     }
 }

@@ -1,46 +1,65 @@
 package io.github.retrokharkov1.configtemplatesync.merge;
 
-import com.google.gson.JsonObject;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormats;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 
 public class EffectiveConfigResolverTest {
+
+    private static TreeNode json(String content) {
+        return TreeFormats.forType(ContentType.JSON).parse(content);
+    }
+
+    // Structural (order-independent) equality, matching Gson's own JsonElement#equals semantics —
+    // key ORDER is deliberately not part of this plugin's merge contract (only key/value content
+    // is), so assertions here must compare parsed structure, not textual/positional serialization.
+    private static JsonElement canonical(String json) {
+        return JsonParser.parseString(json);
+    }
+
+    private static JsonElement render(TreeNode node) {
+        return JsonParser.parseString(TreeFormats.forType(ContentType.JSON).serialize(node));
+    }
 
     @Test
     public void mergesEnvPatchOverCommon() {
         String common = "{\"Logging\":{\"Level\":\"Info\"},\"Feature\":{\"Enabled\":false}}";
         String envPatch = "{\"Logging\":{\"Level\":\"Debug\"}}";
 
-        JsonObject effective = EffectiveConfigResolver.resolve(common, envPatch);
+        TreeNode effective = EffectiveConfigResolver.resolve(ContentType.JSON, common, envPatch);
 
-        assertEquals(JsonParser.parseString(
-                        "{\"Logging\":{\"Level\":\"Debug\"},\"Feature\":{\"Enabled\":false}}"),
-                effective);
+        assertEquals(canonical("{\"Logging\":{\"Level\":\"Debug\"},\"Feature\":{\"Enabled\":false}}"),
+                render(effective));
     }
 
     @Test
     public void nullEnvPatchTreatedAsEmptyOverlay() {
         String common = "{\"a\":1}";
-        JsonObject effective = EffectiveConfigResolver.resolve(common, null);
-        assertEquals(JsonParser.parseString("{\"a\":1}"), effective);
+        TreeNode effective = EffectiveConfigResolver.resolve(ContentType.JSON, common, null);
+        assertEquals(canonical("{\"a\":1}"), render(effective));
     }
 
     @Test
     public void blankEnvPatchTreatedAsEmptyOverlay() {
         String common = "{\"a\":1}";
-        JsonObject effective = EffectiveConfigResolver.resolve(common, "   ");
-        assertEquals(JsonParser.parseString("{\"a\":1}"), effective);
+        TreeNode effective = EffectiveConfigResolver.resolve(ContentType.JSON, common, "   ");
+        assertEquals(canonical("{\"a\":1}"), render(effective));
     }
 
     @Test
     public void emptyChainFoldsToPatchOverEmptyObject() {
-        JsonObject effective = EffectiveConfigResolver.resolveChain(Collections.emptyList(), "{\"a\":1}");
-        assertEquals(JsonParser.parseString("{\"a\":1}"), effective);
+        TreeNode effective = EffectiveConfigResolver.resolveChain(ContentType.JSON, Collections.emptyList(), "{\"a\":1}");
+        assertEquals(canonical("{\"a\":1}"), render(effective));
     }
 
     @Test
@@ -48,11 +67,12 @@ public class EffectiveConfigResolverTest {
         String base = "{\"Logging\":{\"Level\":\"Info\"},\"Feature\":{\"Enabled\":false}}";
         String envPatch = "{\"Logging\":{\"Level\":\"Debug\"}}";
 
-        JsonObject viaResolve = EffectiveConfigResolver.resolve(base, envPatch);
-        JsonObject viaChain = EffectiveConfigResolver.resolveChain(Collections.singletonList(base), envPatch);
+        TreeNode viaResolve = EffectiveConfigResolver.resolve(ContentType.JSON, base, envPatch);
+        TreeNode viaChain = EffectiveConfigResolver.resolveChain(ContentType.JSON,
+                Collections.singletonList(json(base)), envPatch);
 
         assertEquals("resolve() and resolveChain() for the same single-base inputs must be byte-identical",
-                viaResolve.toString(), viaChain.toString());
+                render(viaResolve), render(viaChain));
     }
 
     @Test
@@ -63,11 +83,12 @@ public class EffectiveConfigResolverTest {
         // env patch overrides Shared again and nulls out FeatureA, which came from baseA.
         String envPatch = "{\"Shared\":\"fromEnv\",\"FeatureA\":null}";
 
-        JsonObject effective = EffectiveConfigResolver.resolveChain(Arrays.asList(baseA, baseB, baseC), envPatch);
+        List<TreeNode> bases = Arrays.asList(baseA, baseB, baseC).stream()
+                .map(EffectiveConfigResolverTest::json).collect(Collectors.toList());
+        TreeNode effective = EffectiveConfigResolver.resolveChain(ContentType.JSON, bases, envPatch);
 
-        assertEquals(JsonParser.parseString(
-                        "{\"Logging\":{\"Level\":\"Info\"},\"FeatureB\":true,\"FeatureC\":true,"
-                                + "\"Shared\":\"fromEnv\"}"),
-                effective);
+        assertEquals(canonical("{\"Logging\":{\"Level\":\"Info\"},\"FeatureB\":true,\"FeatureC\":true,"
+                        + "\"Shared\":\"fromEnv\"}"),
+                render(effective));
     }
 }

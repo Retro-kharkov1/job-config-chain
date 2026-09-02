@@ -29,6 +29,7 @@ import com.cloudbees.plugins.credentials.domains.Domain
 import hudson.util.Secret
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole
+import io.github.retrokharkov1.configtemplatesync.model.ContentType
 import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository
 import jenkins.model.Jenkins
@@ -58,7 +59,7 @@ if (repository.findCommon(PROJECT_KEY) != null) {
 } else {
     logger("Seeding common + env ConfigSets for projectKey '${PROJECT_KEY}'...")
 
-    def common = new ConfigSet(PROJECT_KEY, ConfigSetRole.COMMON, null, 'Test App - Common')
+    def common = new ConfigSet(PROJECT_KEY, ConfigSetRole.COMMON, null, 'Test App - Common', ContentType.JSON)
     // Declare the secret BEFORE adding any version — addVersion() enforces that every
     // manifest-declared path already holds the placeholder marker at the time it's called.
     common.putSecretManifestEntry(SECRET_DOTTED_PATH, CREDENTIAL_ID)
@@ -79,7 +80,7 @@ if (repository.findCommon(PROJECT_KEY) != null) {
     repository.save(common)
     logger("Saved common ConfigSet '${common.getStorageKey()}' with ${common.getVersions().size()} versions, active=v${common.getActiveVersionNumber()}.")
 
-    def env = new ConfigSet(PROJECT_KEY, ConfigSetRole.ENV, ENVIRONMENT, "Test App - ${ENVIRONMENT}")
+    def env = new ConfigSet(PROJECT_KEY, ConfigSetRole.ENV, ENVIRONMENT, "Test App - ${ENVIRONMENT}", ContentType.JSON)
     // Sparse RFC 7396 overlay: only overrides Database.Host for this environment.
     def envV1Json = """{
         "Database": { "Host": "db.${ENVIRONMENT}.internal.test" }

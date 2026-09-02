@@ -3,6 +3,7 @@ package io.github.retrokharkov1.configtemplatesync.steps;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 import hudson.model.Result;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
@@ -25,12 +26,12 @@ public class ConfigTemplateValidateStepTest {
             throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository();
 
-        ConfigSet common = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common");
+        ConfigSet common = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         int v = common.addVersion(commonJson, "seed", "test", 1L);
         common.activate(v);
         repository.save(common);
 
-        ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env");
+        ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env", ContentType.JSON);
         int ev = env.addVersion(envPatchJson, "seed", "test", 1L);
         env.activate(ev);
         repository.save(env);
@@ -87,23 +88,23 @@ public class ConfigTemplateValidateStepTest {
         // Config Set entirely — not just projectKey's own.
         ConfigSetRepository repository = new ConfigSetRepository();
 
-        ConfigSet own = new ConfigSet("proj4", ConfigSetRole.COMMON, null, "Common");
+        ConfigSet own = new ConfigSet("proj4", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         int ownV = own.addVersion("{\"a\":1}", "seed", "test", 1L);
         own.activate(ownV);
         repository.save(own);
 
-        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common");
+        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common", ContentType.JSON);
         int bV = teamB.addVersion("{\"b\":2}", "seed", "test", 1L);
         teamB.activate(bV);
         repository.save(teamB);
 
-        ConfigSet teamC = new ConfigSet("team-c-common", ConfigSetRole.COMMON, null, "Team C Common");
+        ConfigSet teamC = new ConfigSet("team-c-common", ConfigSetRole.COMMON, null, "Team C Common", ContentType.JSON);
         int cV1 = teamC.addVersion("{\"c\":1}", "seed", "test", 1L);
         int cV2 = teamC.addVersion("{\"c\":2}", "seed2", "test", 2L);
         teamC.activate(cV2);
         repository.save(teamC);
 
-        ConfigSet env = new ConfigSet("proj4", ConfigSetRole.ENV, "dev", "Env");
+        ConfigSet env = new ConfigSet("proj4", ConfigSetRole.ENV, "dev", "Env", ContentType.JSON);
         int ev = env.addVersion("{}", "seed", "test", 1L, Arrays.asList(
                 BaseConfigReference.active("proj4"),
                 BaseConfigReference.active("team-b-common"),
@@ -124,7 +125,7 @@ public class ConfigTemplateValidateStepTest {
     @Test
     public void missingChainReferenceFailsBuildNamingTheProject() throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet env = new ConfigSet("proj5", ConfigSetRole.ENV, "dev", "Env");
+        ConfigSet env = new ConfigSet("proj5", ConfigSetRole.ENV, "dev", "Env", ContentType.JSON);
         int ev = env.addVersion("{}", "seed", "test", 1L,
                 Collections.singletonList(BaseConfigReference.active("no-such-common-project")));
         env.activate(ev);
