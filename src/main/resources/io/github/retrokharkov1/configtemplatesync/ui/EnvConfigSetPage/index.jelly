@@ -103,13 +103,16 @@
 
       <div class="ctsync-page">
 
+      <!-- BUG-05 breadcrumb: back to this project's overview (env list + New-Env input). -->
+      <p><a href="${rootURL}/configTemplates/${it.projectKey}/">&#8592; ${it.projectKey} overview</a></p>
+
       <h1>${it.displayName}</h1>
       <j:if test="${!it.exists}">
-        <div class="alert alert-info">This env Config Set does not exist yet — Save creates it.</div>
+        <div class="alert alert-info">${%notExistYet}</div>
       </j:if>
 
       <details id="secretsManifestDetails">
-        <summary>Secrets manifest</summary>
+        <summary>${%secretsManifest.heading}</summary>
         <p>A path listed here is structurally locked: the JSON editor below may only hold the literal
            <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
            value is supplied only via the Jenkins credential picked below, never typed here. This
@@ -117,8 +120,8 @@
            their own secret paths.</p>
         <div class="ctsync-scroll-table">
           <table class="jenkins-table" style="width:60%">
-            <thead><tr><th>Dotted path</th><th>Credential</th><th/></tr></thead>
-            <tbody>
+            <thead><tr><th>${%column.dottedPath}</th><th>${%column.credential}</th><th/></tr></thead>
+            <tbody id="secretsManifestTbody">
               <j:if test="${it.exists}">
                 <j:forEach var="entry" items="${it.configSet.secretsManifest.entrySet()}">
                   <tr>
@@ -127,8 +130,8 @@
                     <td>
                       <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
                               data-secret-path="${entry.key}"
-                              title="Remove this secret path binding"
-                              onclick="removeSecret(this.getAttribute('data-secret-path'));">&#128465; Remove</button>
+                              title="${%removeSecret.title}"
+                              onclick="removeSecret(this.getAttribute('data-secret-path'));">&#128465; ${%removeSecret.label}</button>
                     </td>
                   </tr>
                 </j:forEach>
@@ -136,7 +139,20 @@
             </tbody>
           </table>
         </div>
-        <f:entry title="Add / update secret path">
+        <!-- In-place-update template (2026-09-02): see CommonConfigSetPage/index.jelly's identical
+             template for the full rationale — addSecret/removeSecret re-render this tbody from JSON
+             instead of location.reload()-ing the whole page. -->
+        <template id="secretRowTemplate" data-remove-title="${%removeSecret.title}">
+          <tr>
+            <td class="js-secret-path"/>
+            <td class="js-secret-cred"/>
+            <td>
+              <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn">
+                &#128465; ${%removeSecret.label}</button>
+            </td>
+          </tr>
+        </template>
+        <f:entry title="${%addSecret.entryTitle}">
           <div class="ctsync-secret-form">
             <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
             <div class="jenkins-select">
@@ -147,30 +163,30 @@
               </select>
             </div>
             <button type="button" class="jenkins-button"
-                    title="Bind the selected credential to this secret path"
-                    onclick="addSecret();">Bind credential</button>
+                    title="${%bindCredential.title}"
+                    onclick="addSecret();">${%bindCredential.label}</button>
           </div>
         </f:entry>
       </details>
 
       <details id="versionHistoryDetails">
-        <summary>Env override version history (independent of Global's)</summary>
+        <summary>${%versionHistory.heading}</summary>
         <p>Click a row to compare it against the Env-override editor's current draft (no checkbox
            required — click any row again to return to editing).</p>
         <div class="ctsync-scroll-table">
           <table class="jenkins-table ctsync-history-table" style="width:100%">
-            <thead><tr><th>Version</th><th>Created</th><th>Created by</th><th>Note</th><th>Base chain</th><th>Active</th><th>Actions</th></tr></thead>
-            <tbody>
+            <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th>${%column.baseChain}</th><th>${%column.active}</th><th>${%column.actions}</th></tr></thead>
+            <tbody id="versionHistoryTbody">
               <j:forEach var="v" items="${it.versions}">
                 <tr id="historyRow-${v.versionNumber}" class="ctsync-history-row"
                     tabindex="0" role="button"
                     onclick="selectHistoryRow(${v.versionNumber});"
                     onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectHistoryRow(${v.versionNumber}); }">
-                  <td data-th="Version">v${v.versionNumber}</td>
-                  <td data-th="Created">${v.timestampEpochMillis}</td>
-                  <td data-th="Created by">${v.author}</td>
-                  <td data-th="Note">${v.note}</td>
-                  <td data-th="Base chain">
+                  <td data-th="${%column.version}">v${v.versionNumber}</td>
+                  <td data-th="${%column.created}">${v.timestampEpochMillis}</td>
+                  <td data-th="${%column.createdBy}">${v.author}</td>
+                  <td data-th="${%column.note}">${v.note}</td>
+                  <td data-th="${%column.baseChain}">
                     <!-- FR-58: each historical version's own FROZEN baseChain is already available
                          server-side at render time — no AJAX call needed to show it. -->
                     <a href="#" class="ctsync-basechain-toggle"
@@ -193,22 +209,22 @@
                       </j:choose>
                     </div>
                   </td>
-                  <td data-th="Active">
+                  <td data-th="${%column.active}">
                     <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
-                      &#9679; active
+                      &#9679; ${%activeStatus}
                     </j:if>
                   </td>
-                  <td data-th="Actions">
+                  <td data-th="${%column.actions}">
                     <j:choose>
                       <j:when test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
                         <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
                                 disabled="disabled" data-always-disabled="true"
-                                title="Already the active version">Activate</button>
+                                title="${%activate.alreadyActiveTitle}">${%activate.label}</button>
                       </j:when>
                       <j:otherwise>
                         <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
                                 title="Activate version ${v.versionNumber} without changing the editor content"
-                                onclick="event.stopPropagation(); activateVersion(${v.versionNumber});">Activate</button>
+                                onclick="event.stopPropagation(); activateVersion(${v.versionNumber});">${%activate.label}</button>
                       </j:otherwise>
                     </j:choose>
                   </td>
@@ -217,10 +233,36 @@
             </tbody>
           </table>
         </div>
+        <!-- In-place-update template (2026-09-02): jsSave/activateVersion's AJAX responses re-render
+             this tbody client-side from JSON instead of location.reload()-ing the whole page — see
+             renderVersionHistoryRows/buildHistoryRowElement below. Static localized label/title text
+             is stashed on this template (rendered once by Jelly); the per-version base-chain detail
+             lines (project/pinMode/pinnedVersion — never localized even in the server-rendered
+             original above) are built directly in JS from the versions payload's baseChain array. -->
+        <template id="historyRowTemplate"
+                  data-active-label="${%activeStatus}"
+                  data-already-active-title="${%activate.alreadyActiveTitle}">
+          <tr class="ctsync-history-row" tabindex="0" role="button">
+            <td data-th="${%column.version}" class="js-version"/>
+            <td data-th="${%column.created}" class="js-created"/>
+            <td data-th="${%column.createdBy}" class="js-createdBy"/>
+            <td data-th="${%column.note}" class="js-note"/>
+            <td data-th="${%column.baseChain}">
+              <a href="#" class="ctsync-basechain-toggle js-basechain-toggle">
+                &#9656; <span class="js-basechain-count"/> bases</a>
+              <div class="ctsync-basechain-history-detail js-basechain-detail" style="display:none"/>
+            </td>
+            <td data-th="${%column.active}" class="js-activeBadge"/>
+            <td data-th="${%column.actions}">
+              <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn js-activate-btn">
+                ${%activate.label}</button>
+            </td>
+          </tr>
+        </template>
       </details>
 
       <details id="editorDetails" open="open">
-        <summary>Editor</summary>
+        <summary>${%editor.heading}</summary>
 
         <!-- FR-41/44: page-level action, deliberately NOT a 4th mode of the Env-override panel's own
              [Editing]/[Compare] row — see wireframe-layout.md's reasoning note. Clicking it temporarily
@@ -229,17 +271,17 @@
           <j:choose>
             <j:when test="${it.templateAvailable}">
               <button type="button" id="generateTemplateBtn" class="jenkins-button"
-                     title="Show a copy-paste-ready tokenized EFFECTIVE (merged) template from both Config Sets' ACTIVE versions"
-                     onclick="showGeneratedTemplateView();">&#128203; Generate Template</button>
+                     title="${%generateTemplate.title}"
+                     onclick="showGeneratedTemplateView();">&#128203; ${%generateTemplate.label}</button>
             </j:when>
             <j:otherwise>
               <button type="button" id="generateTemplateBtn" class="jenkins-button" disabled="disabled"
-                     title="no active version yet">&#128203; Generate Template</button>
+                     title="${%generateTemplate.disabledTitle}">&#128203; ${%generateTemplate.label}</button>
             </j:otherwise>
           </j:choose>
           <button type="button" id="backTo3PanelBtn" class="jenkins-button" style="display:none"
-                 title="Return to the Global | Env override | Merged result 3-panel view"
-                 onclick="backTo3PanelView();">&#8592; Back to 3-panel view</button>
+                 title="${%backTo3Panel.title}"
+                 onclick="backTo3PanelView();">&#8592; ${%backTo3Panel.label}</button>
         </div>
 
         <div id="generateBanner" class="alert alert-info" style="display:none">
@@ -252,13 +294,13 @@
           <div id="generatedTemplateEditor" style="height:420px;border:1px solid #ccc"/>
           <div style="margin-top:4px">
             <button type="button" id="copyTemplateBtn" class="jenkins-button"
-                    title="Copy the generated template to the clipboard"
-                    onclick="copyGeneratedTemplate();">&#128203; Copy to clipboard</button>
+                    title="${%copyTemplate.title}"
+                    onclick="copyGeneratedTemplate();">&#128203; ${%copyTemplate.label}</button>
           </div>
         </div>
 
         <div id="baseChainEditor">
-          <h3>Base chain (FR-51/FR-55)</h3>
+          <h3>${%baseChain.heading}</h3>
           <p>Ordered list of base Config Sets folded left-to-right before this env's own overlay is
              applied — later rows win on overlapping keys. Each row either always tracks its
              project's currently-ACTIVE version, or pins to one specific historical version.</p>
@@ -268,14 +310,14 @@
           </table>
           <div class="ctsync-btn-row">
             <button type="button" id="addBaseChainRowBtn" class="jenkins-button"
-                    title="Add another base Config Set to the chain"
-                    onclick="addBaseChainRow();">&#10133; Add base</button>
+                    title="${%addBase.title}"
+                    onclick="addBaseChainRow();">&#10133; ${%addBase.label}</button>
           </div>
         </div>
 
         <table id="threePanelTable" style="width:100%"><tr>
           <td style="width:33%;vertical-align:top;padding:4px">
-            <h3>Effective base (read-only, collapsed)</h3>
+            <h3>${%effectiveBase.heading}</h3>
             <p>
               <a href="#" id="inspectChainToggle" onclick="event.preventDefault(); toggleInspectDrawer();">
                 &#9656; Inspect chain (<span id="inspectChainCount">0</span> bases)
@@ -290,40 +332,44 @@
           </td>
           <td style="width:33%;vertical-align:top;padding:4px">
             <div class="ctsync-editor-header-row">
-              <h3>Env override</h3>
+              <h3>${%envOverride.heading}</h3>
               <span class="ctsync-btn-row" style="margin:0">
-                <button type="submit" form="ctsyncSaveForm" id="saveBtn" class="jenkins-button jenkins-button--primary"
-                        title="Save the editor content as a new version">Save</button>
-                <button type="submit" form="ctsyncSaveForm" id="saveActivateBtn"
-                        onclick="document.getElementById('activateFlag').value='true';"
+                <button type="button" id="saveBtn" class="jenkins-button jenkins-button--primary"
+                        title="${%save.title}" onclick="saveClicked(false);">${%save.label}</button>
+                <button type="button" id="saveActivateBtn"
                         class="jenkins-button"
-                        title="Save the editor content as a new version and immediately activate it">Save &amp; Activate</button>
+                        title="${%saveActivate.title}" onclick="saveClicked(true);">${%saveActivate.label}</button>
               </span>
             </div>
             <div class="ctsync-btn-row">
               <button type="button" id="modeEditBtn"
-                     class="jenkins-button jenkins-button--primary" title="Switch to the editable JSON editor"
-                     onclick="switchToEditMode();">&#9998; Editing</button>
+                     class="jenkins-button jenkins-button--primary" title="${%modeEdit.title}"
+                     onclick="switchToEditMode();">&#9998; ${%modeEdit.label}</button>
               <!-- FR-60/FR-63: no picker here (an ENV Config Set's language is always resolved from
                    its base chain, never chosen) — only the YAML debounce's small non-blocking
                    indicator, same placement convention as the Global page's own row. -->
               <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
             </div>
+            <!-- In-place update (2026-09-02): this env page previously had no save-feedback banner
+                 at all (a classic form POST + redirect needed none) — now that Save/Save &amp;
+                 Activate are AJAX, saveClicked() surfaces both success and error here, same div/
+                 convention as CommonConfigSetPage's saveBanner. -->
+            <div id="saveBanner" class="alert alert-danger" style="display:none"/>
             <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
               <span id="compareBannerText"/>
               <span>
                 <button type="button" id="loadComparedBtn" class="jenkins-button jenkins-button--primary"
-                       title="Accept the version being compared into the editor as the new draft"
-                       onclick="loadComparedIntoEditor();">Load into editor</button>
+                       title="${%loadIntoEditor.title}"
+                       onclick="loadComparedIntoEditor();">${%loadIntoEditor.label}</button>
                 <button type="button" id="backToEditingBtn" class="jenkins-button"
-                       title="Discard the comparison and return to editing — the draft is left unchanged"
-                       onclick="switchToEditMode();">Back to editing</button>
+                       title="${%backToEditing.title}"
+                       onclick="switchToEditMode();">${%backToEditing.label}</button>
               </span>
             </div>
             <div id="overrideEditor" style="height:380px;border:1px solid #ccc"/>
           </td>
           <td style="width:33%;vertical-align:top;padding:4px">
-            <h3>Merged result (read-only, live)</h3>
+            <h3>${%mergedResult.heading}</h3>
             <div id="mergedEditor" style="height:380px;border:1px solid #ccc"/>
             <div id="mergedStaleIndicator" style="display:none;color:#a33">
               showing last valid merge — override JSON is currently invalid
@@ -335,14 +381,16 @@
              response's perReference field as the Merged-result panel — no separate AJAX call. -->
         <div id="inspectChainDrawer" class="ctsync-inspect-drawer" style="display:none"/>
 
-        <form method="post" action="save" id="ctsyncSaveForm" onsubmit="return prepareSubmit();">
-          <textarea name="content" id="contentField" style="display:none"/>
-          <f:entry title="Change note (required)">
-            <input class="setting-input" type="text" name="note" required="required"/>
-          </f:entry>
-          <input type="hidden" name="activate" id="activateFlag" value=""/>
-          <input type="hidden" name="baseChainJson" id="baseChainField" value=""/>
-        </form>
+        <!-- No longer a &lt;form&gt; (2026-09-02 in-place-update pass): Save/Save &amp; Activate now
+             call proxy.save(...) directly from saveClicked() below — content comes straight from
+             the live Env-override Monaco editor, never a hidden textarea; there is no native submit
+             to prepare. The note input and baseChainField remain plain elements JS reads by id
+             (baseChainField is also kept in sync by recomputeMerge/renderBaseChainRows, unrelated to
+             saving). -->
+        <f:entry title="${%changeNote.entryTitle}">
+          <input class="setting-input" type="text" id="noteField" required="required"/>
+        </f:entry>
+        <input type="hidden" id="baseChainField" value=""/>
       </details>
 
       <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
@@ -877,16 +925,139 @@
           });
         }
 
-        function prepareSubmit() {
-          document.getElementById('contentField').value =
-              (editMode &amp;&amp; overrideEditor) ? overrideEditor.getValue() : lastEditContent;
+        // In-place update (2026-09-02): shows/clears the save-feedback banner for both the success
+        // and error outcome of a save — success briefly flashes then auto-hides (there is no page
+        // navigation anymore to signal "done" the way a redirect used to); an error is left visible
+        // until the next save attempt clears or replaces it. Mirrors CommonConfigSetPage's identical
+        // helper.
+        function showSaveBanner(message, isError) {
+          var banner = document.getElementById('saveBanner');
+          banner.textContent = message;
+          banner.className = isError ? 'alert alert-danger' : 'alert alert-success';
+          banner.style.display = 'block';
+          if (!isError) {
+            setTimeout(function () {
+              if (banner.textContent === message) { banner.style.display = 'none'; }
+            }, 4000);
+          }
+        }
+
+        // In-place update (2026-09-02): Save/Save &amp; Activate now call proxy.save(...) directly —
+        // no &lt;form&gt; submit, no page reload. Content comes straight from the live Env-override
+        // Monaco editor (mirrors prepareSubmit's old editMode/lastEditContent fallback exactly).
+        function saveClicked(activate) {
+          var content = (editMode &amp;&amp; overrideEditor) ? overrideEditor.getValue() : lastEditContent;
           document.getElementById('baseChainField').value = JSON.stringify(baseChainRows);
-          // FR-46: disable both save buttons for the duration of the submission — this is a
-          // classic form POST, not AJAX, so the page navigates away/reloads on completion
-          // regardless and there is no success path that needs to re-enable them.
+          var note = document.getElementById('noteField').value;
+          var payload = {
+            content: content,
+            note: note,
+            activate: activate,
+            baseChainJson: JSON.stringify(baseChainRows)
+          };
           document.getElementById('saveBtn').disabled = true;
           document.getElementById('saveActivateBtn').disabled = true;
-          return true;
+          proxy.save(JSON.stringify(payload), function (t) {
+            document.getElementById('saveBtn').disabled = false;
+            document.getElementById('saveActivateBtn').disabled = false;
+            var r = t.responseObject();
+            if (!r.ok) {
+              showSaveBanner(r.error, true);
+              return;
+            }
+            showSaveBanner('Saved.', false);
+            renderVersionHistoryRows(r.versions);
+            if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
+            document.getElementById('noteField').value = '';
+          });
+        }
+
+        // In-place-update row templating (2026-09-02): clones #historyRowTemplate (its static
+        // label/title text already correctly localized by Jelly) and fills in only the per-row
+        // dynamic values, including the base-chain detail lines — used by both saveClicked (may
+        // append a version) and activateVersion (flips which version is active) instead of
+        // location.reload()-ing the whole page.
+        function renderVersionHistoryRows(versions) {
+          var tbody = document.getElementById('versionHistoryTbody');
+          tbody.innerHTML = '';
+          for (var i = 0; i &lt; versions.length; i++) {
+            tbody.appendChild(buildHistoryRowElement(versions[i]));
+          }
+        }
+
+        function buildHistoryRowElement(v) {
+          var tpl = document.getElementById('historyRowTemplate');
+          var tr = tpl.content.firstElementChild.cloneNode(true);
+          tr.id = 'historyRow-' + v.versionNumber;
+          tr.onclick = function () { selectHistoryRow(v.versionNumber); };
+          tr.onkeydown = function (event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              selectHistoryRow(v.versionNumber);
+            }
+          };
+          tr.querySelector('.js-version').textContent = 'v' + v.versionNumber;
+          tr.querySelector('.js-created').textContent = v.timestampEpochMillis;
+          tr.querySelector('.js-createdBy').textContent = v.author;
+          tr.querySelector('.js-note').textContent = v.note;
+
+          var chain = v.baseChain || [];
+          tr.querySelector('.js-basechain-count').textContent = chain.length;
+          var detail = tr.querySelector('.js-basechain-detail');
+          detail.id = 'baseChainDetail-' + v.versionNumber;
+          if (chain.length === 0) {
+            detail.textContent = '(no declared chain — resolves to this env\'s own project, ACTIVE)';
+          } else {
+            detail.innerHTML = '';
+            for (var c = 0; c &lt; chain.length; c++) {
+              var ref = chain[c];
+              var line = document.createElement('div');
+              line.textContent = ref.projectKey + ' — ' + ref.pinMode
+                  + (ref.pinMode === 'PINNED' ? ' (v' + ref.pinnedVersionNumber + ')' : '');
+              detail.appendChild(line);
+            }
+          }
+          tr.querySelector('.js-basechain-toggle').onclick = (function (num) {
+            return function (e) { e.stopPropagation(); e.preventDefault(); toggleBaseChainDetail(num); };
+          })(v.versionNumber);
+
+          var badge = tr.querySelector('.js-activeBadge');
+          badge.textContent = v.active ? ('● ' + tpl.dataset.activeLabel) : '';
+          var btn = tr.querySelector('.js-activate-btn');
+          if (v.active) {
+            btn.disabled = true;
+            btn.setAttribute('data-always-disabled', 'true');
+            btn.title = tpl.dataset.alreadyActiveTitle;
+          } else {
+            btn.title = 'Activate version ' + v.versionNumber + ' without changing the editor content';
+            btn.onclick = (function (num) {
+              return function (e) { e.stopPropagation(); activateVersion(num); };
+            })(v.versionNumber);
+          }
+          return tr;
+        }
+
+        // In-place-update row templating (2026-09-02): same technique as the version-history table
+        // above, for the secrets-manifest table — used by addSecret/removeSecret instead of
+        // location.reload()-ing the whole page. Mirrors CommonConfigSetPage's identical helpers.
+        function renderSecretsManifestRows(manifest) {
+          var tbody = document.getElementById('secretsManifestTbody');
+          tbody.innerHTML = '';
+          for (var i = 0; i &lt; manifest.length; i++) {
+            tbody.appendChild(buildSecretRowElement(manifest[i]));
+          }
+        }
+
+        function buildSecretRowElement(entry) {
+          var tpl = document.getElementById('secretRowTemplate');
+          var tr = tpl.content.firstElementChild.cloneNode(true);
+          tr.querySelector('.js-secret-path').textContent = entry.path;
+          tr.querySelector('.js-secret-cred').textContent = entry.credentialId;
+          var btn = tr.querySelector('.ctsync-remove-secret-btn');
+          btn.setAttribute('data-secret-path', entry.path);
+          btn.title = tpl.dataset.removeTitle;
+          btn.onclick = function () { removeSecret(entry.path); };
+          return tr;
         }
 
         // FR-41: zero-argument proxy.generateTemplate() call (server-side signature has no
@@ -956,7 +1127,12 @@
           proxy.activate(JSON.stringify({ version: v }), function (t) {
             var r = t.responseObject();
             if (r.ok) {
-              location.reload();
+              // In-place update (2026-09-02): re-render just the version-history table's
+              // Active-badge/button-disabled-state from the fresh versions list — nothing else on
+              // the page (override editor draft, base-chain editor draft, accordion state) is
+              // touched.
+              renderVersionHistoryRows(r.versions);
+              if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
             } else {
               setActivateButtonsDisabled(false);
               alert(r.error);
@@ -969,17 +1145,25 @@
           var cred = document.getElementById('secretCredentialId').value;
           proxy.addSecret(JSON.stringify({ path: path, credentialId: cred }), function (t) {
             var r = t.responseObject();
-            if (r.ok) { location.reload(); } else { alert(r.error); }
+            if (r.ok) {
+              // In-place update (2026-09-02): re-render just the secrets-manifest table from the
+              // fresh manifest list.
+              renderSecretsManifestRows(r.secretsManifest);
+              document.getElementById('secretPath').value = '';
+            } else {
+              alert(r.error);
+            }
           });
         }
 
-        // OQ-1 CRUD completion: unbind a previously-registered secret path. Reloads the page on
-        // success (same after-action shape as addSecret above) so the manifest table reflects the
-        // removal without a stale row lingering client-side.
+        // OQ-1 CRUD completion: unbind a previously-registered secret path. In-place update
+        // (2026-09-02): re-renders the secrets-manifest table from the fresh manifest list on
+        // success (same after-action shape as addSecret above) so the removal is reflected without
+        // a stale row lingering client-side — no page reload.
         function removeSecret(path) {
           proxy.removeSecret(JSON.stringify({ path: path }), function (t) {
             var r = t.responseObject();
-            if (r.ok) { location.reload(); } else { alert(r.error); }
+            if (r.ok) { renderSecretsManifestRows(r.secretsManifest); } else { alert(r.error); }
           });
         }
       </script>

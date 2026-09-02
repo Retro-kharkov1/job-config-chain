@@ -1,8 +1,8 @@
 <?jelly escape-by-default='true'?>
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
-  <l:layout title="Config Templates">
+  <l:layout title="${%title}">
     <l:main-panel>
-      <h1>Config Templates</h1>
+      <h1>${%title}</h1>
       <p>
         Global (common) Config Sets. Click a row to open its editor; open a project's env layer
         from that project's page.
@@ -11,23 +11,27 @@
       <table class="jenkins-table sortable" style="width:100%">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Active version</th>
-            <th>Last modified</th>
+            <th>${%column.name}</th>
+            <th>${%column.type}</th>
+            <th>${%column.activeVersion}</th>
+            <th>${%column.lastModified}</th>
           </tr>
         </thead>
         <tbody>
           <j:forEach var="cs" items="${it.commonConfigSets}">
             <tr>
               <td>
-                <a href="${rootURL}/${it.urlName}/${cs.projectKey}/common">${cs.projectKey}-common</a>
+                <!-- BUG-05 fix (2026-09-02): link to the project OVERVIEW page (ProjectConfigPage,
+                     which lists this project's env Config Sets and a New-Env-Config-Set input),
+                     not straight to the common editor — previously there was no click-through path
+                     from this root list to a project's env pages or overview at all. -->
+                <a href="${rootURL}/${it.urlName}/${cs.projectKey}/">${cs.projectKey}-common</a>
               </td>
               <td>${cs.contentType}</td>
               <td>
                 <j:choose>
                   <j:when test="${cs.activeVersion != null}">v${cs.activeVersion.versionNumber}</j:when>
-                  <j:otherwise>(no active version)</j:otherwise>
+                  <j:otherwise>${%noActiveVersion}</j:otherwise>
                 </j:choose>
               </td>
               <td>
@@ -43,13 +47,13 @@
         </tbody>
       </table>
 
-      <h2>New Config Set</h2>
+      <h2>${%newConfigSet.heading}</h2>
       <p>Enter a project key (e.g. <code>my-app</code>) and open its common Config Set editor
          (it is created on first Save):</p>
       <input type="text" name="projectKey" id="newProjectKey" placeholder="projectKey" class="setting-input"/>
       <button type="button" class="jenkins-button jenkins-button--primary"
-              title="Open this project's common Config Set editor, creating it on first Save"
-              onclick="window.location.href = '${rootURL}/${it.urlName}/' + encodeURIComponent(document.getElementById('newProjectKey').value) + '/common/';">Open / Create</button>
+              title="${%newConfigSet.buttonTitle}"
+              onclick="window.location.href = '${rootURL}/${it.urlName}/' + encodeURIComponent(document.getElementById('newProjectKey').value) + '/common/';">${%newConfigSet.buttonLabel}</button>
     </l:main-panel>
   </l:layout>
 </j:jelly>
