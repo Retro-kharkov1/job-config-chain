@@ -26,7 +26,6 @@ import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepositor
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 import org.kohsuke.stapler.bind.JavaScriptMethod;
 import org.kohsuke.stapler.interceptor.RequirePOST;
@@ -35,6 +34,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -43,16 +43,30 @@ import java.util.stream.Collectors;
  * {@link ConfigSetRole}, so both pages share this one implementation rather than duplicating the
  * save/validate/activate contract.
  *
- * <p><b>Save contract (tech-lead decision, 2026-08-27):</b> classic Stapler structured form POST,
- * redirecting back to this same edit page on success. <b>Activate contract:</b> a {@code doXxx} AJAX
- * endpoint returning a JSON object, updating the version-history list in place without a page
- * reload.</p>
+ * <p><b>Save contract (superseded 2026-09-02, owner-approved in-place-update pass):</b> the original
+ * tech-lead decision (2026-08-27) was a classic Stapler structured form POST, redirecting back to
+ * this same edit page on success. That is now replaced by the SAME AJAX/JS-proxy shape already used
+ * by {@link #doActivateVersion(int)}/{@link #jsActivate} etc.: {@link #jsSave} updates the
+ * version-history table (and, on a Common page's very first save, the content-type picker's
+ * locked/unlocked display) in place, with zero page reload. {@link #doSubmitSave} is kept alongside
+ * it purely as the classic, URL-addressable sibling — no Jelly {@code &lt;form&gt;} posts to it
+ * anymore, but it remains this class's own {@code JenkinsRule} tests' way of exercising
+ * {@link #saveImpl}'s validation/save logic directly, matching every other action pair on this
+ * class. <b>Activate/addSecret/removeSecret contract:</b> already-AJAX {@code doXxx} endpoints
+ * returning a JSON object; as of this same pass their JS callers also update the affected DOM
+ * region in place (version-history table / secrets-manifest table) instead of the
+ * {@code location.reload()} they previously (and needlessly) called after an already-successful
+ * AJAX round trip.</p>
  *
  * <p><b>JSON syntax validation (FR-33):</b> always re-checked here server-side — the Monaco editor's
  * client-side {@code jsonDefaults} diagnostics give live inline-marker feedback while typing, but a
- * save is never trusted on client-side validation alone. An invalid submission is rejected via
- * {@link Failure}, which Stapler renders as a plain, clear error page (the client-side inline
- * marker + banner in the wireframe is the primary UX for catching this before submit; the
+ * save is never trusted on client-side validation alone. {@link #saveImpl} never itself throws
+ * {@link Failure} out to a caller — it catches its own callees' {@link Failure}s once, internally,
+ * and converts them into a structured {@code SaveOutcome}; {@link #doSubmitSave} re-throws that as a
+ * {@link Failure} (Stapler renders it as a plain, clear error page — the classic path's only
+ * consumer today is this class's own tests), while {@link #jsSave} surfaces it as an
+ * {@code {ok:false, error:...}} response rendered into the {@code saveBanner} div (the client-side
+ * inline marker + banner in the wireframe is the primary UX for catching this before submit; the
  * server-side path here is the non-bypassable backstop).</p>
  */
 // NOTE: this class MUST be public. Jelly/JEXL's bean-property reflection (${it.exists},
@@ -160,60 +174,218 @@ public abstract class ConfigSetPage {
         return jsonEncoded.replace("</", "<\\/");
     }
 
-    @RequirePOST
-    public void doSave(StaplerRequest req, StaplerResponse rsp,
-                        @QueryParameter String content,
-                        @QueryParameter String note,
-                        @QueryParameter(fixEmpty = true) String activate,
-                        @QueryParameter(fixEmpty = true) String baseChainJson,
-                        @QueryParameter(fixEmpty = true) String contentType) throws IOException {
-        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+    /**
+     * Immutable result of {@link #saveImpl}: never a thrown exception, so one implementation can
+     * serve both the throwing classic path ({@link #doSubmitSave}) and the non-throwing AJAX path
+     * ({@link #jsSave}).
+     */
+    private static final class SaveOutcome {
+        final boolean ok;
+        final String error;
+        final int newVersionNumber;
 
-        ConfigSet configSet = getConfigSet();
-        ContentType resolvedContentType;
-        if (configSet == null) {
-            // FR-59/FR-68: only meaningful on first save, and only ever supplied by the COMMON page's
-            // Jelly (the env page's form never emits this field — its type is always resolved, never
-            // chosen, per FR-60). Default to JSON when absent, matching FR-59's literal wording.
-            resolvedContentType = (contentType == null || contentType.trim().isEmpty())
-                    ? ContentType.JSON : ContentType.valueOf(contentType);
-        } else {
-            // Immutable after first version (FR-59) — the field simply has no effect from here on,
-            // exactly mirroring projectKey's own existing immutability. Never re-read from the request.
-            resolvedContentType = configSet.getContentType();
+        private SaveOutcome(boolean ok, String error, int newVersionNumber) {
+            this.ok = ok;
+            this.error = error;
+            this.newVersionNumber = newVersionNumber;
         }
 
-        List<BaseConfigReference> baseChain = parseBaseChainOrFail(baseChainJson);
-
-        // FR-61: cross-chain type-consistency, UI path — ENV role only (a COMMON-role Config Set never
-        // has a baseChain per FR-53, so this check is structurally a no-op there; guarding on role
-        // keeps the intent explicit rather than relying on baseChain always being empty for COMMON).
-        if (getRole() == ConfigSetRole.ENV) {
-            List<BaseConfigReference> resolvedChain = baseChain.isEmpty()
-                    ? Collections.singletonList(BaseConfigReference.active(projectKey))
-                    : baseChain;
-            checkChainTypeConsistencyOrFail(resolvedChain);
+        static SaveOutcome ok(int newVersionNumber) {
+            return new SaveOutcome(true, null, newVersionNumber);
         }
 
-        validateSyntaxOrFail(content, resolvedContentType);
-
-        if (configSet == null) {
-            configSet = new ConfigSet(projectKey, getRole(), getEnvironment(), getDisplayNameSeed(), resolvedContentType);
+        static SaveOutcome error(String message) {
+            return new SaveOutcome(false, message, 0);
         }
-        String author = currentAuthor();
-        int newVersion;
+    }
+
+    /**
+     * Shared save/validate/activate implementation behind both {@link #doSubmitSave} (classic,
+     * re-throws as {@link Failure}) and {@link #jsSave} (AJAX, never throws) — see each caller's
+     * javadoc for how the same outcome is surfaced differently. Every validation/parse failure this
+     * method's callees signal via {@link Failure} (or {@link IllegalArgumentException}, wrapped the
+     * same way {@code doSave} always did) is caught exactly once, here, and converted into a
+     * {@link SaveOutcome#error}, so neither caller duplicates any of the actual save logic.
+     */
+    private SaveOutcome saveImpl(String content, String note, boolean activate, String baseChainJson,
+                                  String contentTypeParam) {
         try {
-            newVersion = configSet.addVersion(content, note, author, System.currentTimeMillis(), baseChain);
-        } catch (IllegalArgumentException e) {
-            // FR-14/OQ-1: structural secret-placeholder rejection, and (FR-53) a non-empty baseChain
-            // on a COMMON-role Config Set, both surface here as a clear save error.
-            throw new Failure("Save blocked: " + e.getMessage());
+            ConfigSet configSet = getConfigSet();
+            ContentType resolvedContentType;
+            if (configSet == null) {
+                // FR-59/FR-68: only meaningful on first save, and only ever supplied by the COMMON
+                // page's client (the env page never sends this field — its type is always resolved,
+                // never chosen, per FR-60). Default to JSON when absent, matching FR-59's literal
+                // wording.
+                resolvedContentType = (contentTypeParam == null || contentTypeParam.trim().isEmpty())
+                        ? ContentType.JSON : ContentType.valueOf(contentTypeParam);
+            } else {
+                // Immutable after first version (FR-59) — the field simply has no effect from here on,
+                // exactly mirroring projectKey's own existing immutability. Never re-read from the
+                // request.
+                resolvedContentType = configSet.getContentType();
+            }
+
+            List<BaseConfigReference> baseChain = parseBaseChainOrFail(baseChainJson);
+
+            // FR-61: cross-chain type-consistency, UI path — ENV role only (a COMMON-role Config Set
+            // never has a baseChain per FR-53, so this check is structurally a no-op there; guarding
+            // on role keeps the intent explicit rather than relying on baseChain always being empty
+            // for COMMON).
+            if (getRole() == ConfigSetRole.ENV) {
+                List<BaseConfigReference> resolvedChain = baseChain.isEmpty()
+                        ? Collections.singletonList(BaseConfigReference.active(projectKey))
+                        : baseChain;
+                checkChainTypeConsistencyOrFail(resolvedChain);
+            }
+
+            validateSyntaxOrFail(content, resolvedContentType);
+
+            if (configSet == null) {
+                configSet = new ConfigSet(projectKey, getRole(), getEnvironment(), getDisplayNameSeed(),
+                        resolvedContentType);
+            }
+            String author = currentAuthor();
+            int newVersion;
+            try {
+                newVersion = configSet.addVersion(content, note, author, System.currentTimeMillis(), baseChain);
+            } catch (IllegalArgumentException e) {
+                // FR-14/OQ-1: structural secret-placeholder rejection, and (FR-53) a non-empty
+                // baseChain on a COMMON-role Config Set, both surface here as a clear save error.
+                throw new Failure(Messages.ConfigSetPage_SaveBlocked(e.getMessage()));
+            }
+            if (activate) {
+                configSet.activate(newVersion);
+            }
+            repository.save(configSet);
+            return SaveOutcome.ok(newVersion);
+        } catch (Failure f) {
+            return SaveOutcome.error(f.getMessage());
         }
-        if (activate != null) {
-            configSet.activate(newVersion);
+    }
+
+    /**
+     * Classic Stapler structured form POST — the URL-addressable, always-Failure-throwing sibling of
+     * {@link #jsSave}. As of the 2026-09-02 in-place-update pass, no Jelly {@code &lt;form&gt;} on
+     * either edit page posts here anymore (both pages' Save/Save &amp; Activate buttons call
+     * {@link #jsSave} directly, since the rest of this page already requires JavaScript for Monaco
+     * regardless — a no-JS fallback has no real audience here). This method is kept anyway, purely as
+     * the same "classic sibling kept alongside its JS-proxy pair" shape as every other action on this
+     * class (see {@link #doActivateVersion(int)}), and because it is what this class's own
+     * {@code JenkinsRule} tests use to exercise {@link #saveImpl}'s validation/save logic directly,
+     * matching how those tests already exercise {@code activateVersion}/{@code registerSecret}/etc.
+     *
+     * <p>Named {@code doSubmitSave} (URL segment {@code submitSave}), deliberately NOT {@code doSave},
+     * to avoid colliding with the {@code @JavaScriptMethod(name = "save")} sibling below — see
+     * {@link #doActivateVersion(int)}'s javadoc for the full root-cause chain behind why that
+     * collision matters.</p>
+     */
+    @RequirePOST
+    public void doSubmitSave(StaplerResponse rsp,
+                              @QueryParameter String content,
+                              @QueryParameter String note,
+                              @QueryParameter(fixEmpty = true) String activate,
+                              @QueryParameter(fixEmpty = true) String baseChainJson,
+                              @QueryParameter(fixEmpty = true) String contentType) throws IOException {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        SaveOutcome outcome = saveImpl(content, note, activate != null, baseChainJson, contentType);
+        if (!outcome.ok) {
+            throw new Failure(outcome.error);
         }
-        repository.save(configSet);
         rsp.sendRedirect2(".");
+    }
+
+    /**
+     * JS-proxy-facing sibling of {@link #doSubmitSave}; exposed as {@code proxy.save(...)} — the
+     * endpoint actually driving both pages' Save/Save &amp; Activate buttons since the 2026-09-02
+     * in-place-update pass. On success, updates the version-history table (via the returned
+     * {@code versions} array — see {@link #versionsAsJsonArray()}) and, on a Common page's very first
+     * save, the content-type picker's locked/unlocked display (via {@code contentTypeLocked}/
+     * {@code contentTypeValue}) — all without a page reload. See {@link #doActivateVersion(int)}
+     * javadoc for the naming-collision root cause this pair avoids, and {@link #saveImpl} for the
+     * shared, never-throwing validation/save logic both siblings delegate to.
+     */
+    @JavaScriptMethod(name = "save")
+    public JSONObject jsSave(String payloadJson) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        JsonObject payload = parseJsPayloadObject(payloadJson);
+        if (payload == null || !payload.has("content") || !payload.has("note")) {
+            JSONObject result = new JSONObject();
+            result.put("ok", false);
+            result.put("error", "Malformed request: expected {\"content\": <string>, \"note\": <string>, "
+                    + "\"activate\": <boolean>, \"baseChainJson\": <string|null>, \"contentType\": <string|null>}");
+            return result;
+        }
+        String content = payload.get("content").getAsString();
+        String note = payload.get("note").getAsString();
+        boolean activate = payload.has("activate") && !payload.get("activate").isJsonNull()
+                && payload.get("activate").getAsBoolean();
+        String baseChainJson = (payload.has("baseChainJson") && !payload.get("baseChainJson").isJsonNull())
+                ? payload.get("baseChainJson").getAsString() : null;
+        String contentType = (payload.has("contentType") && !payload.get("contentType").isJsonNull())
+                ? payload.get("contentType").getAsString() : null;
+
+        SaveOutcome outcome = saveImpl(content, note, activate, baseChainJson, contentType);
+        JSONObject result = new JSONObject();
+        if (!outcome.ok) {
+            result.put("ok", false);
+            result.put("error", outcome.error);
+            return result;
+        }
+        result.put("ok", true);
+        result.put("newVersionNumber", outcome.newVersionNumber);
+        result.put("activeVersionNumber", getConfigSet() == null ? 0 : getConfigSet().getActiveVersionNumber());
+        result.put("contentTypeValue", getContentTypeValue());
+        result.put("contentTypeLocked", isContentTypeLocked());
+        result.put("versions", versionsAsJsonArray());
+        return result;
+    }
+
+    /**
+     * The current version-history list, JSON-serialized for the client's in-place table re-render —
+     * shared by {@link #jsSave} (may append a new version) and {@link #activateImpl} (flips which
+     * version is active) so neither caller needs a page reload to reflect its effect on the
+     * version-history table.
+     */
+    private net.sf.json.JSONArray versionsAsJsonArray() {
+        net.sf.json.JSONArray array = new net.sf.json.JSONArray();
+        ConfigSet configSet = getConfigSet();
+        int activeVersionNumber = configSet == null ? 0 : configSet.getActiveVersionNumber();
+        for (ConfigSetVersion v : getVersions()) {
+            JSONObject row = new JSONObject();
+            row.put("versionNumber", v.getVersionNumber());
+            row.put("timestampEpochMillis", v.getTimestampEpochMillis());
+            row.put("author", v.getAuthor());
+            row.put("note", v.getNote());
+            row.put("active", v.getVersionNumber() == activeVersionNumber);
+            net.sf.json.JSONArray baseChain = new net.sf.json.JSONArray();
+            for (BaseConfigReference ref : v.getBaseChain()) {
+                JSONObject refRow = new JSONObject();
+                refRow.put("projectKey", ref.getProjectKey());
+                refRow.put("pinMode", ref.getPinMode().name());
+                refRow.put("pinnedVersionNumber", ref.getPinnedVersionNumber());
+                baseChain.add(refRow);
+            }
+            row.put("baseChain", baseChain);
+            array.add(row);
+        }
+        return array;
+    }
+
+    /**
+     * The current secrets-manifest, JSON-serialized for the client's in-place table re-render —
+     * shared by {@link #addSecretImpl} and {@link #removeSecretImpl} so neither caller needs a page
+     * reload to reflect its effect on the secrets-manifest table.
+     */
+    private static net.sf.json.JSONArray secretsManifestAsJsonArray(ConfigSet configSet) {
+        net.sf.json.JSONArray array = new net.sf.json.JSONArray();
+        for (Map.Entry<String, String> entry : configSet.getSecretsManifest().entrySet()) {
+            JSONObject row = new JSONObject();
+            row.put("path", entry.getKey());
+            row.put("credentialId", entry.getValue());
+            array.add(row);
+        }
+        return array;
     }
 
     /**
@@ -244,8 +416,7 @@ public abstract class ConfigSetPage {
         if (expected == null || allMatch) {
             return;
         }
-        throw new Failure("Save blocked: mismatched content types in base chain — "
-                + String.join(", ", mismatchParts) + " must all share one content type.");
+        throw new Failure(Messages.ConfigSetPage_SaveBlockedMismatchedTypes(String.join(", ", mismatchParts)));
     }
 
     /**
@@ -286,7 +457,7 @@ public abstract class ConfigSetPage {
             return result;
         } catch (RuntimeException e) {
             // JsonSyntaxException, IllegalStateException, NullPointerException, IllegalArgumentException.
-            throw new Failure("Save blocked: malformed base chain — " + e.getMessage());
+            throw new Failure(Messages.ConfigSetPage_SaveBlockedMalformedBaseChain(e.getMessage()));
         }
     }
 
@@ -390,6 +561,10 @@ public abstract class ConfigSetPage {
         repository.save(configSet);
         result.put("ok", true);
         result.put("active", version);
+        // In-place update (2026-09-02): the client re-renders the version-history table's
+        // Active-badge/button-disabled-state from this instead of location.reload()-ing the whole
+        // page — see #versionsAsJsonArray's javadoc.
+        result.put("versions", versionsAsJsonArray());
         return result;
     }
 
@@ -466,6 +641,9 @@ public abstract class ConfigSetPage {
         configSet.putSecretManifestEntry(path, credentialId);
         repository.save(configSet);
         result.put("ok", true);
+        // In-place update (2026-09-02): the client re-renders just the secrets-manifest table body
+        // from this instead of location.reload()-ing the whole page.
+        result.put("secretsManifest", secretsManifestAsJsonArray(configSet));
         return result;
     }
 
@@ -522,6 +700,8 @@ public abstract class ConfigSetPage {
         configSet.removeSecretManifestEntry(path);
         repository.save(configSet);
         result.put("ok", true);
+        // In-place update (2026-09-02): see #addSecretImpl's equivalent note above.
+        result.put("secretsManifest", secretsManifestAsJsonArray(configSet));
         return result;
     }
 
@@ -748,8 +928,7 @@ public abstract class ConfigSetPage {
         try {
             TreeNode parsed = TreeFormats.forType(type).parse(content == null ? "" : content);
             if (!parsed.isObject()) {
-                throw new Failure("Save blocked: invalid " + type
-                        + " — content must have a top-level object/root element");
+                throw new Failure(Messages.ConfigSetPage_SaveBlockedInvalidRoot(type));
             }
         } catch (RuntimeException e) {
             // JsonSyntaxException / XmlSyntaxException / YAMLException — one catch clause covers all
@@ -758,7 +937,7 @@ public abstract class ConfigSetPage {
             if (e instanceof Failure) {
                 throw (Failure) e;
             }
-            throw new Failure("Save blocked: invalid " + type + " — " + e.getMessage());
+            throw new Failure(Messages.ConfigSetPage_SaveBlockedInvalidSyntax(type, e.getMessage()));
         }
     }
 
