@@ -304,6 +304,10 @@
               <button type="button" id="modeEditBtn"
                      class="jenkins-button jenkins-button--primary" title="Switch to the editable JSON editor"
                      onclick="switchToEditMode();">&#9998; Editing</button>
+              <!-- FR-60/FR-63: no picker here (an ENV Config Set's language is always resolved from
+                   its base chain, never chosen) — only the YAML debounce's small non-blocking
+                   indicator, same placement convention as the Global page's own row. -->
+              <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
             </div>
             <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
               <span id="compareBannerText"/>
@@ -374,18 +378,113 @@
         var commonVersionCatalog = JSON.parse(__commonVersionCatalog);
         var baseChainRows = JSON.parse(__baseChainSeed);
         var lastPerReference = [];
+        // FR-60: an ENV Config Set has no own content-type picker — its language mode always
+        // follows the resolved base chain's shared ContentType, updated on every recomputeMerge
+        // response (default JSON until the first resolve lands).
+        var currentContentType = 'JSON';
+        var yamlCheckTimer = null;
+
+        // FR-63/FR-64: JSON/XML/YAML all dispatch through this one language-mode lookup — no
+        // per-format special-casing anywhere else in this script beyond it (mirrors the Global
+        // page's identical helper).
+        function languageForType(type) {
+          if (type === 'XML') { return 'xml'; }
+          if (type === 'YAML') { return 'yaml'; }
+          return 'json';
+        }
+
+        // FR-64: XML/YAML "Format document" round-trips doFormatContent — JSON keeps Monaco's own
+        // built-in formatter (unchanged), so no provider is registered for it here.
+        function registerXmlYamlFormatProviders() {
+          ['xml', 'yaml'].forEach(function (lang) {
+            monaco.languages.registerDocumentFormattingEditProvider(lang, {
+              provideDocumentFormattingEdits: function (model) {
+                return new Promise(function (resolve) {
+                  var type = lang === 'xml' ? 'XML' : 'YAML';
+                  proxy.formatContent(JSON.stringify({ content: model.getValue(), contentType: type }), function (t) {
+                    var r = t.responseObject();
+                    if (!r.ok) { resolve([]); return; }
+                    resolve([{ range: model.getFullModelRange(), text: r.formatted }]);
+                  });
+                });
+              }
+            });
+          });
+        }
+
+        // FR-63: XML gets synchronous, client-side DOMParser diagnostics; YAML gets a debounced
+        // server round trip (doValidateContent) with the small non-blocking "Checking YAML…"
+        // indicator, shown directly above the Env-override panel only (not Effective base/Merged
+        // result, already covered by the existing stale-indicator convention); JSON keeps Monaco's
+        // built-in JSON diagnostics, so this function is a no-op for JSON.
+        function runXmlDiagnostics(ed) {
+          var markers = [];
+          try {
+            var doc = new DOMParser().parseFromString(ed.getValue(), 'application/xml');
+            var errorNode = doc.getElementsByTagName('parsererror')[0];
+            if (errorNode) {
+              markers.push({
+                severity: monaco.MarkerSeverity.Error,
+                message: errorNode.textContent || 'Malformed XML',
+                startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
+              });
+            }
+          } catch (e) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Error,
+              message: String(e),
+              startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
+            });
+          }
+          monaco.editor.setModelMarkers(ed.getModel(), 'ctsync-xml', markers);
+        }
+
+        function scheduleYamlDiagnostics(ed) {
+          if (yamlCheckTimer) { clearTimeout(yamlCheckTimer); }
+          var indicator = document.getElementById('checkingIndicator');
+          if (indicator) { indicator.style.display = 'inline'; }
+          var content = ed.getValue();
+          yamlCheckTimer = setTimeout(function () {
+            proxy.validateContent(JSON.stringify({ content: content, contentType: 'YAML' }), function (t) {
+              if (indicator) { indicator.style.display = 'none'; }
+              var r = t.responseObject();
+              var markers = [];
+              if (!r.ok) {
+                markers.push({
+                  severity: monaco.MarkerSeverity.Error,
+                  message: r.error || 'Malformed YAML',
+                  startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
+                });
+              }
+              monaco.editor.setModelMarkers(ed.getModel(), 'ctsync-yaml', markers);
+            });
+          }, 500);
+        }
+
+        function wireLiveDiagnostics(ed) {
+          if (!ed) { return; }
+          ed.onDidChangeModelContent(function () {
+            if (currentContentType === 'XML') {
+              runXmlDiagnostics(ed);
+            } else if (currentContentType === 'YAML') {
+              scheduleYamlDiagnostics(ed);
+            }
+          });
+        }
 
         require.config({ paths: { vs: '${rootURL}/plugin/config-template-sync/monaco/vs' } });
         require(['vs/editor/editor.main'], function () {
           monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
             validate: true, allowComments: false, schemas: []
           });
+          registerXmlYamlFormatProviders();
           overrideEditor = monaco.editor.create(document.getElementById('overrideEditor'), {
-            value: __overrideSeed, language: 'json', automaticLayout: true
+            value: __overrideSeed, language: languageForType(currentContentType), automaticLayout: true
           });
           formatEditorContent(overrideEditor);
+          wireLiveDiagnostics(overrideEditor);
           mergedEditor = monaco.editor.create(document.getElementById('mergedEditor'), {
-            value: '', language: 'json', readOnly: true, automaticLayout: true
+            value: '', language: languageForType(currentContentType), readOnly: true, automaticLayout: true
           });
           renderBaseChainRows();
           recomputeMerge();
@@ -573,7 +672,7 @@
             heading.textContent = ref.projectKey + ' — ' + ref.pinMode + ' (v' + ref.resolvedVersionNumber + ')';
             panel.appendChild(heading);
             var pre = document.createElement('pre');
-            pre.textContent = JSON.stringify(JSON.parse(ref.contentJson), null, 2);
+            pre.textContent = ref.contentJson; // already serialized text in the resolved ContentType
             panel.appendChild(pre);
             drawer.appendChild(panel);
           }
@@ -642,9 +741,10 @@
           if (editMode) { return; }
           if (diffEditor) { diffEditor.dispose(); diffEditor = null; }
           overrideEditor = monaco.editor.create(document.getElementById('overrideEditor'), {
-            value: lastEditContent, language: 'json', automaticLayout: true
+            value: lastEditContent, language: languageForType(currentContentType), automaticLayout: true
           });
           formatEditorContent(overrideEditor);
+          wireLiveDiagnostics(overrideEditor);
           attachOverrideChangeListener();
           recomputeMerge();
           editMode = true;
@@ -697,8 +797,8 @@
             diffEditor.dispose();
             diffEditor = null;
           }
-          var draftModel = monaco.editor.createModel(lastEditContent, 'json');
-          var versionModel = monaco.editor.createModel(versionContent, 'json');
+          var draftModel = monaco.editor.createModel(lastEditContent, languageForType(currentContentType));
+          var versionModel = monaco.editor.createModel(versionContent, languageForType(currentContentType));
           diffEditor = monaco.editor.createDiffEditor(document.getElementById('overrideEditor'), {
             readOnly: true,
             automaticLayout: true,
@@ -752,7 +852,17 @@
             var r = t.responseObject();
             var indicator = document.getElementById('mergedStaleIndicator');
             if (r.ok) {
-              mergedEditor.setValue(JSON.stringify(r.merged, null, 2));
+              // FR-60/§7: `merged` is already serialized text in the resolved chain's ContentType,
+              // not a nested JSON object — set directly into the model. The resolved `contentType`
+              // (new field) drives the Effective base/Env override/Merged result panels' shared
+              // Monaco language mode via setModelLanguage (never rebuilding the editor instance,
+              // to avoid disrupting an in-progress edit/cursor position).
+              if (r.contentType &amp;&amp; r.contentType !== currentContentType) {
+                currentContentType = r.contentType;
+                monaco.editor.setModelLanguage(overrideEditor.getModel(), languageForType(currentContentType));
+                monaco.editor.setModelLanguage(mergedEditor.getModel(), languageForType(currentContentType));
+              }
+              mergedEditor.setValue(r.merged);
               indicator.style.display = 'none';
               lastPerReference = r.perReference || [];
               document.getElementById('inspectChainCount').textContent = lastPerReference.length;
@@ -790,7 +900,8 @@
               alert(r.error);
               return;
             }
-            lastGeneratedTemplateText = JSON.stringify(r.template, null, 2);
+            // FR-64/§7: `template` is already serialized text in the resolved contentType.
+            lastGeneratedTemplateText = r.template;
             document.getElementById('threePanelTable').style.display = 'none';
             document.getElementById('generateBanner').style.display = 'block';
             document.getElementById('generatedTemplatePanel').style.display = 'block';
@@ -798,10 +909,11 @@
             document.getElementById('backTo3PanelBtn').style.display = 'inline-block';
             if (generatedTemplateEditor) {
               generatedTemplateEditor.setValue(lastGeneratedTemplateText);
+              monaco.editor.setModelLanguage(generatedTemplateEditor.getModel(), languageForType(r.contentType));
             } else {
               generatedTemplateEditor = monaco.editor.create(document.getElementById('generatedTemplateEditor'), {
                 value: lastGeneratedTemplateText,
-                language: 'json',
+                language: languageForType(r.contentType),
                 readOnly: true,
                 automaticLayout: true
               });

@@ -189,6 +189,18 @@
       <version>2.10.1</version>
     </dependency>
     <dependency>
+      <!-- YAML content-type support (NFR-9). No transitive snakeyaml is pulled in by this project's
+           current dependency tree (confirmed via `mvn dependency:tree -Dincludes=org.yaml:snakeyaml`
+           before adding this — zero matches), so this is a fresh explicit pin, not an alignment to an
+           existing transitive version. Used only via the safe, low-level Yaml#compose/Yaml#serialize
+           node-graph API (YamlTreeAdapter) — never Yaml#load()'s Constructor-based POJO
+           deserialization — so CVE-2022-1471's unsafe-deserialization class does not apply to this
+           usage pattern; 2.2 is still picked as a modern, already-patched baseline. -->
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+      <version>2.2</version>
+    </dependency>
+    <dependency>
       <!-- Standalone Nashorn (removed from the JDK itself since 15; this build runs on a newer
            JDK per maven -v). Used ONLY in test scope to compile (syntax-check, never execute)
            each admin page's rendered inline <script> blocks — a real-JS-engine regression guard

@@ -1,7 +1,5 @@
 package io.github.retrokharkov1.configtemplatesync.steps;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import hudson.AbortException;
 import hudson.EnvVars;
 import hudson.Extension;
@@ -9,12 +7,15 @@ import hudson.FilePath;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import io.github.retrokharkov1.configtemplatesync.merge.EffectiveConfigResolver;
-import io.github.retrokharkov1.configtemplatesync.merge.JsonPaths;
 import io.github.retrokharkov1.configtemplatesync.merge.TokenExtractor;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormats;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreePaths;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigDeploymentBinding;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import io.github.retrokharkov1.configtemplatesync.model.PinMode;
 import io.github.retrokharkov1.configtemplatesync.model.ResolvedBaseVersion;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigDeploymentBindingRepository;
@@ -121,7 +122,8 @@ public class ConfigTemplateSubstituteStep extends Step {
 
             ConfigSet env = StepSupport.requireEnv(configSetRepository, projectKey, environment);
 
-            JsonObject effective;
+            TreeNode effective;
+            ContentType effectiveType;
             List<ResolvedBaseVersion> resolvedBaseChain;
             List<ConfigSet> resolvedBaseConfigSets;
             ConfigSetVersion envVersion;
@@ -136,7 +138,9 @@ public class ConfigTemplateSubstituteStep extends Step {
                 // by (projectKey, versionNumber) lookups. No ACTIVE/PINNED branching needed — the
                 // binding already recorded concrete version numbers. A pinned project/version that's
                 // since vanished must fail loud rather than silently substitute wrong/empty content.
-                List<String> baseContents = new ArrayList<>();
+                // The binding was only ever created by a prior resolveEffective run (FR-62), which
+                // already enforced cross-chain content-type consistency at freeze time — so the first
+                // resolved base's own ContentType is reused directly here, not re-checked.
                 resolvedBaseChain = new ArrayList<>();
                 resolvedBaseConfigSets = new ArrayList<>();
                 for (ResolvedBaseVersion rv : existingBinding.getResolvedBaseChain()) {
@@ -152,14 +156,21 @@ public class ConfigTemplateSubstituteStep extends Step {
                                 + "' has no version " + rv.getVersionNumber()
                                 + " (frozen in deployment binding for buildVersion '" + buildVersion + "')");
                     }
-                    baseContents.add(baseVersion.getContentJson());
                     resolvedBaseChain.add(rv);
                     resolvedBaseConfigSets.add(baseConfigSet);
                 }
+                effectiveType = resolvedBaseConfigSets.isEmpty()
+                        ? ContentType.JSON : resolvedBaseConfigSets.get(0).getContentType();
+                List<TreeNode> baseContents = new ArrayList<>();
+                for (int i = 0; i < resolvedBaseChain.size(); i++) {
+                    ConfigSetVersion baseVersion = resolvedBaseConfigSets.get(i)
+                            .getVersion(resolvedBaseChain.get(i).getVersionNumber());
+                    baseContents.add(TreeFormats.forType(effectiveType).parse(baseVersion.getContentJson()));
+                }
                 envVersion = env.getVersion(existingBinding.getEnvVersionNumber());
                 pinned = true;
-                effective = EffectiveConfigResolver.resolveChain(
-                        baseContents, envVersion == null ? null : envVersion.getContentJson());
+                effective = EffectiveConfigResolver.resolveChain(effectiveType, baseContents,
+                        envVersion == null ? null : envVersion.getContentJson());
                 listener.getLogger().println(
                         "[configTemplateSync] buildVersion '" + buildVersion
                                 + "' is pinned to base chain [" + joinChain(resolvedBaseChain)
@@ -170,6 +181,7 @@ public class ConfigTemplateSubstituteStep extends Step {
                 StepSupport.ResolvedEffective resolved =
                         StepSupport.resolveEffective(configSetRepository, chain, envVersion);
                 effective = resolved.mergedConfig;
+                effectiveType = resolved.contentType;
                 resolvedBaseChain = resolved.resolvedBaseChain;
                 resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
 
@@ -246,11 +258,11 @@ public class ConfigTemplateSubstituteStep extends Step {
             return sb.toString();
         }
 
-        private String substitute(JsonObject effective, String content, EnvVars envVars,
+        private String substitute(TreeNode effective, String content, EnvVars envVars,
                                    Map<String, String> secretsManifest, Run<?, ?> run) throws AbortException {
-            Map<String, JsonElement> flattened = JsonPaths.flatten(effective);
+            Map<String, TreeNode> flattened = TreePaths.flatten(effective);
             String result = content;
-            for (Map.Entry<String, JsonElement> entry : flattened.entrySet()) {
+            for (Map.Entry<String, TreeNode> entry : flattened.entrySet()) {
                 String dottedPath = entry.getKey();
                 String token = "#{" + dottedPath + "}#";
                 if (!result.contains(token)) {
@@ -269,7 +281,7 @@ public class ConfigTemplateSubstituteStep extends Step {
                     // in the calling Jenkinsfile's environment wins over the flattened JSON leaf.
                     value = envVars.get(dottedPath);
                 } else {
-                    value = JsonPaths.leafAsString(entry.getValue());
+                    value = TreePaths.leafAsString(entry.getValue());
                 }
                 result = result.replace(token, value);
             }

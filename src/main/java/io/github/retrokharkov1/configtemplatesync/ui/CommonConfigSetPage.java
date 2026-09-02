@@ -1,8 +1,10 @@
 package io.github.retrokharkov1.configtemplatesync.ui;
 
 import io.github.retrokharkov1.configtemplatesync.merge.TemplateGenerator;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 
 /**
@@ -36,9 +38,14 @@ public class CommonConfigSetPage extends ConfigSetPage {
 
     /** FR-15a: walks this Config Set's own active version content directly, no merge. */
     @Override
-    com.google.gson.JsonObject computeTemplate() {
+    TreeNode computeTemplate() {
         ConfigSetVersion active = getActiveVersion();
-        return TemplateGenerator.fromContent(active.getContentJson());
+        return TemplateGenerator.fromContent(active.getContentJson(), getConfigSet().getContentType());
+    }
+
+    @Override
+    ContentType getTemplateContentType() {
+        return getConfigSet().getContentType();
     }
 
     @Override
