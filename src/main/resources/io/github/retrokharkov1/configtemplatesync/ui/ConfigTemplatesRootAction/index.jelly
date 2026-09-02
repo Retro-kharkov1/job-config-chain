@@ -12,6 +12,7 @@
         <thead>
           <tr>
             <th>Name</th>
+            <th>Type</th>
             <th>Active version</th>
             <th>Last modified</th>
           </tr>
@@ -22,6 +23,7 @@
               <td>
                 <a href="${rootURL}/${it.urlName}/${cs.projectKey}/common">${cs.projectKey}-common</a>
               </td>
+              <td>${cs.contentType}</td>
               <td>
                 <j:choose>
                   <j:when test="${cs.activeVersion != null}">v${cs.activeVersion.versionNumber}</j:when>

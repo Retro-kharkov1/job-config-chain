@@ -3,6 +3,7 @@ package io.github.retrokharkov1.configtemplatesync.merge;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 import org.junit.Rule;
 import org.junit.Test;
@@ -24,13 +25,13 @@ public class BaseChainResolverTest {
     public void resolvesActiveAndPinnedReferencesAcrossProjects() throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
 
-        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common");
+        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         int aV1 = teamA.addVersion("{\"a\":1}", "v1", "alice", 1L);
         teamA.addVersion("{\"a\":2}", "v2", "alice", 2L);
         teamA.activate(aV1);
         repository.save(teamA);
 
-        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common");
+        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common", ContentType.JSON);
         int bV1 = teamB.addVersion("{\"b\":1}", "v1", "bob", 1L);
         int bV2 = teamB.addVersion("{\"b\":2}", "v2", "bob", 2L);
         teamB.activate(bV2);
@@ -62,7 +63,7 @@ public class BaseChainResolverTest {
     @Test
     public void missingPinnedVersionResolvesToNullVersionWithoutThrowing() throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
-        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common");
+        ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         teamA.addVersion("{\"a\":1}", "v1", "alice", 1L);
         repository.save(teamA);
 

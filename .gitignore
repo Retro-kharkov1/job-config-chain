@@ -6,3 +6,4 @@ work/
 build.log
 build-package.log
 distribution/site/*.hpi
+.build-timings.log

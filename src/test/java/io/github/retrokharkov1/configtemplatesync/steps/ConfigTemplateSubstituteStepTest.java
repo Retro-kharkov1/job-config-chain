@@ -7,6 +7,7 @@ import hudson.util.Secret;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigDeploymentBindingRepository;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
@@ -33,7 +34,7 @@ public class ConfigTemplateSubstituteStepTest {
 
     private ConfigSet seedCommon(String projectKey, String contentJson) throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet common = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common");
+        ConfigSet common = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         int v = common.addVersion(contentJson, "seed", "test", 1L);
         common.activate(v);
         repository.save(common);
@@ -42,7 +43,7 @@ public class ConfigTemplateSubstituteStepTest {
 
     private ConfigSet seedEnv(String projectKey, String environment, String patchJson) throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env");
+        ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env", ContentType.JSON);
         int v = env.addVersion(patchJson, "seed", "test", 1L);
         env.activate(v);
         repository.save(env);
@@ -52,7 +53,7 @@ public class ConfigTemplateSubstituteStepTest {
     private ConfigSet seedEnvWithChain(String projectKey, String environment, String patchJson,
                                         java.util.List<BaseConfigReference> chain) throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env");
+        ConfigSet env = new ConfigSet(projectKey, ConfigSetRole.ENV, environment, "Env", ContentType.JSON);
         int v = env.addVersion(patchJson, "seed", "test", 1L, chain);
         env.activate(v);
         repository.save(env);
@@ -63,7 +64,7 @@ public class ConfigTemplateSubstituteStepTest {
     private ConfigSet seedCommonWithSecret(String projectKey, String dottedPath, String credentialId,
                                             String contentJsonWithPlaceholder) throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet common = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common");
+        ConfigSet common = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         common.putSecretManifestEntry(dottedPath, credentialId);
         int v = common.addVersion(contentJsonWithPlaceholder, "seed", "test", 1L);
         common.activate(v);
@@ -254,7 +255,7 @@ public class ConfigTemplateSubstituteStepTest {
     public void multiEntryCrossProjectChainSubstitutesFromAllBases() throws Exception {
         seedCommon("subproj9", "{\"a\":\"own\"}");
         ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common");
+        ConfigSet teamB = new ConfigSet("team-b-common", ConfigSetRole.COMMON, null, "Team B Common", ContentType.JSON);
         int bV = teamB.addVersion("{\"b\":\"fromB\"}", "seed", "test", 1L);
         teamB.activate(bV);
         repository.save(teamB);

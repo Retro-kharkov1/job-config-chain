@@ -1,9 +1,8 @@
 package io.github.retrokharkov1.configtemplatesync.model;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import io.github.retrokharkov1.configtemplatesync.merge.JsonPaths;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormats;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreePaths;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -44,7 +43,15 @@ public class ConfigSet implements Serializable {
     /** 0 means "no active version yet"; otherwise exactly one version has this number (FR-3). */
     private int activeVersionNumber;
 
-    public ConfigSet(String projectKey, ConfigSetRole role, String environment, String displayName) {
+    /**
+     * This Config Set's structured content format (FR-59), chosen once at first Save and immutable
+     * thereafter. NOT {@code final} — {@link #readResolve()} patches in the FR-69 backward-compat
+     * default for XML persisted before this feature existed.
+     */
+    private ContentType contentType;
+
+    public ConfigSet(String projectKey, ConfigSetRole role, String environment, String displayName,
+                      ContentType contentType) {
         this.projectKey = Objects.requireNonNull(projectKey, "projectKey");
         if (projectKey.trim().isEmpty()) {
             throw new IllegalArgumentException("projectKey must not be empty");
@@ -59,6 +66,26 @@ public class ConfigSet implements Serializable {
         }
         this.environment = environment;
         this.displayName = displayName;
+        this.contentType = Objects.requireNonNull(contentType, "contentType");
+    }
+
+    public ContentType getContentType() {
+        return contentType;
+    }
+
+    /**
+     * XStream2/Jenkins persistence idiom (FR-69): a Config Set persisted before this feature existed
+     * has no {@code <contentType>} XML element, so this field lands {@code null} after
+     * reflection-based deserialization (XStream bypasses the constructor entirely). Plain
+     * field-default assignment, not object reconstruction — reconstructing via the constructor would
+     * lose {@code displayName}/{@code versions}/{@code secretsManifest}/{@code activeVersionNumber},
+     * all populated post-construction via mutators.
+     */
+    private Object readResolve() {
+        if (contentType == null) {
+            contentType = ContentType.JSON;
+        }
+        return this;
     }
 
     public String getProjectKey() {
@@ -186,25 +213,23 @@ public class ConfigSet implements Serializable {
      * is not the literal placeholder marker (OQ-1, resolved 2026-08-27: structural prevention, not
      * heuristic detection).
      */
-    private void enforceSecretPlaceholders(String contentJson) {
+    private void enforceSecretPlaceholders(String content) {
         if (secretsManifest.isEmpty()) {
             return;
         }
-        JsonElement parsed = JsonParser.parseString(contentJson);
-        if (!parsed.isJsonObject()) {
-            throw new IllegalArgumentException("Config Set content must be a JSON object");
+        TreeNode root = TreeFormats.forType(this.contentType).parse(content);
+        if (!root.isObject()) {
+            throw new IllegalArgumentException(
+                    "Config Set content must be a " + contentType + " object/root element");
         }
-        JsonObject root = parsed.getAsJsonObject();
         for (String dottedPath : secretsManifest.keySet()) {
-            JsonElement leaf = JsonPaths.get(root, dottedPath);
+            TreeNode leaf = TreePaths.get(root, dottedPath);
             if (leaf == null) {
                 // absent leaf for a manifest path is allowed on an env overlay (sparse content) —
                 // there is simply nothing to enforce at this version for that path.
                 continue;
             }
-            String asString = leaf.isJsonPrimitive() && leaf.getAsJsonPrimitive().isString()
-                    ? leaf.getAsString()
-                    : null;
+            String asString = !leaf.isObject() && !leaf.isNull() ? leaf.leafAsString() : null;
             if (asString == null || !asString.equals(SecretPlaceholder.VALUE)) {
                 throw new IllegalArgumentException(
                         "Manifest-declared secret path '" + dottedPath

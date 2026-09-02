@@ -1,16 +1,18 @@
 package io.github.retrokharkov1.configtemplatesync.ui;
 
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.google.gson.JsonSyntaxException;
 import io.github.retrokharkov1.configtemplatesync.merge.BaseChainResolver;
 import io.github.retrokharkov1.configtemplatesync.merge.EffectiveConfigResolver;
+import io.github.retrokharkov1.configtemplatesync.merge.TemplateGenerator;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormat;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormats;
+import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
+import io.github.retrokharkov1.configtemplatesync.model.ContentType;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
@@ -19,7 +21,9 @@ import org.kohsuke.stapler.bind.JavaScriptMethod;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The env-level Config Set admin page (FR-34–FR-39, FR-51–FR-58) at
@@ -185,20 +189,8 @@ public class EnvConfigSetPage extends ConfigSetPage {
         return previewMergeImpl(overlayJson, baseChainJson);
     }
 
-    private JSONObject previewMergeImpl(String overlayJson, String baseChainJson) {
+    private JSONObject previewMergeImpl(String overlayRaw, String baseChainJson) {
         JSONObject result = new JSONObject();
-        try {
-            JsonElement parsedOverlay = JsonParser.parseString(overlayJson == null ? "{}" : overlayJson);
-            if (!parsedOverlay.isJsonObject()) {
-                result.put("ok", false);
-                result.put("error", "Override content must be a JSON object");
-                return result;
-            }
-        } catch (JsonSyntaxException | IllegalStateException e) {
-            result.put("ok", false);
-            result.put("error", e.getMessage());
-            return result;
-        }
 
         List<BaseConfigReference> chain = tryParseBaseChain(baseChainJson);
         if (chain == null) {
@@ -211,8 +203,8 @@ public class EnvConfigSetPage extends ConfigSetPage {
         }
 
         List<BaseChainResolver.ResolvedReference> resolved = BaseChainResolver.resolve(repository, chain);
-        List<String> baseContents = new ArrayList<>();
-        JsonArray perReference = new JsonArray();
+        Set<ContentType> distinctTypes = EnumSet.noneOf(ContentType.class);
+        List<String> typeReport = new ArrayList<>();
         for (BaseChainResolver.ResolvedReference r : resolved) {
             if (r.configSet == null || r.version == null) {
                 result.put("ok", false);
@@ -221,22 +213,57 @@ public class EnvConfigSetPage extends ConfigSetPage {
                         + (r.configSet == null ? "no such common Config Set" : "no such version"));
                 return result;
             }
-            baseContents.add(r.version.getContentJson());
+            distinctTypes.add(r.configSet.getContentType());
+            typeReport.add(r.reference.getProjectKey() + " (" + r.configSet.getContentType() + ")");
+        }
+        if (distinctTypes.size() > 1) {
+            // FR-61 surfaced through the SAME live-preview envelope (ok:false), not a page reload —
+            // the env override panel's debounced recompute keeps its "last valid + non-blocking
+            // indicator" behavior unchanged; this ok:false just means the indicator persists until the
+            // operator fixes the chain, exactly like any other unresolvable-chain error already does.
+            result.put("ok", false);
+            result.put("error", "Mismatched content types in base chain — " + String.join(", ", typeReport)
+                    + " must all share one content type.");
+            return result;
+        }
+        ContentType type = distinctTypes.isEmpty() ? ContentType.JSON : distinctTypes.iterator().next();
+        TreeFormat format = TreeFormats.forType(type);
+
+        TreeNode overlay;
+        try {
+            overlay = format.parse(overlayRaw == null ? format.serialize(format.emptyObject()) : overlayRaw);
+            if (!overlay.isObject()) {
+                result.put("ok", false);
+                result.put("error", "Override content must be a " + type + " object/root element");
+                return result;
+            }
+        } catch (RuntimeException e) {
+            result.put("ok", false);
+            result.put("error", e.getMessage());
+            return result;
+        }
+
+        List<TreeNode> baseContents = new ArrayList<>();
+        JsonArray perReference = new JsonArray();
+        for (BaseChainResolver.ResolvedReference r : resolved) {
+            TreeNode baseNode = format.parse(r.version.getContentJson());
+            baseContents.add(baseNode);
             JsonObject entry = new JsonObject();
             entry.addProperty("projectKey", r.reference.getProjectKey());
             entry.addProperty("pinMode", r.reference.getPinMode().name());
             entry.addProperty("resolvedVersionNumber", r.version.getVersionNumber());
-            entry.addProperty("contentJson", r.version.getContentJson());
+            entry.addProperty("contentJson", format.serialize(baseNode)); // now type-serialized text, not raw JSON
             perReference.add(entry);
         }
 
         try {
-            JsonObject merged = EffectiveConfigResolver.resolveChain(baseContents, overlayJson);
+            TreeNode merged = EffectiveConfigResolver.resolveChain(type, baseContents, overlayRaw);
             result.put("ok", true);
-            result.put("merged", net.sf.json.JSONObject.fromObject(merged.toString()));
+            result.put("contentType", type.name()); // NEW field — client needs this to pick Monaco's language mode
+            result.put("merged", format.serialize(merged)); // plain string now, not a nested JSON object
             result.put("perReference", net.sf.json.JSONArray.fromObject(perReference.toString()));
             return result;
-        } catch (JsonSyntaxException | IllegalStateException | IllegalArgumentException e) {
+        } catch (RuntimeException e) {
             result.put("ok", false);
             result.put("error", e.getMessage());
             return result;
@@ -250,21 +277,44 @@ public class EnvConfigSetPage extends ConfigSetPage {
      * ACTIVE env version specifically (FR-16), never a draft.
      */
     @Override
-    com.google.gson.JsonObject computeTemplate() {
+    TreeNode computeTemplate() {
         ConfigSetVersion envActive = getActiveVersion();
+        List<BaseChainResolver.ResolvedReference> resolved = resolveTemplateChainOrFail();
+        ContentType type = resolveTemplateContentType(resolved);
+        List<TreeNode> baseContents = new ArrayList<>();
+        for (BaseChainResolver.ResolvedReference r : resolved) {
+            baseContents.add(TreeFormats.forType(type).parse(r.version.getContentJson()));
+        }
+        String envRaw = envActive == null ? null : envActive.getContentJson();
+        TreeNode effective = EffectiveConfigResolver.resolveChain(type, baseContents, envRaw);
+        return TemplateGenerator.fromEffective(effective, type);
+    }
+
+    @Override
+    ContentType getTemplateContentType() {
+        return resolveTemplateContentType(resolveTemplateChainOrFail());
+    }
+
+    private List<BaseChainResolver.ResolvedReference> resolveTemplateChainOrFail() {
         List<BaseConfigReference> chain = effectiveBaseChainForTemplate();
         List<BaseChainResolver.ResolvedReference> resolved = BaseChainResolver.resolve(repository, chain);
-        List<String> baseContents = new ArrayList<>();
         for (BaseChainResolver.ResolvedReference r : resolved) {
             if (r.configSet == null || r.version == null) {
                 throw new IllegalStateException("Cannot resolve base chain entry '"
                         + r.reference.getProjectKey() + "' for template generation");
             }
-            baseContents.add(r.version.getContentJson());
         }
-        String envJson = envActive == null ? null : envActive.getContentJson();
-        com.google.gson.JsonObject effective = EffectiveConfigResolver.resolveChain(baseContents, envJson);
-        return io.github.retrokharkov1.configtemplatesync.merge.TemplateGenerator.fromEffective(effective);
+        return resolved;
+    }
+
+    /**
+     * FR-62: mismatched types across the resolved chain are already rejected at save time (§4a/§4b)
+     * and at live-preview time (previewMergeImpl above) — template generation reads an
+     * already-frozen, already-consistent chain (FR-51), so this simply picks the first resolved
+     * base's type rather than re-running the full mismatch check a third time.
+     */
+    private static ContentType resolveTemplateContentType(List<BaseChainResolver.ResolvedReference> resolved) {
+        return resolved.isEmpty() ? ContentType.JSON : resolved.get(0).configSet.getContentType();
     }
 
     /**
