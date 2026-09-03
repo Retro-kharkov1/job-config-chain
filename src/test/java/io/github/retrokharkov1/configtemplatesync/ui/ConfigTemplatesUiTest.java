@@ -26,6 +26,7 @@ import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -703,8 +704,8 @@ public class ConfigTemplatesUiTest {
         String html = page.getWebResponse().getContentAsString();
         assertTrue("env page must render a page-level Generate Template button (FR-41)",
                 html.contains("id=\"generateTemplateBtn\""));
-        assertTrue("env page must render the 3-panel table with its own id, replaced on click",
-                html.contains("id=\"threePanelTable\""));
+        assertTrue("env page must render the merge layout grid with its own id, replaced on click (FR-73)",
+                html.contains("id=\"mergeLayout\""));
         assertTrue("env page must render the full-width generated-template panel container",
                 html.contains("id=\"generatedTemplatePanel\""));
         assertTrue("env page must render the Back-to-3-panel-view affordance",
@@ -923,10 +924,12 @@ public class ConfigTemplatesUiTest {
                 html.contains("id=\"baseChainRowsTable\""));
         assertTrue("env page must render the Add-base row control",
                 html.contains("id=\"addBaseChainRowBtn\""));
-        assertTrue("env page must render the Inspect-chain drawer toggle",
-                html.contains("id=\"inspectChainToggle\""));
-        assertTrue("env page must render the Inspect-chain drawer container",
-                html.contains("id=\"inspectChainDrawer\""));
+        assertTrue("env page must render the explicitlyStandalone checkbox (FR-89)",
+                html.contains("id=\"explicitlyStandaloneCheckbox\""));
+        assertTrue("env page must render the merged-bases pane (FR-73)",
+                html.contains("id=\"mergedBasesEditor\""));
+        assertTrue("env page must render the Discard-all-changes button (FR-74)",
+                html.contains("id=\"discardAllBtn\""));
         // In-place-update pass (2026-09-02): baseChainField is no longer a <form>-submitted field
         // (Save now posts via proxy.save(...) AJAX, reading this element by id, not name) — assert
         // on the id JS actually reads instead of a submission-era name attribute.
@@ -998,7 +1001,7 @@ public class ConfigTemplatesUiTest {
         HtmlPage page = wc.goTo("configTemplates/uitest53/dev/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains("function addBaseChainRow"));
-        assertTrue(html.contains("function renderInspectDrawer"));
+        assertTrue(html.contains("function toggleBaseChainRowExpanded"));
         assertAllInlineScriptsAreSyntacticallyValidJs("env edit page (base-chain editor JS)", html);
     }
 
@@ -1226,5 +1229,285 @@ public class ConfigTemplatesUiTest {
         JSONObject formatJson = JSONObject.fromObject(formatPage.getWebResponse().getContentAsString());
         assertTrue("doReformatContent must succeed for valid YAML", formatJson.getBoolean("ok"));
         assertNotNull(formatJson.getString("formatted"));
+    }
+
+    // --- Base-chain accordion / type-filtered picker / three-pane layout / discard / FR-89 --------
+    // (2026-09-03 tech-lead-contracted redesign pass)
+
+    @Test
+    public void doSubmitSave_persistsExplicitlyStandaloneTrue_viaSixArgAddVersion() throws Exception {
+        // Real-gap regression guard (§1 of the tech-lead contract): saveImpl previously called the
+        // OLD 5-arg ConfigSet.addVersion overload, which hardcodes explicitlyStandalone=false
+        // regardless of what the UI sent. This proves the checkbox's boolean state actually survives
+        // a real save round trip.
+        seedCommon("uitest70a", "{\"a\":1}", "seed");
+
+        jenkins.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        wc.getOptions().setJavaScriptEnabled(false);
+
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest70a/dev/submitSave");
+        WebRequest request = new WebRequest(url, HttpMethod.POST);
+        request.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "{}"),
+                new org.htmlunit.util.NameValuePair("note", "standalone save"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", "[]"),
+                new org.htmlunit.util.NameValuePair("explicitlyStandalone", "true"),
+                new org.htmlunit.util.NameValuePair("activate", "true")
+        ));
+        Page result = wc.getPage(request);
+        assertEquals("a valid explicitlyStandalone=true save with an empty chain must succeed",
+                200, result.getWebResponse().getStatusCode());
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet env = repository.findEnv("uitest70a", "dev");
+        assertNotNull(env);
+        assertTrue("explicitlyStandalone=true must actually persist through saveImpl's addVersion call",
+                env.getActiveVersion().isExplicitlyStandalone());
+    }
+
+    @Test
+    public void doSubmitSave_omittedExplicitlyStandalone_defaultsFalse() throws Exception {
+        seedCommon("uitest70b", "{\"a\":1}", "seed");
+        jenkins.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        wc.getOptions().setJavaScriptEnabled(false);
+
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest70b/dev/submitSave");
+        WebRequest request = new WebRequest(url, HttpMethod.POST);
+        request.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "{}"),
+                new org.htmlunit.util.NameValuePair("note", "ordinary save"),
+                new org.htmlunit.util.NameValuePair("activate", "true")
+        ));
+        wc.getPage(request);
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        assertFalse(repository.findEnv("uitest70b", "dev").getActiveVersion().isExplicitlyStandalone());
+    }
+
+    @Test
+    public void effectiveBaseChainForTemplate_respectsExplicitlyStandalone_forSeedAndTemplate() throws Exception {
+        // Real gap fix (§5): effectiveBaseChainForTemplate previously ignored isExplicitlyStandalone()
+        // entirely, unconditionally applying the FR-52 synthesized default. Both the base-chain
+        // editor's re-seed-on-reopen AND Generate Template must now honor it.
+        seedCommon("uitest71", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet env = new ConfigSet("uitest71", ConfigSetRole.ENV, "dev", "Env", ContentType.JSON);
+        int v = env.addVersion("{\"own\":true}", "standalone save", "seed-author", 1L,
+                Collections.emptyList(), true);
+        env.activate(v);
+        repository.save(env);
+
+        EnvConfigSetPage page = new EnvConfigSetPage("uitest71", "dev", repository);
+        String seedLiteral = page.getBaseChainSeedJsonForScript();
+        String jsonArrayText = new com.google.gson.Gson().fromJson(seedLiteral, String.class);
+        com.google.gson.JsonArray seededChain = com.google.gson.JsonParser.parseString(jsonArrayText).getAsJsonArray();
+        assertEquals("a standalone version must re-seed the editor with ZERO rows, not the FR-52 default",
+                0, seededChain.size());
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest71/dev/renderTemplate");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        JSONObject template = JSONObject.fromObject(json.getString("template"));
+        assertTrue("Generate Template on a standalone version must reflect ONLY the env's own content",
+                template.has("own"));
+        assertFalse("must NOT spuriously fold in the common project's own content (FR-87)",
+                template.has("database"));
+    }
+
+    @Test
+    public void doComputeMerge_explicitlyStandaloneTrue_emptyChain_doesNotApplyFr52Default() throws Exception {
+        // Real gap fix (§5): previewMergeImpl previously always substituted the FR-52 synthesized
+        // single-entry default for an empty draft chain, with no way to preview a genuinely empty
+        // (explicitlyStandalone) chain while mid-edit.
+        seedCommon("uitest72", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+        seedEnv("uitest72", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page standalone = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest72/dev/computeMerge?overlayJson="
+                + java.net.URLEncoder.encode("{\"own\":1}", "UTF-8")
+                + "&baseChainJson=" + java.net.URLEncoder.encode("[]", "UTF-8")
+                + "&explicitlyStandalone=true");
+        JSONObject standaloneJson = JSONObject.fromObject(standalone.getWebResponse().getContentAsString());
+        assertTrue(standaloneJson.getBoolean("ok"));
+        JSONObject merged = JSONObject.fromObject(standaloneJson.getString("merged"));
+        assertFalse("the FR-52 default (this project's own common content) must NOT be folded in "
+                + "while explicitlyStandalone=true", merged.has("database"));
+        assertEquals(1, merged.getInt("own"));
+        JSONObject mergedBases = JSONObject.fromObject(standaloneJson.getString("mergedBases"));
+        assertTrue("mergedBases must be an empty fold when the chain is genuinely empty",
+                mergedBases.isEmpty());
+
+        Page ordinary = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest72/dev/computeMerge?overlayJson="
+                + java.net.URLEncoder.encode("{\"own\":1}", "UTF-8")
+                + "&baseChainJson=" + java.net.URLEncoder.encode("[]", "UTF-8")
+                + "&explicitlyStandalone=false");
+        JSONObject ordinaryJson = JSONObject.fromObject(ordinary.getWebResponse().getContentAsString());
+        assertTrue(ordinaryJson.getBoolean("ok"));
+        JSONObject ordinaryMerged = JSONObject.fromObject(ordinaryJson.getString("merged"));
+        assertTrue("without explicitlyStandalone, an empty chain must still apply the FR-52 default",
+                ordinaryMerged.has("database"));
+    }
+
+    @Test
+    public void doComputeMerge_returnsMergedBasesField_foldOfChainBeforeOverlay() throws Exception {
+        // FR-73: "Merged bases" is the fold BEFORE the env override is applied — distinct from
+        // "merged" (the fold AFTER the override).
+        seedCommon("uitest73", "{\"a\":1,\"b\":1}", "seed");
+        seedEnv("uitest73", "dev", "{}", "seed");
+
+        String baseChainJson = "[{\"projectKey\":\"uitest73\",\"pinMode\":\"ACTIVE\"}]";
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest73/dev/computeMerge?overlayJson="
+                + java.net.URLEncoder.encode("{\"b\":2}", "UTF-8")
+                + "&baseChainJson=" + java.net.URLEncoder.encode(baseChainJson, "UTF-8"));
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        JSONObject mergedBases = JSONObject.fromObject(json.getString("mergedBases"));
+        assertEquals("mergedBases must reflect the chain fold BEFORE the override", 1, mergedBases.getInt("b"));
+        JSONObject merged = JSONObject.fromObject(json.getString("merged"));
+        assertEquals("merged must reflect the fold AFTER the override is applied", 2, merged.getInt("b"));
+    }
+
+    @Test
+    public void getCommonVersionCatalogJsonForScript_exposesVersionsAndTypeByProjectMaps() throws Exception {
+        // FR-72: the payload shape changed from a bare {projectKey: [...]} object to
+        // {versionsByProject: {...}, typeByProject: {...}} — proves the new sibling map exists with
+        // the same key set, for the client-side type filter.
+        seedCommon("uitest74", "{\"a\":1}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        EnvConfigSetPage page = new EnvConfigSetPage("uitest74", "dev", repository);
+        String literal = page.getCommonVersionCatalogJsonForScript();
+        String jsonText = new com.google.gson.Gson().fromJson(literal, String.class);
+        com.google.gson.JsonObject wrapper = com.google.gson.JsonParser.parseString(jsonText).getAsJsonObject();
+        assertTrue(wrapper.has("versionsByProject"));
+        assertTrue(wrapper.has("typeByProject"));
+        assertEquals("JSON", wrapper.getAsJsonObject("typeByProject").get("uitest74").getAsString());
+    }
+
+    @Test
+    public void envEditPage_rendersMergedBasesPaneAndDiscardButtonAndStandaloneCheckbox() throws Exception {
+        seedCommon("uitest75", "{\"a\":1}", "seed");
+        seedEnv("uitest75", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest75/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("env page must render the Merged-bases pane (FR-73)",
+                html.contains("id=\"mergedBasesEditor\""));
+        assertTrue("env page must render the Discard-all-changes button (FR-74)",
+                html.contains("id=\"discardAllBtn\""));
+        assertTrue("env page must render the explicitlyStandalone checkbox (FR-89)",
+                html.contains("id=\"explicitlyStandaloneCheckbox\""));
+        assertTrue("the base-chain accordion toggle column must render per row (FR-71)",
+                html.contains("ctsync-basechain-row-toggle") || html.contains("buildBaseChainRowElement"));
+    }
+
+    @Test
+    public void envEditPage_versionHistoryRendersStandaloneBadgeInsteadOfBasesLink() throws Exception {
+        // FR-89 second half: a version saved as explicitlyStandalone renders a distinguishing badge
+        // INSTEAD OF the [N bases] link, since it would otherwise be visually indistinguishable from
+        // "0 declared bases" via any other route.
+        seedCommon("uitest76", "{\"a\":1}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet env = new ConfigSet("uitest76", ConfigSetRole.ENV, "dev", "Env", ContentType.JSON);
+        int v = env.addVersion("{}", "standalone", "seed-author", 1L, Collections.emptyList(), true);
+        env.activate(v);
+        repository.save(env);
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest76/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("a standalone version's history row must render the Standalone badge",
+                html.contains("ctsync-standalone-badge") && html.contains("Standalone"));
+    }
+
+    @Test
+    public void envEditPage_inlineScriptsAreSyntacticallyValidJs_withStandaloneAndDiscardCode() throws Exception {
+        seedCommon("uitest77", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+        seedEnv("uitest77", "dev", "{\"database\":{\"host\":\"db.dev.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest77/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue(html.contains("function onExplicitlyStandaloneChange"));
+        assertTrue(html.contains("function discardAllChangesClicked"));
+        assertTrue(html.contains("function projectOptionsForRow"));
+        assertTrue(html.contains("function findPerReferenceFor"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("env edit page (standalone/discard JS)", html);
+    }
+
+    // --- Pure-logic regression guard for the accordion expand-state/reorder lockstep and the
+    // type-filter logic, exercised via a real, standalone JS engine (same technique as the
+    // inline-script syntax guards above), since the vendored Monaco loader's ES2015+ syntax blocks
+    // full in-browser execution under HtmlUnit for this whole page. -------------------------------
+
+    @Test
+    public void baseChainRowExpanded_reorderLockstep_and_projectOptionsForRow_typeFilter_runInARealJsEngine()
+            throws Exception {
+        seedCommon("uitest78", "{\"a\":1}", "seed");
+        seedEnv("uitest78", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest78/dev/");
+        String html = page.getWebResponse().getContentAsString();
+
+        Matcher matcher = INLINE_SCRIPT.matcher(html);
+        StringBuilder allScripts = new StringBuilder();
+        while (matcher.find()) {
+            if (matcher.group(1) != null) { allScripts.append(matcher.group(1)).append('\n'); }
+        }
+
+        ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
+        assertNotNull(engine);
+        // Stub the handful of DOM/monaco globals this page's top-level script touches eagerly
+        // (require.config/require, document.getElementById chains for id lookups used outside any
+        // function body, and the addEventListener calls) so the file can be evaluated far enough to
+        // define moveBaseChainRow/projectOptionsForRow as real, callable functions — never executing
+        // Monaco itself, exactly like the existing real-JS-engine syntax guards in this class.
+        String harness =
+                "var document = { getElementById: function() { return { addEventListener: function(){}, "
+                        + "style:{}, classList:{add:function(){},remove:function(){}} }; }, "
+                        + "querySelectorAll: function() { return []; } };"
+                        + "var require = function(){}; require.config = function(){};"
+                        + "var monaco = undefined;"
+                        + "function makeStaplerProxy() { return {}; }"
+                        + allScripts;
+        engine.eval(harness);
+
+        // moveBaseChainRow must keep baseChainRowExpanded in lockstep with baseChainRows.
+        engine.eval("baseChainRows = [{projectKey:'a',pinMode:'ACTIVE',pinnedVersionNumber:0},"
+                + "{projectKey:'b',pinMode:'ACTIVE',pinnedVersionNumber:0}];"
+                + "baseChainRowExpanded = [false, true];"
+                + "renderBaseChainRows = function() {};" // stub out the DOM-touching render for this unit check
+                + "recomputeMerge = function() {};"
+                + "moveBaseChainRow(1, -1);");
+        Object expandedAfterMove = engine.eval("baseChainRowExpanded[0]");
+        assertEquals("moving the expanded row up must carry its expand state with it",
+                Boolean.TRUE, expandedAfterMove);
+
+        // projectOptionsForRow: row 0 unfiltered, row 1 filtered to row 0's resolved type.
+        engine.eval("availableProjectKeys = ['json-proj', 'xml-proj'];"
+                + "commonVersionCatalog = { typeByProject: { 'json-proj': 'JSON', 'xml-proj': 'XML' } };"
+                + "baseChainRows = [{projectKey:'json-proj'}, {projectKey:'xml-proj'}];");
+        Object row0Options = engine.eval("projectOptionsForRow(0).length");
+        assertEquals("row #1 (index 0) must list every available project, unfiltered",
+                2.0, ((Number) row0Options).doubleValue(), 0.001);
+        Object row1Options = engine.eval("projectOptionsForRow(1)");
+        // Nashorn arrays come back as a ScriptObjectMirror; check via JSON.stringify for a simple assert.
+        Object row1Json = engine.eval("JSON.stringify(projectOptionsForRow(1))");
+        assertEquals("row #2+ must be filtered to row #1's resolved ContentType — 'xml-proj' does not "
+                + "match 'json-proj's JSON type", "[\"json-proj\"]", row1Json);
     }
 }
