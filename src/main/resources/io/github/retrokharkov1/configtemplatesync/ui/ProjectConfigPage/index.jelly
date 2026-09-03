@@ -2,6 +2,13 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
   <l:layout title="${it.projectKey} — Config Templates">
     <l:main-panel>
+      <style>
+        /* Scoped to this page only — same input+button spacing convention already used by
+           CommonConfigSetPage/EnvConfigSetPage's ".ctsync-secret-form" row (owner report,
+           UI-polish pass): flex + gap so the input never sits flush against its button. */
+        .ctsync-inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+        .ctsync-inline-form .setting-input { flex: 1 1 240px; min-width: 180px; width: auto !important; }
+      </style>
       <p><a href="${rootURL}/configTemplates/">&#8592; ${%backAllLink}</a></p>
       <h1>${it.projectKey}</h1>
       <p><a href="common">${%openCommonLink} &#8594;</a></p>
@@ -31,10 +38,12 @@
 
       <h3>${%newEnv.heading}</h3>
       <p>Overrides common Config Set: <code>${it.projectKey}-common</code> (structural pairing, FR-35)</p>
-      <input type="text" id="newEnvName" placeholder="environment (e.g. dev)" class="setting-input"/>
-      <button type="button" class="jenkins-button jenkins-button--primary"
-              title="${%newEnv.buttonTitle}"
-              onclick="window.location.href = encodeURIComponent(document.getElementById('newEnvName').value) + '/';">${%newEnv.buttonLabel}</button>
+      <div class="ctsync-inline-form">
+        <input type="text" id="newEnvName" placeholder="environment (e.g. dev)" class="setting-input"/>
+        <button type="button" class="jenkins-button jenkins-button--primary"
+                title="${%newEnv.buttonTitle}"
+                onclick="window.location.href = encodeURIComponent(document.getElementById('newEnvName').value) + '/';">${%newEnv.buttonLabel}</button>
+      </div>
     </l:main-panel>
   </l:layout>
 </j:jelly>
