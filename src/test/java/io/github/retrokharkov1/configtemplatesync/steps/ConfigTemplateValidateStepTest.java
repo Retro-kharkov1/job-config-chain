@@ -141,4 +141,62 @@ public class ConfigTemplateValidateStepTest {
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
         jenkins.assertLogContains("no-such-common-project", run);
     }
+
+    @Test
+    public void useBase_validatesAgainstCommonOnlyBypassingEnv() throws Exception {
+        // FR-81/FR-85: useBase=true for validate is an intentional, valid use case — a
+        // project-level CI check of the base template before any env-specific values matter.
+        seed("proj6", "dev", "{\"a\":1}", "{\"a\":2,\"onlyInEnv\":3}");
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "validate-usebase");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
+                        + "  configTemplateValidate(projectKey: 'proj6', environment: 'dev', file: 'app.json', useBase: true)\n"
+                        + "}", true));
+
+        jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+    }
+
+    @Test
+    public void useBaseWithMissingExplicitVersion_failsLoudNamingIt() throws Exception {
+        // FR-84: fail-loud naming the exact missing version number and which Config Set.
+        seed("proj7", "dev", "{\"a\":1}", "{}");
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "validate-usebase-missing-version");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
+                        + "  configTemplateValidate(projectKey: 'proj7', environment: 'dev', file: 'app.json', useBase: true, version: 99)\n"
+                        + "}", true));
+
+        var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
+        jenkins.assertLogContains("proj7", run);
+        jenkins.assertLogContains("99", run);
+    }
+
+    @Test
+    public void envVersionPin_validatesAgainstThatExactVersion() throws Exception {
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet common = new ConfigSet("proj8", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
+        int cv = common.addVersion("{\"a\":1}", "seed", "test", 1L);
+        common.activate(cv);
+        repository.save(common);
+
+        ConfigSet env = new ConfigSet("proj8", ConfigSetRole.ENV, "dev", "Env", ContentType.JSON);
+        int ev1 = env.addVersion("{}", "seed", "test", 1L);
+        int ev2 = env.addVersion("{\"onlyInV2\":9}", "second", "test", 2L);
+        env.activate(ev2);
+        repository.save(env);
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "validate-env-version-pin");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
+                        + "  configTemplateValidate(projectKey: 'proj8', environment: 'dev', file: 'app.json', version: "
+                        + ev1 + ")\n"
+                        + "}", true));
+
+        jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+    }
 }

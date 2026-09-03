@@ -189,14 +189,43 @@ public class ConfigSet implements Serializable {
      */
     public int addVersion(String contentJson, String note, String author, long timestampEpochMillis,
                            List<BaseConfigReference> baseChain) {
-        if (role == ConfigSetRole.COMMON && baseChain != null && !baseChain.isEmpty()) {
+        return addVersion(contentJson, note, author, timestampEpochMillis, baseChain, false);
+    }
+
+    /**
+     * Appends a new version carrying an explicit base chain and standalone flag (FR-51, FR-86). Both
+     * the FR-53 (non-empty {@code baseChain} on COMMON) and the FR-86 ({@code explicitlyStandalone} on
+     * COMMON) checks, plus the FR-86/87 contradiction check ({@code explicitlyStandalone=true} with a
+     * non-empty {@code baseChain}), are validated together here as hard {@link IllegalArgumentException}s
+     * — never silent normalization, matching FR-53's own existing "fail the save, not silently
+     * truncated to empty" convention.
+     *
+     * @return the newly assigned, monotonically increasing version number (FR-4).
+     */
+    public int addVersion(String contentJson, String note, String author, long timestampEpochMillis,
+                           List<BaseConfigReference> baseChain, boolean explicitlyStandalone) {
+        if (role == ConfigSetRole.COMMON) {
+            if (baseChain != null && !baseChain.isEmpty()) {
+                // FR-53, unchanged.
+                throw new IllegalArgumentException(
+                        "A COMMON-role Config Set must not declare a base chain of its own");
+            }
+            if (explicitlyStandalone) {
+                // FR-86: mirrors FR-53's own restriction for the new flag.
+                throw new IllegalArgumentException(
+                        "A COMMON-role Config Set must not be marked explicitlyStandalone");
+            }
+        }
+        if (explicitlyStandalone && baseChain != null && !baseChain.isEmpty()) {
+            // New contradiction check (FR-86/87 area).
             throw new IllegalArgumentException(
-                    "A COMMON-role Config Set must not declare a base chain of its own");
+                    "explicitlyStandalone=true is contradictory with a non-empty baseChain — an "
+                            + "explicitly-standalone env Config Set Version must declare zero base configs");
         }
         enforceSecretPlaceholders(contentJson);
         int nextVersionNumber = nextVersionNumber();
         versions.add(new ConfigSetVersion(nextVersionNumber, contentJson, note, author, timestampEpochMillis,
-                baseChain));
+                baseChain, explicitlyStandalone));
         return nextVersionNumber;
     }
 
