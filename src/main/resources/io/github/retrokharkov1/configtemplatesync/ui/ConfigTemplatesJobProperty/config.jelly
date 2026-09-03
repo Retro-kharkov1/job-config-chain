@@ -1,0 +1,12 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
+  <f:entry>
+    <h3>Config Templates Association</h3>
+  </f:entry>
+  <f:entry title="Project key" field="projectKey">
+    <f:textbox />
+  </f:entry>
+  <f:entry title="Environment (optional)" field="environment">
+    <f:textbox />
+  </f:entry>
+</j:jelly>
