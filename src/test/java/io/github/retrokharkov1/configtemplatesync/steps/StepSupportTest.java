@@ -67,7 +67,7 @@ public class StepSupportTest {
                 BaseConfigReference.active("team-b-common"));
         ConfigSetVersion envVersion = new ConfigSetVersion(1, "{\"c\":3}", "seed", "test", 1L);
 
-        StepSupport.ResolvedEffective resolved = StepSupport.resolveEffective(repository, chain, envVersion);
+        StepSupport.ResolvedEffective resolved = StepSupport.resolveEffective(repository, chain, envVersion, null);
 
         assertEquals(2, resolved.resolvedBaseChain.size());
         assertEquals(aV, resolved.resolvedBaseChain.get(0).getVersionNumber());
@@ -83,7 +83,7 @@ public class StepSupportTest {
         List<BaseConfigReference> chain = Collections.singletonList(BaseConfigReference.active("no-such-project"));
 
         AbortException ex = assertThrows(AbortException.class,
-                () -> StepSupport.resolveEffective(repository, chain, null));
+                () -> StepSupport.resolveEffective(repository, chain, null, null));
         assertTrue(ex.getMessage().contains("no-such-project"));
     }
 
@@ -97,7 +97,7 @@ public class StepSupportTest {
         List<BaseConfigReference> chain = Collections.singletonList(BaseConfigReference.pinned("team-a-common", 99));
 
         AbortException ex = assertThrows(AbortException.class,
-                () -> StepSupport.resolveEffective(repository, chain, null));
+                () -> StepSupport.resolveEffective(repository, chain, null, null));
         assertTrue(ex.getMessage().contains("team-a-common"));
         assertTrue(ex.getMessage().contains("99"));
     }
@@ -122,7 +122,7 @@ public class StepSupportTest {
                 BaseConfigReference.active("team-b-common"));
 
         AbortException ex = assertThrows(AbortException.class,
-                () -> StepSupport.resolveEffective(repository, chain, null));
+                () -> StepSupport.resolveEffective(repository, chain, null, null));
         assertTrue(ex.getMessage().contains("Mismatched content types in base chain"));
         assertTrue(ex.getMessage().contains("team-a-common (JSON)"));
         assertTrue(ex.getMessage().contains("team-b-common (XML)"));
@@ -138,8 +138,75 @@ public class StepSupportTest {
         List<BaseConfigReference> chain = Collections.singletonList(BaseConfigReference.active("team-a-common"));
 
         AbortException ex = assertThrows(AbortException.class,
-                () -> StepSupport.resolveEffective(repository, chain, null));
+                () -> StepSupport.resolveEffective(repository, chain, null, null));
         assertTrue(ex.getMessage().contains("team-a-common"));
         assertTrue(ex.getMessage().contains("active"));
+    }
+
+    @Test
+    public void effectiveBaseChainReturnsEmptyForExplicitlyStandaloneVersion() {
+        // FR-87: a deliberate zero-base declaration must return an empty chain, never FR-52's
+        // synthesized single-entry default.
+        ConfigSetVersion standalone = new ConfigSetVersion(1, "{\"a\":1}", "standalone", "test", 1L,
+                Collections.emptyList(), true);
+        List<BaseConfigReference> chain = StepSupport.effectiveBaseChain("proj", standalone);
+        assertTrue(chain.isEmpty());
+    }
+
+    @Test
+    public void resolveEffectiveWithEmptyChainFallsBackToEnvsOwnContentType() throws Exception {
+        // FR-87/§2b gap fix: an explicitlyStandalone version's empty chain must not silently
+        // mis-type as ContentType.JSON — it must fall back to the env Config Set's own contentType.
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSet env = new ConfigSet("proj", ConfigSetRole.ENV, "dev", "Env", ContentType.XML);
+        ConfigSetVersion standalone = new ConfigSetVersion(1, "<root><a>1</a></root>", "standalone", "test", 1L,
+                Collections.emptyList(), true);
+
+        StepSupport.ResolvedEffective resolved =
+                StepSupport.resolveEffective(repository, Collections.emptyList(), standalone, env);
+
+        assertEquals(ContentType.XML, resolved.contentType);
+    }
+
+    @Test
+    public void resolveUseBaseOnlyResolvesActiveCommonVersionDirectly() throws Exception {
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSet common = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
+        int v1 = common.addVersion("{\"a\":1}", "seed", "test", 1L);
+        common.addVersion("{\"a\":2}", "second", "test", 2L);
+        common.activate(v1);
+        repository.save(common);
+
+        StepSupport.ResolvedEffective resolved = StepSupport.resolveUseBaseOnly(repository, "proj", null);
+
+        assertEquals("1", TreePaths.get(resolved.mergedConfig, "a").leafAsString());
+        assertEquals(1, resolved.resolvedBaseChain.get(0).getVersionNumber());
+    }
+
+    @Test
+    public void resolveUseBaseOnlyPinsExplicitVersion() throws Exception {
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSet common = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
+        common.addVersion("{\"a\":1}", "seed", "test", 1L);
+        int v2 = common.addVersion("{\"a\":2}", "second", "test", 2L);
+        common.activate(v2);
+        repository.save(common);
+
+        StepSupport.ResolvedEffective resolved = StepSupport.resolveUseBaseOnly(repository, "proj", 1);
+
+        assertEquals("1", TreePaths.get(resolved.mergedConfig, "a").leafAsString());
+    }
+
+    @Test
+    public void resolveUseBaseOnlyThrowsAbortExceptionForMissingExplicitVersion() throws Exception {
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSet common = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
+        common.addVersion("{\"a\":1}", "seed", "test", 1L);
+        repository.save(common);
+
+        AbortException ex = assertThrows(AbortException.class,
+                () -> StepSupport.resolveUseBaseOnly(repository, "proj", 99));
+        assertTrue(ex.getMessage().contains("proj"));
+        assertTrue(ex.getMessage().contains("99"));
     }
 }

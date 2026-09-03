@@ -168,4 +168,39 @@ public class ConfigSetTest {
         int version = configSet.addVersion("{\"a\":1}", "no chain", "alice", 1L);
         assertTrue(configSet.getVersion(version).getBaseChain().isEmpty());
     }
+
+    @Test
+    public void addVersionWithExplicitlyStandalonePersistsAndIsRetrievable() {
+        // FR-86: a deliberate, first-class "zero base configs" declaration on an env version.
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.ENV, "dev", "Dev", ContentType.JSON);
+        int version = configSet.addVersion("{\"a\":1}", "standalone", "alice", 1L,
+                Collections.emptyList(), true);
+        assertTrue(configSet.getVersion(version).isExplicitlyStandalone());
+    }
+
+    @Test
+    public void sixArgAddVersionWithoutExplicitFlagDefaultsFalse() {
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.ENV, "dev", "Dev", ContentType.JSON);
+        int version = configSet.addVersion("{\"a\":1}", "no flag", "alice", 1L, Collections.emptyList());
+        assertFalse(configSet.getVersion(version).isExplicitlyStandalone());
+    }
+
+    @Test
+    public void addVersionRejectsExplicitlyStandaloneOnCommonRole() {
+        // FR-86: mirrors FR-53's own restriction for the new flag.
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
+        assertThrows(IllegalArgumentException.class,
+                () -> configSet.addVersion("{}", "should be rejected", "alice", 1L,
+                        Collections.emptyList(), true));
+    }
+
+    @Test
+    public void addVersionRejectsExplicitlyStandaloneContradictingNonEmptyBaseChain() {
+        // FR-86/87 contradiction check: explicitlyStandalone=true with a non-empty baseChain is invalid.
+        ConfigSet configSet = new ConfigSet("proj", ConfigSetRole.ENV, "dev", "Dev", ContentType.JSON);
+        List<BaseConfigReference> chain = Collections.singletonList(BaseConfigReference.active("team-a-common"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> configSet.addVersion("{}", "contradictory", "alice", 1L, chain, true));
+    }
 }

@@ -89,7 +89,7 @@ final class StepSupport {
      * if the resolved chain's base Config Sets don't all share one {@link ContentType}.
      */
     static ResolvedEffective resolveEffective(ConfigSetRepository repository, List<BaseConfigReference> baseChain,
-                                               ConfigSetVersion envVersion) throws AbortException {
+                                               ConfigSetVersion envVersion, ConfigSet env) throws AbortException {
         List<BaseChainResolver.ResolvedReference> resolved = BaseChainResolver.resolve(repository, baseChain);
         List<ResolvedBaseVersion> resolvedBaseChain = new ArrayList<>();
         List<ConfigSet> resolvedBaseConfigSets = new ArrayList<>();
@@ -116,7 +116,15 @@ final class StepSupport {
             throw new AbortException("[configTemplateSync] Mismatched content types in base chain — "
                     + String.join(", ", typeReport) + " must all share one content type.");
         }
-        ContentType resolvedType = distinctTypes.isEmpty() ? ContentType.JSON : distinctTypes.iterator().next();
+        // FR-87 gap fix: distinctTypes can now legitimately be empty (an explicitlyStandalone env
+        // version has zero bases to fold) — fall back to the env Config Set's own already-stored
+        // contentType, not a hardcoded ContentType.JSON, which would silently mis-type every
+        // standalone env Config Set's effective content. `env` staying null is only ever a
+        // theoretical case in this codebase (kept null-tolerant for symmetry with
+        // mergedSecretsManifest's own null-tolerant `env` parameter).
+        ContentType resolvedType = distinctTypes.isEmpty()
+                ? (env != null ? env.getContentType() : ContentType.JSON)
+                : distinctTypes.iterator().next();
         List<TreeNode> baseContents = new ArrayList<>();
         for (BaseChainResolver.ResolvedReference r : resolved) {
             baseContents.add(TreeFormats.forType(resolvedType).parse(r.version.getContentJson()));
@@ -135,12 +143,41 @@ final class StepSupport {
      */
     static List<BaseConfigReference> effectiveBaseChain(String projectKey, ConfigSetVersion envVersion) {
         if (envVersion != null) {
+            if (envVersion.isExplicitlyStandalone()) {
+                // FR-87: a deliberate zero-base declaration — never FR-52's synthesized single-entry
+                // default. Checked first, before the declared/isEmpty() check below, to document the
+                // actual precedence intent unambiguously (in practice the two checks never compete on
+                // the same real version — a version cannot simultaneously be explicitly-standalone AND
+                // carry a non-empty chain, enforced at write time by ConfigSet.addVersion).
+                return Collections.emptyList();
+            }
             List<BaseConfigReference> declared = envVersion.getBaseChain();
             if (declared != null && !declared.isEmpty()) {
                 return declared;
             }
         }
         return Collections.singletonList(BaseConfigReference.active(projectKey));
+    }
+
+    /**
+     * FR-81: resolves directly against {@code projectKey}'s own COMMON Config Set only, completely
+     * bypassing the env Config Set and its base-chain resolution machinery entirely. A supplied
+     * {@code version} pins this SAME COMMON Config Set to that exact version.
+     */
+    static ResolvedEffective resolveUseBaseOnly(ConfigSetRepository repository, String projectKey, Integer version)
+            throws AbortException {
+        ConfigSet common = requireCommon(repository, projectKey);
+        ConfigSetVersion resolved = version != null ? common.getVersion(version) : common.getActiveVersion();
+        if (resolved == null) {
+            String what = version != null ? "version " + version : "an active version";
+            throw new AbortException("Common Config Set for projectKey '" + projectKey + "' has no " + what
+                    + " to resolve" + (version != null ? " (explicit 'version' parameter, useBase=true)" : ""));
+        }
+        TreeNode content = TreeFormats.forType(common.getContentType()).parse(resolved.getContentJson());
+        List<ResolvedBaseVersion> chain = Collections.singletonList(
+                new ResolvedBaseVersion(projectKey, resolved.getVersionNumber()));
+        List<ConfigSet> configSets = Collections.singletonList(common);
+        return new ResolvedEffective(content, common.getContentType(), chain, configSets);
     }
 
     /**
@@ -210,6 +247,67 @@ final class StepSupport {
      * AbortException} naming both the dotted path and the missing/inaccessible credential ID
      * (NFR-7: fail loud, never fail silent).</p>
      */
+    /**
+     * FR-93: per-parameter merge of a call's own explicit arguments against a prior
+     * {@code setupConfigTemplate} call's stored {@link ConfigTemplateSetupAction} state for the same
+     * build — explicit call-site value always wins, evaluated field by field, never all-or-nothing.
+     * Also implements FR-94 (fail-loud on insufficient parameters) as this method's single exit-check.
+     */
+    static final class EffectiveParams {
+        final String projectKey;
+        final String environment;
+        final String file;
+        final String redeployFromRun;
+        final boolean useBase;
+        final Integer version;
+
+        EffectiveParams(String projectKey, String environment, String file, String redeployFromRun,
+                         boolean useBase, Integer version) {
+            this.projectKey = projectKey;
+            this.environment = environment;
+            this.file = file;
+            this.redeployFromRun = redeployFromRun;
+            this.useBase = useBase;
+            this.version = version;
+        }
+    }
+
+    static EffectiveParams mergeWithSetupState(Run<?, ?> run, String callProjectKey, String callEnvironment,
+            String callFile, String callRedeployFromRun, Boolean callUseBase, Integer callVersion)
+            throws AbortException {
+        ConfigTemplateSetupAction setup = run == null ? null : run.getAction(ConfigTemplateSetupAction.class);
+
+        String projectKey = callProjectKey != null ? callProjectKey : (setup == null ? null : setup.getProjectKey());
+        String environment = callEnvironment != null ? callEnvironment : (setup == null ? null : setup.getEnvironment());
+        String file = callFile != null ? callFile : (setup == null ? null : setup.getFile());
+        String redeployFromRun = callRedeployFromRun != null
+                ? callRedeployFromRun : (setup == null ? null : setup.getRedeployFromRun());
+        boolean useBase = callUseBase != null ? callUseBase : (setup != null && setup.isUseBase());
+        Integer version = callVersion != null ? callVersion : (setup == null ? null : setup.getVersion());
+
+        List<String> missing = new ArrayList<>();
+        if (isBlank(projectKey)) {
+            missing.add("projectKey");
+        }
+        if (isBlank(environment)) {
+            missing.add("environment");
+        }
+        if (isBlank(file)) {
+            missing.add("file");
+        }
+        if (!missing.isEmpty()) {
+            // FR-94's exact message shape.
+            throw new AbortException("[configTemplateSync] Missing required parameter(s) " + missing
+                    + " — not supplied explicitly on this call, and no prior setupConfigTemplate() call in this "
+                    + "build provided them.");
+        }
+        return new EffectiveParams(projectKey, environment, file, redeployFromRun, useBase, version);
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
     static String resolveSecretOrThrow(String dottedPath, String credentialId, Run<?, ?> run)
             throws AbortException {
         StringCredentials credentials = CredentialsProvider.findCredentialById(
