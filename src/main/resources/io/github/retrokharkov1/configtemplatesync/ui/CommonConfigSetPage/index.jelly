@@ -83,9 +83,6 @@
 
       <div class="ctsync-page">
 
-      <!-- BUG-05 breadcrumb: back to this project's overview (env list + New-Env input). -->
-      <p><a href="${rootURL}/configTemplates/${it.projectKey}/">&#8592; ${it.projectKey} overview</a></p>
-
       <h1>${it.displayName}</h1>
       <j:if test="${!it.exists}">
         <div class="alert alert-info">${%notExistYet}</div>
@@ -219,13 +216,6 @@
 
         <div class="ctsync-section-header ctsync-editor-header-row">
           <b>${%editor.heading}</b>
-          <span class="ctsync-btn-row" style="margin:0">
-            <button type="button" id="saveBtn" class="jenkins-button jenkins-button--primary"
-                    title="${%save.title}" onclick="saveClicked(false);">${%save.label}</button>
-            <button type="button" id="saveActivateBtn"
-                    class="jenkins-button"
-                    title="${%saveActivate.title}" onclick="saveClicked(true);">${%saveActivate.label}</button>
-          </span>
         </div>
         <div class="ctsync-btn-row">
           <button type="button" id="modeEditBtn"
@@ -296,6 +286,17 @@
           <input class="setting-input" type="text" id="noteField" required="required"/>
         </f:entry>
         <input type="hidden" id="contentTypeField" value="${it.contentTypeValue}"/>
+
+        <!-- Bottom-of-form position (owner request, 2026-09-02 UI reorg): Save/Save &amp; Activate
+             relocated below the change-note field — the natural end-of-form position — instead of
+             sitting inline with the "Editor" section heading. -->
+        <div class="ctsync-btn-row">
+          <button type="button" id="saveBtn" class="jenkins-button jenkins-button--primary"
+                  title="${%save.title}" onclick="saveClicked(false);">${%save.label}</button>
+          <button type="button" id="saveActivateBtn"
+                  class="jenkins-button"
+                  title="${%saveActivate.title}" onclick="saveClicked(true);">${%saveActivate.label}</button>
+        </div>
       </details>
 
       <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
