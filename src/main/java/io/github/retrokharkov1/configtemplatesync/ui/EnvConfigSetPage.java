@@ -125,6 +125,7 @@ public class EnvConfigSetPage extends ConfigSetPage {
      */
     public String getCommonVersionCatalogJsonForScript() {
         JsonObject catalog = new JsonObject();
+        JsonObject typesByProject = new JsonObject(); // FR-72: sibling map, same key set as catalog
         for (ConfigSet common : repository.listAllCommon()) {
             JsonArray versions = new JsonArray();
             for (ConfigSetVersion v : common.getVersions()) {
@@ -135,8 +136,12 @@ public class EnvConfigSetPage extends ConfigSetPage {
                 versions.add(versionEntry);
             }
             catalog.add(common.getProjectKey(), versions);
+            typesByProject.addProperty(common.getProjectKey(), common.getContentType().name());
         }
-        return toJsScriptStringLiteral(catalog.toString());
+        JsonObject wrapper = new JsonObject();
+        wrapper.add("versionsByProject", catalog);
+        wrapper.add("typeByProject", typesByProject);
+        return toJsScriptStringLiteral(wrapper.toString());
     }
 
     /**
@@ -149,12 +154,29 @@ public class EnvConfigSetPage extends ConfigSetPage {
     private List<BaseConfigReference> effectiveBaseChainForTemplate() {
         ConfigSetVersion active = getActiveVersion();
         if (active != null) {
+            if (active.isExplicitlyStandalone()) {
+                // FR-87, mirrored from StepSupport#effectiveBaseChain — checked first, same
+                // precedence reasoning as that method's own javadoc (a version cannot simultaneously
+                // be explicitly-standalone and carry a non-empty baseChain, enforced at write time by
+                // ConfigSet#addVersion).
+                return Collections.emptyList();
+            }
             List<BaseConfigReference> declared = active.getBaseChain();
             if (declared != null && !declared.isEmpty()) {
                 return declared;
             }
         }
         return Collections.singletonList(BaseConfigReference.active(projectKey));
+    }
+
+    /**
+     * FR-89: seeds the explicitlyStandalone checkbox from the current ACTIVE version's own flag —
+     * {@code false} for a brand-new Config Set (no active version) or any version that never set it
+     * (FR-88).
+     */
+    public boolean isExplicitlyStandaloneSeed() {
+        ConfigSetVersion active = getActiveVersion();
+        return active != null && active.isExplicitlyStandalone();
     }
 
     /**
@@ -174,9 +196,10 @@ public class EnvConfigSetPage extends ConfigSetPage {
      * JS-proxy call and always merging against a {@code null}/default overlay instead of the real
      * live content the browser sent.</p>
      */
-    public JSONObject doComputeMerge(@QueryParameter String overlayJson, @QueryParameter String baseChainJson) {
+    public JSONObject doComputeMerge(@QueryParameter String overlayJson, @QueryParameter String baseChainJson,
+                                      @QueryParameter boolean explicitlyStandalone) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        return previewMergeImpl(overlayJson, baseChainJson);
+        return previewMergeImpl(overlayJson, baseChainJson, explicitlyStandalone);
     }
 
     /**
@@ -184,12 +207,12 @@ public class EnvConfigSetPage extends ConfigSetPage {
      * See {@link ConfigSetPage#doActivateVersion(int)} javadoc.
      */
     @JavaScriptMethod(name = "previewMerge")
-    public JSONObject jsPreviewMerge(String overlayJson, String baseChainJson) {
+    public JSONObject jsPreviewMerge(String overlayJson, String baseChainJson, boolean explicitlyStandalone) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        return previewMergeImpl(overlayJson, baseChainJson);
+        return previewMergeImpl(overlayJson, baseChainJson, explicitlyStandalone);
     }
 
-    private JSONObject previewMergeImpl(String overlayRaw, String baseChainJson) {
+    private JSONObject previewMergeImpl(String overlayRaw, String baseChainJson, boolean explicitlyStandalone) {
         JSONObject result = new JSONObject();
 
         List<BaseConfigReference> chain = tryParseBaseChain(baseChainJson);
@@ -199,7 +222,13 @@ public class EnvConfigSetPage extends ConfigSetPage {
             return result;
         }
         if (chain.isEmpty()) {
-            chain = Collections.singletonList(BaseConfigReference.active(projectKey));
+            if (!explicitlyStandalone) {
+                // FR-52's default — unchanged behavior for the ordinary "empty chain, not standalone" case.
+                chain = Collections.singletonList(BaseConfigReference.active(projectKey));
+            }
+            // else FR-87: leave chain empty — BaseChainResolver.resolve(repository, emptyList())
+            // already returns an empty resolved list with no special-casing needed, mirroring
+            // StepSupport#effectiveBaseChain's own guard for the UI's decoupled-from-steps code path.
         }
 
         List<BaseChainResolver.ResolvedReference> resolved = BaseChainResolver.resolve(repository, chain);
@@ -257,9 +286,14 @@ public class EnvConfigSetPage extends ConfigSetPage {
         }
 
         try {
+            // FR-73: "Merged bases" is the fold of the chain BEFORE the env override is applied —
+            // reuses the SAME EffectiveConfigResolver.resolveChain call with a null overlay, no
+            // second/divergent merge implementation.
+            TreeNode mergedBasesOnly = EffectiveConfigResolver.resolveChain(type, baseContents, null);
             TreeNode merged = EffectiveConfigResolver.resolveChain(type, baseContents, overlayRaw);
             result.put("ok", true);
             result.put("contentType", type.name()); // NEW field — client needs this to pick Monaco's language mode
+            result.put("mergedBases", format.serialize(mergedBasesOnly)); // NEW field (FR-73)
             result.put("merged", format.serialize(merged)); // plain string now, not a nested JSON object
             result.put("perReference", net.sf.json.JSONArray.fromObject(perReference.toString()));
             return result;
