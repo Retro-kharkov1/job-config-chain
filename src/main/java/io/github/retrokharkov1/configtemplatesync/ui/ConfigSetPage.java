@@ -208,7 +208,7 @@ public abstract class ConfigSetPage {
      * {@link SaveOutcome#error}, so neither caller duplicates any of the actual save logic.
      */
     private SaveOutcome saveImpl(String content, String note, boolean activate, String baseChainJson,
-                                  String contentTypeParam) {
+                                  String contentTypeParam, boolean explicitlyStandalone) {
         try {
             ConfigSet configSet = getConfigSet();
             ContentType resolvedContentType;
@@ -248,10 +248,12 @@ public abstract class ConfigSetPage {
             String author = currentAuthor();
             int newVersion;
             try {
-                newVersion = configSet.addVersion(content, note, author, System.currentTimeMillis(), baseChain);
+                newVersion = configSet.addVersion(content, note, author, System.currentTimeMillis(), baseChain,
+                        explicitlyStandalone);
             } catch (IllegalArgumentException e) {
-                // FR-14/OQ-1: structural secret-placeholder rejection, and (FR-53) a non-empty
-                // baseChain on a COMMON-role Config Set, both surface here as a clear save error.
+                // FR-14/OQ-1/FR-53/FR-86/FR-87: every ConfigSet.addVersion validation failure —
+                // including the "explicitlyStandalone on COMMON" and "explicitlyStandalone=true with
+                // non-empty baseChain" checks — surfaces through this SAME catch, no new branch needed.
                 throw new Failure(Messages.ConfigSetPage_SaveBlocked(e.getMessage()));
             }
             if (activate) {
@@ -286,9 +288,11 @@ public abstract class ConfigSetPage {
                               @QueryParameter String note,
                               @QueryParameter(fixEmpty = true) String activate,
                               @QueryParameter(fixEmpty = true) String baseChainJson,
-                              @QueryParameter(fixEmpty = true) String contentType) throws IOException {
+                              @QueryParameter(fixEmpty = true) String contentType,
+                              @QueryParameter(fixEmpty = true) String explicitlyStandalone) throws IOException {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        SaveOutcome outcome = saveImpl(content, note, activate != null, baseChainJson, contentType);
+        SaveOutcome outcome = saveImpl(content, note, activate != null, baseChainJson, contentType,
+                explicitlyStandalone != null);
         if (!outcome.ok) {
             throw new Failure(outcome.error);
         }
@@ -324,8 +328,11 @@ public abstract class ConfigSetPage {
                 ? payload.get("baseChainJson").getAsString() : null;
         String contentType = (payload.has("contentType") && !payload.get("contentType").isJsonNull())
                 ? payload.get("contentType").getAsString() : null;
+        boolean explicitlyStandalone = payload.has("explicitlyStandalone")
+                && !payload.get("explicitlyStandalone").isJsonNull()
+                && payload.get("explicitlyStandalone").getAsBoolean();
 
-        SaveOutcome outcome = saveImpl(content, note, activate, baseChainJson, contentType);
+        SaveOutcome outcome = saveImpl(content, note, activate, baseChainJson, contentType, explicitlyStandalone);
         JSONObject result = new JSONObject();
         if (!outcome.ok) {
             result.put("ok", false);
@@ -358,6 +365,7 @@ public abstract class ConfigSetPage {
             row.put("author", v.getAuthor());
             row.put("note", v.getNote());
             row.put("active", v.getVersionNumber() == activeVersionNumber);
+            row.put("explicitlyStandalone", v.isExplicitlyStandalone());
             net.sf.json.JSONArray baseChain = new net.sf.json.JSONArray();
             for (BaseConfigReference ref : v.getBaseChain()) {
                 JSONObject refRow = new JSONObject();
