@@ -153,6 +153,16 @@
       <artifactId>workflow-step-api</artifactId>
     </dependency>
     <dependency>
+      <!-- FR-95/OQ-11: SetupConfigTemplateStep's ParallelBranchGuard needs FlowNode/ThreadNameAction,
+           which live in workflow-api, not workflow-cps (that stays test-scope only, deliberately —
+           see the tech-lead contract review's OQ-11 §7 for why CpsThread/workflow-cps was rejected
+           for this). Not pulled in transitively by workflow-step-api at any scope (confirmed by
+           reading workflow-step-api-plugin's own pom.xml/StepContext.java source) — this is a new,
+           real main-scope dependency, version managed by the imported bom-2.426.x. -->
+      <groupId>org.jenkins-ci.plugins.workflow</groupId>
+      <artifactId>workflow-api</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-cps</artifactId>
       <scope>test</scope>

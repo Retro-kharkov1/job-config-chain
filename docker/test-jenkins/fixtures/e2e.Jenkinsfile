@@ -11,14 +11,22 @@
 // "test-app-dev-db-password" credential:
 //   1. configTemplateValidate — checks the sample target file's #{Dotted.Path}# tokens
 //      against the effective (common+env merged) configuration.
-//   2. configTemplateSubstitute — replaces those tokens for real. The Database.Password
-//      token is resolved EXCLUSIVELY from the "test-app-dev-db-password" Jenkins credential
-//      declared in the common ConfigSet's secrets manifest (FR-13/FR-21) — deliberately no
-//      withCredentials/withEnv wiring here anymore, to prove the step resolves it itself
-//      rather than depending on the calling Jenkinsfile to re-inject it under a matching
-//      env-var name.
+//   2. configTemplateSubstitute (no parameters beyond projectKey/environment/file) —
+//      replaces those tokens for real. Per FR-96/FR-97 (automatic build-identity pinning),
+//      this call automatically derives this Run's own identity and unconditionally
+//      creates/updates a Deployment Binding for it — no `buildVersion` parameter is needed
+//      or accepted any more (it was removed entirely, not merely deprecated). The
+//      Database.Password token is resolved EXCLUSIVELY from the "test-app-dev-db-password"
+//      Jenkins credential declared in the common ConfigSet's secrets manifest (FR-13/FR-21).
+//   3. On every build after the first, a second demonstration stage calls
+//      configTemplateSubstitute again with `redeployFromRun: '1'` (FR-100–FR-103) — this
+//      replays build #1's frozen config chain byte-for-byte, even if the common ConfigSet's
+//      active version has changed since (the core FR-54/UF-6 rollback guarantee), and its
+//      own successful run additionally forward-chains a fresh binding keyed to the CURRENT
+//      build (FR-102) so a later build could, in turn, redeploy from THIS one.
 node {
     def targetFile = 'appsettings.json'
+    def redeployFile = 'appsettings.redeploy.json'
 
     stage('Prepare sample target file') {
         writeFile file: targetFile, text: '''{
@@ -39,12 +47,37 @@ node {
         configTemplateValidate(projectKey: 'test-app', environment: 'dev', file: targetFile)
     }
 
-    stage('Substitute') {
-        configTemplateSubstitute(projectKey: 'test-app', environment: 'dev', file: targetFile, buildVersion: '1.0.0')
+    stage('Substitute (default-on binding, no parameters)') {
+        // FR-96/FR-97: this alone is enough to both substitute AND record a Deployment
+        // Binding for this exact build — no buildVersion/redeployFromRun/version needed for
+        // the ordinary deploy case.
+        configTemplateSubstitute(projectKey: 'test-app', environment: 'dev', file: targetFile)
     }
 
     stage('Show substituted file') {
-        echo "---- appsettings.json (after substitution) ----"
+        echo "---- appsettings.json (after substitution, build #${currentBuild.number}) ----"
         sh "cat ${targetFile}"
+    }
+
+    if (currentBuild.number > 1) {
+        stage('Redeploy demonstration: replay build #1 via redeployFromRun') {
+            writeFile file: redeployFile, text: '''{
+  "App": {
+    "Name": "#{App.Name}#"
+  },
+  "Database": {
+    "Host": "#{Database.Host}#",
+    "Password": "#{Database.Password}#"
+  }
+}
+'''
+            // FR-100–FR-103: replays build #1's frozen base chain, byte-identical, even if
+            // the common ConfigSet's active version has since changed (UF-6/FR-54).
+            configTemplateSubstitute(projectKey: 'test-app', environment: 'dev', file: redeployFile,
+                    redeployFromRun: '1')
+            echo "---- appsettings.redeploy.json (redeployFromRun: '1', from build #${currentBuild.number}) ----"
+            echo "Compare this against build #1's own 'Show substituted file' console output — must be byte-identical."
+            sh "cat ${redeployFile}"
+        }
     }
 }

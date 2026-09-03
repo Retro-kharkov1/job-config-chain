@@ -5,6 +5,7 @@ import com.cloudbees.plugins.credentials.SystemCredentialsProvider;
 import hudson.model.Result;
 import hudson.util.Secret;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
+import io.github.retrokharkov1.configtemplatesync.model.ConfigDeploymentBinding;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.ContentType;
@@ -20,11 +21,11 @@ import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 
 import java.util.Arrays;
-import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ConfigTemplateSubstituteStepTest {
@@ -162,93 +163,107 @@ public class ConfigTemplateSubstituteStepTest {
     }
 
     @Test
-    public void buildVersionOptIn_recordsBindingOnSuccessfulSubstitution() throws Exception {
+    public void fr97_defaultOn_recordsBindingUnderOwnRunIdentityWithNoParameter() throws Exception {
+        // FR-96/FR-97: every successful real substitution automatically derives its own
+        // Run-identity key and unconditionally creates/updates a binding for it — no parameter
+        // needed at all.
         seedCommon("subproj3", "{\"a\":\"one\"}");
         seedEnv("subproj3", "dev", "{}");
 
-        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-pin-record");
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-default-on-binding");
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(projectKey: 'subproj3', environment: 'dev', file: 'app.json', buildVersion: '1.0.0')\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj3', environment: 'dev', file: 'app.json')\n"
                         + "}", true));
 
-        jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
 
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
-        var binding = bindingRepository.find("subproj3", "dev", "1.0.0");
-        assertNotNull(binding);
+        ConfigDeploymentBinding binding =
+                bindingRepository.find("subproj3", "dev", run.getExternalizableId());
+        assertNotNull("a binding must exist under this run's own externalizableId with zero parameters",
+                binding);
         assertEquals(1, binding.getCommonVersionNumber());
     }
 
     @Test
-    public void buildVersionWithNoBinding_fallsBackToActiveAndLogsFallback() throws Exception {
-        seedCommon("subproj4", "{\"a\":\"one\"}");
+    public void fr98_explicitVersionSuppressesBindingLookupAndWrite() throws Exception {
+        seedCommon("subproj4", "{\"a\":\"v1-value\"}");
         seedEnv("subproj4", "dev", "{}");
 
-        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-pin-fallback");
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-version-suppresses-binding");
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(projectKey: 'subproj4', environment: 'dev', file: 'app.json', buildVersion: '9.9.9')\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj4', environment: 'dev', file: 'app.json', version: 1)\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
-        // FR-26: must surface, in build output, that it fell back to the currently active/pinned chain.
-        jenkins.assertLogContains("falling back to the currently active/pinned base chain", run);
-        jenkins.assertLogContains("resolved to v1", run);
+
+        ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
+        assertNull("an explicit 'version' must suppress the binding write entirely (FR-98)",
+                bindingRepository.find("subproj4", "dev", run.getExternalizableId()));
     }
 
     @Test
-    public void noBuildVersionGiven_usesActiveWithNoPinningBehavior() throws Exception {
+    public void fr103_redeployFromRunWithNoBinding_fallsBackToActiveAndLogsFallback() throws Exception {
         seedCommon("subproj5", "{\"a\":\"one\"}");
         seedEnv("subproj5", "dev", "{}");
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-redeploy-fallback");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj5', environment: 'dev', file: 'app.json', redeployFromRun: '999')\n"
+                        + "}", true));
+
+        WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        // FR-103: must surface, in build output, that it fell back to the currently active/pinned
+        // chain, naming the unresolved redeployFromRun value explicitly.
+        jenkins.assertLogContains("redeployFromRun '999'", run);
+        jenkins.assertLogContains("falling back to the currently active/pinned base chain", run);
+    }
+
+    @Test
+    public void fr27_firstSubstitutionUnderOwnIdentity_usesActiveWithNoWarning() throws Exception {
+        seedCommon("subproj6a", "{\"a\":\"one\"}");
+        seedEnv("subproj6a", "dev", "{}");
 
         WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-no-pin");
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(projectKey: 'subproj5', environment: 'dev', file: 'app.json')\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj6a', environment: 'dev', file: 'app.json')\n"
                         + "}", true));
 
-        jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
-
-        ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
-        assertEquals(null, bindingRepository.find("subproj5", "dev", ""));
+        WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        assertFalse("a Run's very first substitution under its own identity must not be a warned-about fallback",
+                jenkins.getLog(run).contains("falling back"));
     }
 
     @Test
-    public void pinnedBuildVersionReusesRecordedVersionsNotCurrentActive() throws Exception {
+    public void fr25_sameRunRepeatCallFindsItsOwnPriorBindingAndReplays() throws Exception {
+        // FR-25's "(a) the current Run's own ... identity" case — a Pipeline restart-from-stage
+        // analogue, simulated here as two substitute calls within the same build.
         ConfigSet common = seedCommon("subproj6", "{\"a\":\"v1-value\"}");
         seedEnv("subproj6", "dev", "{}");
 
-        WorkflowJob firstDeploy = jenkins.createProject(WorkflowJob.class, "substitute-pin-first");
-        firstDeploy.setDefinition(new CpsFlowDefinition(
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-same-run-self-lookup");
+        job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(projectKey: 'subproj6', environment: 'dev', file: 'app.json', buildVersion: '1.0.0')\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj6', environment: 'dev', file: 'app.json')\n"
                         + "  echo \"FIRST:${readFile('app.json')}\"\n"
-                        + "}", true));
-        WorkflowRun first = jenkins.assertBuildStatus(Result.SUCCESS, firstDeploy.scheduleBuild2(0));
-        jenkins.assertLogContains("FIRST:x=v1-value", first);
-
-        // now advance common's active version, but a redeploy of build 1.0.0 must keep using the
-        // pinned (older) common version, not the new "currently active" one (UF-6).
-        ConfigSetRepository repository = new ConfigSetRepository();
-        ConfigSet reloadedCommon = repository.findCommon("subproj6");
-        int v2 = reloadedCommon.addVersion("{\"a\":\"v2-value\"}", "bump", "test", 2L);
-        reloadedCommon.activate(v2);
-        repository.save(reloadedCommon);
-
-        WorkflowJob rollbackRedeploy = jenkins.createProject(WorkflowJob.class, "substitute-pin-redeploy");
-        rollbackRedeploy.setDefinition(new CpsFlowDefinition(
-                "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(projectKey: 'subproj6', environment: 'dev', file: 'app.json', buildVersion: '1.0.0')\n"
-                        + "  echo \"REDEPLOY:${readFile('app.json')}\"\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj6', environment: 'dev', file: 'app.json')\n"
+                        + "  echo \"SECOND:${readFile('app.json')}\"\n"
                         + "}", true));
-        WorkflowRun redeploy = jenkins.assertBuildStatus(Result.SUCCESS, rollbackRedeploy.scheduleBuild2(0));
-        jenkins.assertLogContains("REDEPLOY:x=v1-value", redeploy);
+
+        WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        jenkins.assertLogContains("FIRST:x=v1-value", run);
+        jenkins.assertLogContains("SECOND:x=v1-value", run);
+        jenkins.assertLogContains("This run's own prior binding is pinned", run);
     }
 
     @Test
@@ -277,9 +292,12 @@ public class ConfigTemplateSubstituteStepTest {
     }
 
     @Test
-    public void fr54_pinnedBuildVersionSubstitutionIsByteIdenticalAcrossRepeatRuns() throws Exception {
-        // FR-54: substituting the same buildVersion twice, even after the referenced base's active
-        // version changes in between, must produce byte-identical output both times.
+    public void fr54_redeployFromRunReplayIsByteIdenticalAcrossRuns_evenAfterBaseChanges() throws Exception {
+        // FR-54's amended acceptance criterion: substitute under Run A's own key, then substitute
+        // under a DIFFERENT Run B supplying redeployFromRun targeting Run A, and assert Run B's
+        // merged output is byte-identical to Run A's original output, even after Run A's base
+        // Config Set's active version has since changed. This is the test that actually proves
+        // UF-6's cross-Run rollback case works.
         seedCommon("subproj10", "{\"a\":\"v1-value\"}");
         seedEnv("subproj10", "dev", "{}");
 
@@ -287,7 +305,7 @@ public class ConfigTemplateSubstituteStepTest {
         firstDeploy.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(projectKey: 'subproj10', environment: 'dev', file: 'app.json', buildVersion: 'b1')\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj10', environment: 'dev', file: 'app.json')\n"
                         + "  echo \"FIRST:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun first = jenkins.assertBuildStatus(Result.SUCCESS, firstDeploy.scheduleBuild2(0));
@@ -303,11 +321,13 @@ public class ConfigTemplateSubstituteStepTest {
         reloadedCommon.activate(v2);
         repository.save(reloadedCommon);
 
+        int firstBuildNumber = first.getNumber();
         WorkflowJob secondDeploy = jenkins.createProject(WorkflowJob.class, "fr54-second");
         secondDeploy.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(projectKey: 'subproj10', environment: 'dev', file: 'app.json', buildVersion: 'b1')\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj10', environment: 'dev', file: 'app.json', "
+                        + "redeployFromRun: '" + first.getParent().getFullName() + "#" + firstBuildNumber + "')\n"
                         + "  echo \"SECOND:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun second = jenkins.assertBuildStatus(Result.SUCCESS, secondDeploy.scheduleBuild2(0));
@@ -315,8 +335,86 @@ public class ConfigTemplateSubstituteStepTest {
                 .filter(l -> l.contains("SECOND:"))
                 .findFirst().orElseThrow();
 
-        assertEquals("re-substituting the same pinned buildVersion must be byte-identical",
+        assertEquals("redeployFromRun must replay Run A's frozen chain byte-identically in Run B",
                 firstOutput.replace("FIRST:", ""), secondOutput.replace("SECOND:", ""));
         jenkins.assertLogContains("SECOND:x=v1-value", second);
+
+        // FR-102: Run B's own successful substitution must ALSO forward-chain a fresh binding
+        // keyed to ITS OWN identity, so a future redeploy could in turn target Run B.
+        ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
+        ConfigDeploymentBinding ownBindingForSecond =
+                bindingRepository.find("subproj10", "dev", second.getExternalizableId());
+        assertNotNull("FR-102: redeployFromRun must still forward-chain a binding under the CURRENT run",
+                ownBindingForSecond);
+        assertEquals(1, ownBindingForSecond.getCommonVersionNumber());
+    }
+
+    @Test
+    public void useBase_bypassesEnvEntirely_resolvesAgainstCommonOnly() throws Exception {
+        // FR-81/FR-85: useBase=true resolves directly against the COMMON Config Set, bypassing
+        // the env Config Set's override content and base-chain machinery entirely.
+        seedCommon("subproj11", "{\"a\":\"commonValue\"}");
+        seedEnv("subproj11", "dev", "{\"a\":\"envOverrideValueMustNeverAppear\"}");
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-usebase");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj11', environment: 'dev', file: 'app.json', useBase: true)\n"
+                        + "  echo \"RESULT:${readFile('app.json')}\"\n"
+                        + "}", true));
+
+        WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        jenkins.assertLogContains("RESULT:x=commonValue", run);
+    }
+
+    @Test
+    public void useBaseWithVersion_pinsCommonConfigSetToThatVersion() throws Exception {
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet common = new ConfigSet("subproj12", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
+        common.addVersion("{\"a\":\"v1\"}", "seed", "test", 1L);
+        int v2 = common.addVersion("{\"a\":\"v2\"}", "second", "test", 2L);
+        common.activate(v2);
+        repository.save(common);
+        seedEnv("subproj12", "dev", "{}");
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-usebase-version");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj12', environment: 'dev', file: 'app.json', useBase: true, version: 1)\n"
+                        + "  echo \"RESULT:${readFile('app.json')}\"\n"
+                        + "}", true));
+
+        WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        jenkins.assertLogContains("RESULT:x=v1", run);
+    }
+
+    @Test
+    public void envVersionPin_pinsEnvConfigSetToThatVersionIncludingItsOwnBaseChain() throws Exception {
+        // FR-80: pinning the env version pins its entire frozen baseChain for free.
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet common = new ConfigSet("subproj13", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
+        int cv = common.addVersion("{\"a\":\"common-value\"}", "seed", "test", 1L);
+        common.activate(cv);
+        repository.save(common);
+
+        ConfigSet env = new ConfigSet("subproj13", ConfigSetRole.ENV, "dev", "Env", ContentType.JSON);
+        int ev1 = env.addVersion("{\"a\":\"env-v1\"}", "seed", "test", 1L);
+        int ev2 = env.addVersion("{\"a\":\"env-v2\"}", "second", "test", 2L);
+        env.activate(ev2);
+        repository.save(env);
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "substitute-env-version-pin");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                        + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
+                        + "  configTemplateSubstitute(projectKey: 'subproj13', environment: 'dev', file: 'app.json', version: "
+                        + ev1 + ")\n"
+                        + "  echo \"RESULT:${readFile('app.json')}\"\n"
+                        + "}", true));
+
+        WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        jenkins.assertLogContains("RESULT:x=env-v1", run);
     }
 }
