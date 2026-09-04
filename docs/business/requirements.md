@@ -282,7 +282,7 @@ future reader knows *why* the UI design in FR-30–FR-40 looks the way it does, 
 
 ## 3. Key entities and relationships
 
-- **Config Project** (implicit grouping key, e.g. `apilealtad`) — not necessarily a first-class persisted
+- **Config Project** (implicit grouping key, e.g. `sample-app`) — not necessarily a first-class persisted
   object, but the unit that ties one common Config Set to one or more env Config Sets together. Every
   Config Set name/key must make this grouping unambiguous (see OQ-2 on naming convention).
 
@@ -1277,6 +1277,110 @@ the same empty list, and FR-52 then treats empty as "implicitly one self-referen
   convention as FR-55–58's own SDLC follow-up note; this FR mandates only that the distinction MUST be
   visible somewhere, not its exact placement.
 
+**FR-104 addendum (added 2026-09-03) — env content-type picker for the explicitlyStandalone-with-no-chain
+gap.** Found during live manual testing of the already-shipped FR-60/FR-86/FR-87 UI: this is a genuine
+functional gap in requirements already formalized above, not a new feature — FR-60's text is left
+unchanged; this is an explicit, dated amendment layered on top of it, mirroring the already-specified
+FR-59 picker pattern rather than inventing a new one.
+
+- **FR-104**: FR-60's "An ENV-role Config Set MUST NOT expose any independent way to choose its own
+  `ContentType`" rule has exactly one exception: when an ENV-role Config Set Version is
+  `explicitlyStandalone` (FR-86/87) — declaring zero base configs — there is no base chain at all for
+  FR-60's resolution path to read a `ContentType` from. For that case only, the env-level Config Set edit
+  page (FR-37) MUST expose the SAME content-type picker UX FR-59 already specifies for the COMMON page
+  (JSON/XML/YAML choice, locked permanently after the first Save). Specifically:
+  1. The picker MUST render/enable only while no version of this env Config Set exists yet AND the
+     draft's `explicitlyStandalone` state (FR-89's editor) is checked — mirroring FR-59's own
+     "only while `!exists`" gate, with the added `explicitlyStandalone` condition.
+  2. Whenever `explicitlyStandalone` is unchecked (a base chain is declared), the picker MUST stay
+     hidden and FR-60's original "always follows the chain" behavior MUST be completely unchanged —
+     this FR is strictly additive, never a modification of the non-standalone case.
+  3. Once a first version of this env Config Set exists, the picker MUST lock to a read-only display
+     exactly like FR-59's, regardless of whether that version was saved `explicitlyStandalone` or not —
+     a later version can never retroactively change the type, mirroring `ContentType`'s existing
+     immutability contract (`ConfigSet`, §3) exactly.
+  4. The resolved value MUST drive the same downstream consumers FR-63/FR-64/FR-15 already key off
+     `ContentType` for (Monaco language mode + diagnostics/format wiring, save-time syntax validation,
+     template generation) for the standalone-with-no-chain case specifically. The merge-preview
+     (`doComputeMerge`/`previewMerge`) and save (`doSubmitSave`/`jsSave`) server paths MUST accept this
+     client-supplied value as a fallback ONLY when the resolved base chain is genuinely empty; FR-52's
+     synthesized default chain for a non-standalone empty draft chain MUST continue to always win, so
+     this fallback MUST never be reachable for an ordinary, non-standalone env Config Set.
+
+**FR-105 addendum (added 2026-09-04) — "choose content type at creation" moved earlier in the flow.**
+Owner-requested UX refinement, not a change to FR-59's underlying rule: FR-59 already establishes that a
+Config Set's `ContentType` is chosen exactly once, at first-save time, defaulting to `JSON` if unspecified,
+and that the COMMON page's `#contentTypeRow` picker is the only place that choice is ever made or persisted.
+FR-105 does not change any of that — it only moves the point at which the admin is first *prompted* for the
+choice earlier in the navigation flow, from after they have already clicked into a brand-new project's editor
+to the root list page's own "New Config Set" section, before that navigation happens.
+
+- **FR-105**: The root list page's "New Config Set" section MUST render the same JSON/XML/YAML choice
+  (with the same "choose once — locked forever after the first Save" helper wording FR-59's own picker
+  uses) alongside the existing `projectKey` input, defaulting to `JSON` pre-selected. The selected value
+  MUST be carried through to the destination COMMON page's URL (as a `?contentType=...` query parameter)
+  when the "Open / Create" button is clicked, so that page's still-unlocked `#contentTypeRow` picker
+  pre-selects that same value instead of always hard-defaulting to `JSON` on arrival.
+- **FR-105a**: This is purely a smarter *default*, never a second enforcement/persistence point. The
+  COMMON page's picker remains the only place the choice is actually saved (FR-59's `doSubmitSave`/`jsSave`
+  contract is unchanged), and it remains fully changeable up until the first Save — a user who navigates
+  there directly (bookmark, or simply changing their mind after arriving via the root page) can still pick
+  any of the three types right up to that point.
+- **FR-105b**: An incoming `?contentType=...` query parameter MUST be honored only while the target project
+  does not yet exist (`isExists() == false`). For an already-existing (and therefore already-locked, FR-59)
+  Config Set, the parameter MUST be silently ignored — the committed type remains authoritative and is never
+  influenced by a stray or mismatched incoming query parameter (e.g. from an old bookmark).
+- **FR-105c**: Leaving `projectKey` empty on the root page and clicking "Open / Create" MUST continue to
+  behave exactly as it did before this change (no new client-side validation was added) — the only change to
+  that path is the additive `?contentType=...` query parameter now also being appended.
+
+**FR-105 layout addendum (added 2026-09-04, `ux-ui-designer` — live UI review, root list page).** FR-105
+above specifies WHAT the "New Config Set" section must contain (projectKey input, JSON/XML/YAML choice,
+choose-once helper text) but not how those elements are arranged; the first implementation rendered them
+as one cramped inline row (input, radios, and the helper hint all side by side), which the owner flagged
+live as poor UX, not a functional defect. This addendum does not change FR-105/FR-105a/FR-105b/FR-105c's
+behavior contract in any way — only the layout:
+- The `projectKey` input and the content-type radio group are stacked in a column, inside a bordered card
+  matching the `f:section` bordered-card convention already applied to `CommonConfigSetPage`/
+  `EnvConfigSetPage` the same day (`border: 1px solid var(--table-border-color, #ddd)`).
+- The `projectKey` input gets a visible "Project key" label (an `f:entry` title) instead of relying on
+  placeholder text alone; the placeholder now only shows the example format (`my-app`).
+- The content-type micro-label ("Content type:") and the "choose once — locked forever after the first
+  Save" hint both render ABOVE the radio row, label first then hint, instead of the hint trailing after
+  the radios.
+- The "Open / Create" button sits outside/below the bordered card, not inside it.
+
+See `docs/design/wireframe-layout.md`'s Page 1 list-view wireframe for the redrawn ASCII layout.
+
+**FR-106/FR-107 addendum (added 2026-09-04) — EnvConfigSetPage live-manual-review fixes: section reorg
+and Activate-reloads-editor-state.** Found during live manual review of the already-shipped FR-51–58/71–89
+base-chain editor UI: these are genuine functional/UX gaps in requirements already formalized above, not new
+features — no prior FR text is changed, these are explicit, dated amendments layered on top of it.
+
+- **FR-106 (section layout — accordion removed, reordered)**: The env-level Config Set edit page (FR-37)
+  MUST render its four sections — Env override version history (FR-38), Secrets manifest (FR-12/13), Base
+  chain (FR-51/FR-55), and Editor (Merged bases/Env override/Merged result, FR-38/FR-73) — as always-visible,
+  non-collapsible framed sections (Jenkins core's own bordered-card section convention), in this exact
+  top-to-bottom order: **(1)** Env override version history, **(2)** Secrets manifest, **(3)** Base chain,
+  **(4)** Editor, last. This supersedes the 2026-09-02 "independently collapsible `<details>` accordion" UI
+  pass referenced elsewhere in this document's own history for these four regions — that collapsible
+  behavior is removed, not merely re-skinned. The Base chain section (previously nested inside the Editor
+  region, ahead of the Merged-bases/Env-override/Merged-result panels — see FR-51/FR-55's original wireframe
+  placement) MUST be its own top-level section, structurally independent of Editor, per this order.
+  `CommonConfigSetPage`'s equivalent three regions (Secrets manifest, Version history, Editor) MUST receive
+  the same accordion-to-framed-section treatment for visual consistency across both edit pages; that page's
+  own section ORDER is unchanged (out of scope for this addendum — only the env page's order was
+  owner-directed to change).
+- **FR-107 (Activate must reload the editor's draft state)**: Activating a version on the env-level Config
+  Set edit page (FR-38's `activateVersion` action) that is DIFFERENT from whichever version's content the
+  base-chain editor/Env-override editor currently has loaded MUST reload that editor state (base-chain rows,
+  the `explicitlyStandalone` flag, and the Env-override editor's content) from the NEWLY ACTIVATED version's
+  own persisted data, then recompute the Merged bases/Env override/Merged result panels accordingly, and
+  clear any active Compare-mode selection. Previously, Activate updated only the version-history table's
+  active-badge/button-disabled state, deliberately leaving the editor draft untouched — this left the
+  operator looking at stale draft content that no longer represented the newly-active version, risking an
+  accidental Save that would overwrite the just-activated version with unrelated draft content.
+
 **`setupConfigTemplate` build-scoped convenience step (added 2026-09-03)**
 
 A new pipeline step, `setupConfigTemplate(projectKey:, environment:, file:, redeployFromRun:, useBase:,
@@ -1493,7 +1597,7 @@ an explicit owner decision before the affected requirements can be considered fi
     certainty" caveat is itself the tell that detection is the wrong tool — prevention removes the ambiguity
     FR-14 was written around instead of trying to police it after the fact.
 - **OQ-2 — Naming convention for common/env Config Set pairs.** The plan doc's example
-  (`apilealtad-common` / `apilealtad-dev`) is informal. Should the plugin enforce a naming convention
+  (`sample-app-common` / `sample-app-dev`) is informal. Should the plugin enforce a naming convention
   (e.g. a shared "project key" field that ties one common + N env Config Sets together structurally), or
   leave pairing purely by operator-supplied string matching in pipeline step parameters (current MVP
   behavior, per the plan doc)? Unenforced pairing risks a typo silently merging the wrong env against the
@@ -1695,7 +1799,7 @@ code-verified status.**
 | FR-21/22 (substitute: real values in, fail if tokens remain) | Design explicitly restates the existing safety guard ("throws if any `#{...}#` remains unsubstituted"). Appears **satisfied**. | Design-level only |
 | FR-23/24 (binding created/updated on real substitution; report versions used) | Design explicitly describes this for `ConfigDeploymentBinding`. Appears **satisfied**, though "report which versions were used" (an explicit build-log line) is not explicitly confirmed as implemented output vs. just implied by the mechanism. | Design-level only |
 | FR-25/26/27 (pinning: use binding if present, fallback+report if absent, no-op if no buildVersion given) | Design explicitly describes the pinned-lookup and unchanged-default-when-no-`buildVersion`-given behavior. The **"must surface that it fell back" (FR-26)** half is not explicitly confirmed — the design doc describes the fallback behavior but not a log/output line announcing it. **Partially addressed** — likely gap on the visibility half specifically. | Design-level only — **needs code verification** on FR-26 |
-| FR-28/29 (multi-project isolation, no hardcoded project names in the model/code) | Design explicitly states the domain model is generic (no `apilealtad`/Caffenio references in the Java type model itself) and keyed per project/env string. Appears **satisfied** at the design level — but NFR-4 (no client name anywhere in the *repo*, including docs/tests/sample data) needs an actual grep of the pushed repo, which this session could not do. **Flag as unverified**, not confirmed-clean. | **Needs code verification — cannot be waived** |
+| FR-28/29 (multi-project isolation, no hardcoded project names in the model/code) | Design explicitly states the domain model is generic (no motivating-client-project references in the Java type model itself) and keyed per project/env string. Appears **satisfied** at the design level — but NFR-4 (no client name anywhere in the *repo*, including docs/tests/sample data) needs an actual grep of the pushed repo, which this session could not do. **Flag as unverified**, not confirmed-clean. | **Needs code verification — cannot be waived** |
 | NFR-1 (no external DB) | Design explicitly uses XStream under `$JENKINS_HOME`. Appears **satisfied**. | Design-level only |
 | NFR-2 (not git-backed) | Design confirms no git dependency. Appears **satisfied**. | Design-level only |
 | NFR-3 (no real secrets at rest) | Same as FR-12/13 — appears satisfied by convention, not by enforcement (FR-14 gap applies here too). | Design-level only |

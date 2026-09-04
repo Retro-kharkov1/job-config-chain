@@ -68,12 +68,48 @@
              right-margin gap above collapses to 0 — replace it with vertical breathing room. */
           .ctsync-banner-row > #compareBannerText { margin-right: 0; margin-bottom: 8px; display: block; }
         }
-        /* Accordion layout (owner-approved plan, 2026-09-02): Secrets manifest / Version history /
-           Editor are now independently collapsible details sections rather than one long
-           always-expanded scroll. Style the summary element to read as a natural evolution of the
-           existing h2 section-heading language, not a jarring new widget. */
-        .ctsync-page summary { font-size: 1.4em; font-weight: 600; margin: 12px 0 4px; cursor: pointer; }
-        .ctsync-page details { margin-bottom: 8px; }
+        /* Section framing (owner-directed, 2026-09-04 — consistency pass matching EnvConfigSetPage's
+           own reorg): Secrets manifest / Version history / Editor are no longer independently
+           collapsible details/summary accordions — each now renders as an always-visible, framed
+           section using Jenkins core's own f:section markup (jenkins-section /
+           jenkins-section__title) instead of a bespoke details/summary widget. Section ORDER on
+           this page is unchanged (Secrets manifest, Version history, Editor) — only
+           EnvConfigSetPage's order was reworked by the owner. NOTE: avoid literal angle-bracket tag
+           syntax anywhere in this style block's comments — Jelly parses the whole document as
+           strict XML, so writing a real tag name surrounded by angle brackets inside a CSS comment
+           is parsed as an actual tag open and breaks the page at runtime (see
+           EnvConfigSetPage/index.jelly's own note on this same bug). */
+        /* Bordered-card framing for f:section (owner report, 2026-09-04): confirmed live that
+           Jenkins core's own default jenkins-section styling only draws a top rule
+           (border-top plus the shared panel-border-color token) and removes even that on the
+           first section of a page — no side/bottom border, no radius, no per-section box — so the
+           three sections above read as one continuous flow instead of distinct framed cards. This
+           adds a full border on every side, a small radius, and bottom margin so each section
+           reads as its own card, matching the visual weight Jenkins core itself uses for
+           grouped-settings tiles/fieldsets elsewhere (e.g. Manage Jenkins, a job's own configure
+           page). Corner radius reuses core's own form-input-border-radius token. Border color
+           deliberately uses table-border-color instead of core's own jenkins-section line color
+           (panel-border-color, which resolves to an extremely light #f4f4f8 at this baseline —
+           confirmed live it renders as an all-but-invisible frame against a white page
+           background); table-border-color already renders as a clearly visible line elsewhere on
+           this same page, so reusing it here keeps the frame consistent with contrast the
+           operator can actually see, with a literal fallback in the same style already used by
+           this file's table-border-color rule above, in case a given Jenkins version doesn't
+           define this token. Scoped to this page's own container only —
+           never a global Jenkins section-style override. The first-of-type/last-child overrides
+           below exist only to beat core's own jenkins-section:first-of-type/
+           jenkins-section:last-child rules (which strip the top border and bottom padding
+           respectively) so every section — including the first and last — keeps a uniform box on
+           all sides. */
+        .ctsync-page .jenkins-section,
+        .ctsync-page .jenkins-section:first-of-type,
+        .ctsync-page .jenkins-section:last-child {
+          border: 1px solid var(--table-border-color, #ddd);
+          border-radius: var(--form-input-border-radius, 6px);
+          padding: 1.25rem;
+          margin: 0 0 16px;
+        }
+        .ctsync-page .jenkins-section:last-child { margin-bottom: 0; }
         /* Table-scroll behavior (same plan): contain a long Version-history/Secrets-manifest
            table's growth so page buttons/sections below it stay reachable, without requiring the
            whole page to scroll. Applied to the wrapper div, never the table element itself —
@@ -88,8 +124,8 @@
         <div class="alert alert-info">${%notExistYet}</div>
       </j:if>
 
-      <details id="secretsManifestDetails">
-        <summary>${%secretsManifest.heading}</summary>
+      <div id="secretsManifestDetails">
+      <f:section title="${%secretsManifest.heading}">
         <p>A path listed here is structurally locked: the JSON editor below may only hold the literal
            <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
            value is supplied only via the Jenkins credential picked below, never typed here.</p>
@@ -144,10 +180,11 @@
                     onclick="addSecret();">${%bindCredential.label}</button>
           </div>
         </f:entry>
-      </details>
+      </f:section>
+      </div>
 
-      <details id="versionHistoryDetails">
-        <summary>${%versionHistory.heading}</summary>
+      <div id="versionHistoryDetails">
+      <f:section title="${%versionHistory.heading}">
         <p>Click a row to compare it against the editor's current draft (no checkbox required —
            click any row again to return to editing).</p>
         <div class="ctsync-scroll-table">
@@ -207,16 +244,18 @@
             </td>
           </tr>
         </template>
-      </details>
+      </f:section>
+      </div>
 
-      <details id="editorDetails" open="open">
-        <summary>${%editor.heading}</summary>
+      <div id="editorDetails">
+      <f:section title="${%editor.heading}">
 
         <div id="saveBanner" class="alert alert-danger" style="display:none"></div>
 
-        <div class="ctsync-section-header ctsync-editor-header-row">
-          <b>${%editor.heading}</b>
-        </div>
+        <!-- Stray duplicate heading removed (found live, 2026-09-04): f:section already renders
+             this same editor.heading text as its own title bar above — a second bold heading
+             here was leftover from before the accordion-to-f:section conversion and is dead
+             weight now that no sibling element still needs this row's flex layout. -->
         <div class="ctsync-btn-row">
           <button type="button" id="modeEditBtn"
                  class="jenkins-button jenkins-button--primary" title="${%modeEdit.title}"
@@ -246,11 +285,51 @@
               <span id="contentTypeLockedDisplay">${it.contentTypeValue}&#160;&#128274; (locked — set at first Save, immutable)</span>
             </j:when>
             <j:otherwise>
+              <!-- FR-105: pre-selects whichever radio matches getPreselectedContentTypeValue()
+                   (normally JSON per FR-59, or the type carried over from the root list page's own
+                   picker via ?contentType=...) instead of always hard-defaulting to JSON. Written as
+                   an explicit j:choose per radio (rather than a computed "checked" attribute value)
+                   to avoid relying on Jelly's boolean-attribute-omission behavior for a plain HTML
+                   &lt;input&gt; element, matching this file's own existing j:choose/j:when convention
+                   (see the Activate-button branch above). -->
+              <j:set var="preselectedContentType" value="${it.preselectedContentTypeValue}"/>
               <span id="contentTypeUnlockedGroup">
-                <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="JSON" checked="checked" onclick="onContentTypeChange('JSON');"/> JSON</label>
-                <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="XML" onclick="onContentTypeChange('XML');"/> XML</label>
-                <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="YAML" onclick="onContentTypeChange('YAML');"/> YAML</label>
-                <span style="color:#666">&#9432; choose once — locked forever after the first Save</span>
+                <!-- Hint-before-radios order (owner-directed consistency pass, 2026-09-04): the
+                     root list page's own New Config Set picker was redesigned to read
+                     label -> hint -> radios (a decision reached first, then reused here) instead
+                     of radios -> trailing hint, since a trailing hint reads as a squeezed-in
+                     afterthought rather than something read before making the choice. -->
+                <span style="color:#666;display:block;margin-bottom:4px">&#9432; choose once — locked forever after the first Save</span>
+                <label style="margin-right:8px">
+                  <j:choose>
+                    <j:when test="${preselectedContentType == 'JSON'}">
+                      <input type="radio" name="contentTypeRadio" value="JSON" checked="checked" onclick="onContentTypeChange('JSON');"/>
+                    </j:when>
+                    <j:otherwise>
+                      <input type="radio" name="contentTypeRadio" value="JSON" onclick="onContentTypeChange('JSON');"/>
+                    </j:otherwise>
+                  </j:choose>
+                  JSON</label>
+                <label style="margin-right:8px">
+                  <j:choose>
+                    <j:when test="${preselectedContentType == 'XML'}">
+                      <input type="radio" name="contentTypeRadio" value="XML" checked="checked" onclick="onContentTypeChange('XML');"/>
+                    </j:when>
+                    <j:otherwise>
+                      <input type="radio" name="contentTypeRadio" value="XML" onclick="onContentTypeChange('XML');"/>
+                    </j:otherwise>
+                  </j:choose>
+                  XML</label>
+                <label style="margin-right:8px">
+                  <j:choose>
+                    <j:when test="${preselectedContentType == 'YAML'}">
+                      <input type="radio" name="contentTypeRadio" value="YAML" checked="checked" onclick="onContentTypeChange('YAML');"/>
+                    </j:when>
+                    <j:otherwise>
+                      <input type="radio" name="contentTypeRadio" value="YAML" onclick="onContentTypeChange('YAML');"/>
+                    </j:otherwise>
+                  </j:choose>
+                  YAML</label>
               </span>
             </j:otherwise>
           </j:choose>
@@ -285,7 +364,7 @@
         <f:entry title="${%changeNote.entryTitle}">
           <input class="setting-input" type="text" id="noteField" required="required"/>
         </f:entry>
-        <input type="hidden" id="contentTypeField" value="${it.contentTypeValue}"/>
+        <input type="hidden" id="contentTypeField" value="${it.preselectedContentTypeValue}"/>
 
         <!-- Bottom-of-form position (owner request, 2026-09-02 UI reorg): Save/Save &amp; Activate
              relocated below the change-note field — the natural end-of-form position — instead of
@@ -297,7 +376,8 @@
                   class="jenkins-button"
                   title="${%saveActivate.title}" onclick="saveClicked(true);">${%saveActivate.label}</button>
         </div>
-      </details>
+      </f:section>
+      </div>
 
       <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
       <link rel="stylesheet" href="${rootURL}/plugin/config-template-sync/monaco/vs/editor/editor.main.css"/>
@@ -306,7 +386,7 @@
         // FR-59/FR-63/FR-64: this Config Set's content type — committed and immutable once a first
         // version exists, otherwise the picker's live selection (default JSON). Drives the Monaco
         // `language` mode and which diagnostics/format provider attaches.
-        var currentContentType = '${it.contentTypeValue}';
+        var currentContentType = '${it.preselectedContentTypeValue}';
         var editor;
         var diffEditor;
         var yamlCheckTimer = null;
@@ -448,16 +528,13 @@
           });
         }
 
-        // Accordion layout (2026-09-02): Monaco measures its container's computed size at
-        // creation time, so an editor created while its ancestor details element is closed can render
-        // at zero size. "Editor" is open by default so this isn't hit on initial load, but if a
-        // user collapses then reopens it, force every live Monaco instance in this section to
-        // re-measure via layout() so it never renders mis-sized.
-        document.getElementById('editorDetails').addEventListener('toggle', function (evt) {
-          if (!evt.target.open) { return; }
-          if (editor) { editor.layout(); }
-          if (diffEditor) { diffEditor.layout(); }
-        });
+        // Section framing (2026-09-04): the Editor section is no longer a collapsible details element —
+        // every section on this page is always visible now, so there is no expand/collapse event
+        // left to force a Monaco re-measure from (the accordion-era `editorDetails` `toggle`
+        // listener that used to call `.layout()` here has been removed). Both Monaco instances on
+        // this page are created with `automaticLayout: true`, which is sufficient on its own: they
+        // already re-measure on window resize, and their container is never hidden at creation time
+        // or afterward.
 
         // Auto pretty-print JSON content whenever it's (re)loaded into the editable Monaco
         // editor, so the user never sees a minified/however-it-was-stored blob and never has to

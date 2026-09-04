@@ -54,8 +54,8 @@ flowchart TD
         NewBtn["[ + New Config Set ]"]
         subgraph Table["Table (one row per Common Config Set)"]
             Col["Columns: Name | Active version # | Last modified"]
-            Row1["apilealtad-common   v7   2026-08-20"]
-            Row2["andatti-common      v3   2026-07-11"]
+            Row1["sample-app-common   v7   2026-08-20"]
+            Row2["billing-common      v3   2026-07-11"]
         end
     end
     NewBtn --> Row1
@@ -75,8 +75,8 @@ existing editor area switches to Monaco's built-in diff mode (tech-lead Finding 
 
 ```mermaid
 flowchart TD
-    subgraph EditPage["Global edit page — apilealtad-common"]
-        Breadcrumb["Config Templates / apilealtad-common"]
+    subgraph EditPage["Global edit page — sample-app-common"]
+        Breadcrumb["Config Templates / sample-app-common"]
         subgraph EditorArea["Editor area (ONE Monaco instance)"]
             ModeToggle["View: [ Edit ]  [ Compare selected versions ]"]
             Editor["Monaco JSON editor\n(syntax highlight, bracket match,\nlanguage: 'json')"]
@@ -136,10 +136,10 @@ action, listing Env Config Sets instead of Common Config Sets.
 
 ```mermaid
 flowchart TD
-    subgraph EnvListPage["Env list page — apilealtad / dev"]
+    subgraph EnvListPage["Env list page — sample-app / dev"]
         NewBtn2["[ + New Env Config Set ]"]
         subgraph Table2["Table"]
-            ERow1["apilealtad-dev   v4   2026-08-19"]
+            ERow1["sample-app-dev   v4   2026-08-19"]
         end
     end
     NewBtn2 --> ERow1
@@ -160,13 +160,13 @@ it is not a separate editor a user types into.
 
 ```mermaid
 flowchart LR
-    subgraph EnvEditPage["Env edit page — apilealtad-dev"]
+    subgraph EnvEditPage["Env edit page — sample-app-dev"]
         direction TB
-        Picker["Overrides Common Config Set: [ apilealtad-common ▾ ]  (immutable after creation, FR-35)"]
+        Picker["Overrides Common Config Set: [ sample-app-common ▾ ]  (immutable after creation, FR-35)"]
         subgraph Panels["Three panels, left to right"]
             direction LR
             subgraph GlobalPanel["Global (read-only)\nMonaco, readOnly:true"]
-                GContent["active content of\napilealtad-common v7"]
+                GContent["active content of\nsample-app-common v7"]
             end
             subgraph OverridePanel["Env override (editable)\nMonaco, language:'json'\n★ the only editable panel"]
                 OContent["sparse merge-patch overlay\n(FR-37 — never a full copy)"]
