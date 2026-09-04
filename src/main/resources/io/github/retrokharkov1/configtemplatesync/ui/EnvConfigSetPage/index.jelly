@@ -74,12 +74,52 @@
              right-margin gap above collapses to 0 — replace it with vertical breathing room. */
           .ctsync-banner-row > #compareBannerText { margin-right: 0; margin-bottom: 8px; display: block; }
         }
-        /* Accordion layout (owner-approved plan, 2026-09-02): Secrets manifest / Env override
-           version history / Editor are now independently collapsible details sections rather
-           than one long always-expanded scroll. Style the summary element to read as a natural
-           evolution of the existing h2 section-heading language, not a jarring new widget. */
-        .ctsync-page summary { font-size: 1.4em; font-weight: 600; margin: 12px 0 4px; cursor: pointer; }
-        .ctsync-page details { margin-bottom: 8px; }
+        /* Section reorg (owner-directed, 2026-09-04): Env override version history / Secrets
+           manifest / Base chain / Editor are no longer independently collapsible details/summary
+           accordions — every operator needs to see all four at once (the collapse/expand step
+           was adding friction, not reducing it), so each now renders as an always-visible,
+           framed section using Jenkins core's own f:section markup (jenkins-section /
+           jenkins-section__title) instead of a bespoke details/summary widget.
+           New top-to-bottom order: Env override version history, Secrets manifest, Base chain,
+           Editor (last) — see this page's own section markup below for the reasoning per
+           section. NOTE: this comment block deliberately avoids literal angle-bracket tag
+           syntax anywhere in this file's style block — Jelly parses the whole document as
+           strict XML, so literal angle-bracket tag text inside a CSS comment is parsed as a
+           real XML tag open, not inert text, and silently breaks the page (found live,
+           2026-09-04: a table-cell tag written this way in a comment further down caused a
+           fatal "element type td must be terminated" SAXParseException at runtime). */
+        /* Bordered-card framing for f:section (owner report, 2026-09-04): confirmed live that
+           Jenkins core's own default jenkins-section styling only draws a top rule
+           (border-top plus the shared panel-border-color token) and removes even that on the
+           first section of a page — no side/bottom border, no radius, no per-section box — so
+           the four sections above read as one continuous flow instead of distinct framed cards.
+           This adds a full border on every side, a small radius, and bottom margin so each
+           section reads as its own card, matching the visual weight Jenkins core itself uses for
+           grouped-settings tiles/fieldsets elsewhere (e.g. Manage Jenkins, a job's own configure
+           page). Corner radius reuses core's own form-input-border-radius token. Border color
+           deliberately uses table-border-color instead of core's own jenkins-section line color
+           (panel-border-color, which resolves to an extremely light #f4f4f8 at this baseline —
+           confirmed live it renders as an all-but-invisible frame against a white page
+           background); table-border-color already renders as a clearly visible line elsewhere on
+           this same page (the version-history/base-chain tables), so reusing it here keeps the
+           frame consistent with contrast the operator can actually see, with a literal fallback
+           in the same
+           style already used by this file's table-border-color/table-hover-color rules above, in
+           case a given Jenkins version doesn't define one of these tokens. Scoped to this page's
+           own container only — never a global Jenkins section-style override. The
+           first-of-type/last-child overrides below exist only to beat core's own
+           jenkins-section:first-of-type/jenkins-section:last-child rules (which strip the top
+           border and bottom padding respectively) so every section — including the first and
+           last — keeps a uniform box on all sides. */
+        .ctsync-page .jenkins-section,
+        .ctsync-page .jenkins-section:first-of-type,
+        .ctsync-page .jenkins-section:last-child {
+          border: 1px solid var(--table-border-color, #ddd);
+          border-radius: var(--form-input-border-radius, 6px);
+          padding: 1.25rem;
+          margin: 0 0 16px;
+        }
+        .ctsync-page .jenkins-section:last-child { margin-bottom: 0; }
         /* Table-scroll behavior (same plan): contain a long Version-history/Secrets-manifest
            table's growth so page buttons/sections below it stay reachable, without requiring the
            whole page to scroll. Applied to the wrapper div, never the table element itself —
@@ -88,6 +128,14 @@
         /* Base-chain editor (FR-51/FR-55/FR-56/FR-57/FR-71, wireframe Page 2). */
         .ctsync-basechain-table { width: 100%; margin-bottom: 8px; }
         .ctsync-basechain-table th, .ctsync-basechain-table td { padding: 4px 6px; text-align: left; }
+        /* Compact, consistently-sized dropdowns for the base-chain table's Project/Pinned-version
+           selects (real bug found in live manual review, 2026-09-04): both selects are built with
+           the bare `jenkins-select__input` class, which inherits Jenkins core's full-width sizing
+           — oversized for this table's narrow columns and visually overflows/clips against the
+           table cell. Scoped by this one table-level selector so BOTH possible selects per row (Project
+           — always present; Pinned version — only in PINNED mode) are guaranteed identical sizing
+           via a single rule, never two separately-maintained ones. */
+        .ctsync-basechain-table select.jenkins-select__input { width: 100%; max-width: 200px; }
         .ctsync-basechain-row select, .ctsync-basechain-row input[type="radio"] { vertical-align: middle; }
         .ctsync-basechain-reorder-btn, .ctsync-basechain-remove-btn { min-width: 28px; }
         .ctsync-basechain-row-toggle { text-decoration: none; }
@@ -112,66 +160,15 @@
         <div class="alert alert-info">${%notExistYet}</div>
       </j:if>
 
-      <details id="secretsManifestDetails">
-        <summary>${%secretsManifest.heading}</summary>
-        <p>A path listed here is structurally locked: the JSON editor below may only hold the literal
-           <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
-           value is supplied only via the Jenkins credential picked below, never typed here. This
-           manifest is independent of the paired Common Config Set's manifest — env overrides declare
-           their own secret paths.</p>
-        <div class="ctsync-scroll-table">
-          <table class="jenkins-table" style="width:60%">
-            <thead><tr><th>${%column.dottedPath}</th><th>${%column.credential}</th><th/></tr></thead>
-            <tbody id="secretsManifestTbody">
-              <j:if test="${it.exists}">
-                <j:forEach var="entry" items="${it.configSet.secretsManifest.entrySet()}">
-                  <tr>
-                    <td>${entry.key}</td>
-                    <td>${entry.value}</td>
-                    <td>
-                      <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
-                              data-secret-path="${entry.key}"
-                              title="${%removeSecret.title}"
-                              onclick="removeSecret(this.getAttribute('data-secret-path'));">&#128465; ${%removeSecret.label}</button>
-                    </td>
-                  </tr>
-                </j:forEach>
-              </j:if>
-            </tbody>
-          </table>
-        </div>
-        <!-- In-place-update template (2026-09-02): see CommonConfigSetPage/index.jelly's identical
-             template for the full rationale — addSecret/removeSecret re-render this tbody from JSON
-             instead of location.reload()-ing the whole page. -->
-        <template id="secretRowTemplate" data-remove-title="${%removeSecret.title}">
-          <tr>
-            <td class="js-secret-path"/>
-            <td class="js-secret-cred"/>
-            <td>
-              <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn">
-                &#128465; ${%removeSecret.label}</button>
-            </td>
-          </tr>
-        </template>
-        <f:entry title="${%addSecret.entryTitle}">
-          <div class="ctsync-secret-form">
-            <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
-            <div class="jenkins-select">
-              <select class="jenkins-select__input" id="secretCredentialId">
-                <j:forEach var="cid" items="${it.availableCredentialIds}">
-                  <option value="${cid}">${cid}</option>
-                </j:forEach>
-              </select>
-            </div>
-            <button type="button" class="jenkins-button"
-                    title="${%bindCredential.title}"
-                    onclick="addSecret();">${%bindCredential.label}</button>
-          </div>
-        </f:entry>
-      </details>
-
-      <details id="versionHistoryDetails">
-        <summary>${%versionHistory.heading}</summary>
+      <!-- Section reorg (owner-directed, 2026-09-04): Env override version history now renders
+           FIRST (previously 2nd) — an operator's most common orientation question on arrival is
+           "what's active / what changed recently," not the secrets manifest. Non-collapsible
+           `<f:section>` framed card (see the CSS-block comment above for why `<details>` was
+           dropped); the outer `<div id="versionHistoryDetails">` id is kept purely so any
+           external reference to it (bookmarked anchor, browser extension, etc.) still resolves
+           to the right region — nothing in this page's own JS/tests depends on it. -->
+      <div id="versionHistoryDetails">
+      <f:section title="${%versionHistory.heading}">
         <p>Click a row to compare it against the Env-override editor's current draft (no checkbox
            required — click any row again to return to editing).</p>
         <div class="ctsync-scroll-table">
@@ -274,10 +271,110 @@
             </td>
           </tr>
         </template>
-      </details>
+      </f:section>
+      </div>
 
-      <details id="editorDetails" open="open">
-        <summary>${%editor.heading}</summary>
+      <!-- Secrets manifest is now 2nd (previously 1st) — see the section-reorg note above. -->
+      <div id="secretsManifestDetails">
+      <f:section title="${%secretsManifest.heading}">
+        <p>A path listed here is structurally locked: the JSON editor below may only hold the literal
+           <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
+           value is supplied only via the Jenkins credential picked below, never typed here. This
+           manifest is independent of the paired Common Config Set's manifest — env overrides declare
+           their own secret paths.</p>
+        <div class="ctsync-scroll-table">
+          <table class="jenkins-table" style="width:60%">
+            <thead><tr><th>${%column.dottedPath}</th><th>${%column.credential}</th><th/></tr></thead>
+            <tbody id="secretsManifestTbody">
+              <j:if test="${it.exists}">
+                <j:forEach var="entry" items="${it.configSet.secretsManifest.entrySet()}">
+                  <tr>
+                    <td>${entry.key}</td>
+                    <td>${entry.value}</td>
+                    <td>
+                      <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
+                              data-secret-path="${entry.key}"
+                              title="${%removeSecret.title}"
+                              onclick="removeSecret(this.getAttribute('data-secret-path'));">&#128465; ${%removeSecret.label}</button>
+                    </td>
+                  </tr>
+                </j:forEach>
+              </j:if>
+            </tbody>
+          </table>
+        </div>
+        <!-- In-place-update template (2026-09-02): see CommonConfigSetPage/index.jelly's identical
+             template for the full rationale — addSecret/removeSecret re-render this tbody from JSON
+             instead of location.reload()-ing the whole page. -->
+        <template id="secretRowTemplate" data-remove-title="${%removeSecret.title}">
+          <tr>
+            <td class="js-secret-path"/>
+            <td class="js-secret-cred"/>
+            <td>
+              <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn">
+                &#128465; ${%removeSecret.label}</button>
+            </td>
+          </tr>
+        </template>
+        <f:entry title="${%addSecret.entryTitle}">
+          <div class="ctsync-secret-form">
+            <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
+            <div class="jenkins-select">
+              <select class="jenkins-select__input" id="secretCredentialId">
+                <j:forEach var="cid" items="${it.availableCredentialIds}">
+                  <option value="${cid}">${cid}</option>
+                </j:forEach>
+              </select>
+            </div>
+            <button type="button" class="jenkins-button"
+                    title="${%bindCredential.title}"
+                    onclick="addSecret();">${%bindCredential.label}</button>
+          </div>
+        </f:entry>
+      </f:section>
+      </div>
+
+      <!-- Base chain (FR-51/FR-55) is now its OWN top-level section, 3rd — pulled out of the
+           Editor section entirely (real gap found in live manual review: it previously lived
+           inside "Editor," after the descriptive paragraph, ahead of the Merged-bases/Env-override/
+           Merged-result panels, which buried a decision (which bases feed this env) underneath an
+           unrelated "Editor" label). Every existing id/function reference below (`baseChainEditor`,
+           `baseChainRowsBody`, `addBaseChainRowBtn`, `explicitlyStandaloneCheckbox`, etc.) is
+           unchanged — this is a structural move of the containing markup only, not a functional
+           rewrite. No Monaco instance lives in this section (the per-row expanded resolved-content
+           `<pre>` blocks are plain read-only text, not Monaco), so — unlike the Editor section below
+           — there is no editor `.layout()` call this section ever needed, accordion or not. -->
+      <f:section title="${%baseChain.heading}">
+        <div id="baseChainEditor">
+          <p>Ordered list of base Config Sets folded left-to-right before this env's own overlay is
+             applied — later rows win on overlapping keys. Each row either always tracks its
+             project's currently-ACTIVE version, or pins to one specific historical version. Click a
+             row's &#9656; to expand its resolved (read-only) content.</p>
+          <!-- FR-89: mutually exclusive with having any base-chain rows — checking this clears the
+               chain, greys out (never hides) the row table below, and disables Add base. -->
+          <div class="ctsync-standalone-row">
+            <label>
+              <input type="checkbox" id="explicitlyStandaloneCheckbox"
+                     onchange="onExplicitlyStandaloneChange(this.checked);"/>
+              ${%explicitlyStandalone.label}
+            </label>
+          </div>
+          <table class="jenkins-table ctsync-basechain-table" id="baseChainRowsTable">
+            <thead><tr><th/><th>#</th><th>Project</th><th>Mode</th><th>Pinned version</th><th/></tr></thead>
+            <tbody id="baseChainRowsBody"/>
+          </table>
+          <div class="ctsync-btn-row">
+            <button type="button" id="addBaseChainRowBtn" class="jenkins-button"
+                    title="${%addBase.title}"
+                    onclick="addBaseChainRow();">&#10133; ${%addBase.label}</button>
+          </div>
+        </div>
+      </f:section>
+
+      <!-- Editor is now LAST, 4th (previously the only section with everything, including the
+           base chain, crammed into it). -->
+      <div id="editorDetails">
+      <f:section title="${%editor.heading}">
 
         <!-- FR-41/44: page-level action, deliberately NOT a 4th mode of the Env-override panel's own
              [Editing]/[Compare] row — see wireframe-layout.md's reasoning note. Clicking it temporarily
@@ -314,32 +411,6 @@
           </div>
         </div>
 
-        <div id="baseChainEditor">
-          <h3>${%baseChain.heading}</h3>
-          <p>Ordered list of base Config Sets folded left-to-right before this env's own overlay is
-             applied — later rows win on overlapping keys. Each row either always tracks its
-             project's currently-ACTIVE version, or pins to one specific historical version. Click a
-             row's &#9656; to expand its resolved (read-only) content.</p>
-          <!-- FR-89: mutually exclusive with having any base-chain rows — checking this clears the
-               chain, greys out (never hides) the row table below, and disables Add base. -->
-          <div class="ctsync-standalone-row">
-            <label>
-              <input type="checkbox" id="explicitlyStandaloneCheckbox"
-                     onchange="onExplicitlyStandaloneChange(this.checked);"/>
-              ${%explicitlyStandalone.label}
-            </label>
-          </div>
-          <table class="jenkins-table ctsync-basechain-table" id="baseChainRowsTable">
-            <thead><tr><th/><th>#</th><th>Project</th><th>Mode</th><th>Pinned version</th><th/></tr></thead>
-            <tbody id="baseChainRowsBody"/>
-          </table>
-          <div class="ctsync-btn-row">
-            <button type="button" id="addBaseChainRowBtn" class="jenkins-button"
-                    title="${%addBase.title}"
-                    onclick="addBaseChainRow();">&#10133; ${%addBase.label}</button>
-          </div>
-        </div>
-
         <div id="mergeLayout" class="ctsync-merge-grid">
           <div class="ctsync-merge-top">
             <div class="ctsync-merge-pane" id="mergedBasesPane">
@@ -359,6 +430,39 @@
                      indicator, same placement convention as the Global page's own row. -->
                 <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
               </div>
+
+              <!-- FR-104 (2026-09-03, real gap found in live manual testing): FR-60's "no own
+                   content-type picker" rule has exactly one exception — an explicitlyStandalone
+                   version (FR-86/87) has zero base configs, so there is no chain to resolve a
+                   ContentType from at all. Reuses CommonConfigSetPage's own #contentTypeRow pattern
+                   verbatim (same locked/unlocked markup, same "choose once — locked forever after
+                   the first Save" convention) — hidden by default here (never shown for the ordinary
+                   "follows the chain" case), toggled by updateEnvContentTypeRowVisibility() below,
+                   which is driven purely by the explicitlyStandaloneCheckbox's live state, never by
+                   it.exists alone. Locking (j:when it.contentTypeLocked) is computed server-side at
+                   render time exactly like Common's, from whether ANY version of this env Config Set
+                   already exists — so once a version exists, this renders the locked display
+                   regardless of whether that version was saved standalone or not, satisfying "must
+                   lock forever, whether standalone or not" without a second lock-state accessor. -->
+              <div class="ctsync-btn-row" id="envContentTypeRow" style="display:none">
+                <label style="font-weight:600;margin-right:8px">${%contentType.label}</label>
+                <j:choose>
+                  <j:when test="${it.contentTypeLocked}">
+                    <span id="envContentTypeLockedDisplay">${it.contentTypeValue}&#160;&#128274; (locked — set at first Save, immutable)</span>
+                  </j:when>
+                  <j:otherwise>
+                    <span id="envContentTypeUnlockedGroup">
+                      <!-- Hint-before-radios order (owner-directed consistency pass, 2026-09-04) —
+                           see CommonConfigSetPage/index.jelly's identical note. -->
+                      <span style="color:#666;display:block;margin-bottom:4px">&#9432; choose once — locked forever after the first Save</span>
+                      <label style="margin-right:8px"><input type="radio" name="envContentTypeRadio" value="JSON" checked="checked" onclick="onEnvContentTypeChange('JSON');"/> JSON</label>
+                      <label style="margin-right:8px"><input type="radio" name="envContentTypeRadio" value="XML" onclick="onEnvContentTypeChange('XML');"/> XML</label>
+                      <label style="margin-right:8px"><input type="radio" name="envContentTypeRadio" value="YAML" onclick="onEnvContentTypeChange('YAML');"/> YAML</label>
+                    </span>
+                  </j:otherwise>
+                </j:choose>
+              </div>
+
               <!-- In-place update (2026-09-02): this env page previously had no save-feedback banner
                    at all (a classic form POST + redirect needed none) — now that Save/Save &amp;
                    Activate are AJAX, saveClicked() surfaces both success and error here, same div/
@@ -412,7 +516,8 @@
           <button type="button" id="discardAllBtn" class="jenkins-button jenkins-button--destructive"
                   title="${%discardAll.title}" onclick="discardAllChangesClicked();">${%discardAll.label}</button>
         </div>
-      </details>
+      </f:section>
+      </div>
 
       <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
       <link rel="stylesheet" href="${rootURL}/plugin/config-template-sync/monaco/vs/editor/editor.main.css"/>
@@ -462,10 +567,18 @@
         var lastSavedOverrideContent = __overrideSeed;
         var lastSavedBaseChainJson = __baseChainSeed;
         var lastSavedExplicitlyStandalone = explicitlyStandalone;
-        // FR-60: an ENV Config Set has no own content-type picker — its language mode always
-        // follows the resolved base chain's shared ContentType, updated on every recomputeMerge
-        // response (default JSON until the first resolve lands).
-        var currentContentType = 'JSON';
+        // FR-60: an ENV Config Set has no own content-type picker for the ordinary "follows the
+        // base chain" case — its language mode always follows the resolved base chain's shared
+        // ContentType, updated on every recomputeMerge response. FR-104 (2026-09-03): seeded from
+        // the server's own committed value (JSON when no version exists yet, exactly like
+        // CommonConfigSetPage's identical seed) rather than a hardcoded literal, so an ALREADY-SAVED
+        // explicitlyStandalone version (no chain to resolve from) renders with its true persisted
+        // type immediately, instead of flashing JSON until the first recomputeMerge response lands.
+        var currentContentType = '${it.contentTypeValue}';
+        // FR-104: "last saved" content-type baseline, same discard-target convention as
+        // lastSavedOverrideContent/lastSavedBaseChainJson/lastSavedExplicitlyStandalone above —
+        // refreshed on every successful save, read back by discardAllChangesClicked.
+        var lastSavedContentType = currentContentType;
         var yamlCheckTimer = null;
 
         // FR-63/FR-64: JSON/XML/YAML all dispatch through this one language-mode lookup — no
@@ -578,10 +691,55 @@
           if (explicitlyStandalone) {
             document.getElementById('baseChainEditor').className = 'ctsync-standalone-active';
           }
+          updateEnvContentTypeRowVisibility(); // FR-104
           renderBaseChainRows();
           recomputeMerge();
           attachOverrideChangeListener();
         });
+
+        // FR-104: the env content-type picker row is visible ONLY while explicitlyStandalone is
+        // checked (FR-60's "follows the chain" rule is unaffected — and the row stays hidden —
+        // whenever it is unchecked, regardless of whether a version already exists). Whether the
+        // row's own inner content renders as the locked display or the interactive radio group is a
+        // separate, server-computed decision (${it.contentTypeLocked}, baked into the Jelly markup at
+        // render time) that this function never touches.
+        function updateEnvContentTypeRowVisibility() {
+          var row = document.getElementById('envContentTypeRow');
+          if (row) { row.style.display = explicitlyStandalone ? '' : 'none'; }
+        }
+
+        // FR-104: mirrors CommonConfigSetPage's onContentTypeChange, but this page shares its
+        // ContentType across THREE live Monaco models (overrideEditor/mergedEditor/mergedBasesEditor)
+        // rather than one — updates every model's language via setModelLanguage (never recreating any
+        // editor instance), the exact same mechanism recomputeMerge below already uses whenever a
+        // resolved chain's ContentType changes, so both paths converge on one update mechanism. Only
+        // reachable while the picker is unlocked (envContentTypeRow's radio group), i.e. only before
+        // this env Config Set's first version exists.
+        function onEnvContentTypeChange(type) {
+          if (currentContentType === type) { return; }
+          currentContentType = type;
+          var lang = languageForType(type);
+          if (overrideEditor) { monaco.editor.setModelLanguage(overrideEditor.getModel(), lang); }
+          if (mergedEditor) { monaco.editor.setModelLanguage(mergedEditor.getModel(), lang); }
+          if (mergedBasesEditor) { monaco.editor.setModelLanguage(mergedBasesEditor.getModel(), lang); }
+          recomputeMerge();
+        }
+
+        // FR-104 follow-up: mirrors CommonConfigSetPage's applyContentTypeLocked — this env page's
+        // very first successful standalone save commits (locks) the content type server-side
+        // (jsSave's contentTypeLocked/contentTypeValue response fields, unchanged shape from Common's)
+        // — without a page reload, swap the still-editable radio group for the same locked/read-only
+        // display the server would have rendered on a fresh page load.
+        function applyEnvContentTypeLocked(type) {
+          if (document.getElementById('envContentTypeLockedDisplay')) { return; }
+          var unlockedGroup = document.getElementById('envContentTypeUnlockedGroup');
+          if (!unlockedGroup) { return; }
+          var locked = document.createElement('span');
+          locked.id = 'envContentTypeLockedDisplay';
+          locked.textContent = type + ' 🔒 (locked — set at first Save, immutable)';
+          unlockedGroup.parentNode.replaceChild(locked, unlockedGroup);
+          currentContentType = type;
+        }
 
         // ---- Base-chain editor (FR-51/FR-55/FR-56/FR-57/FR-71/FR-72/FR-89) ----
 
@@ -628,6 +786,7 @@
           }
           document.getElementById('addBaseChainRowBtn').disabled = checked;
           document.getElementById('baseChainEditor').className = checked ? 'ctsync-standalone-active' : '';
+          updateEnvContentTypeRowVisibility(); // FR-104
           renderBaseChainRows();
           recomputeMerge();
         }
@@ -851,22 +1010,14 @@
           if (el) { el.style.display = (el.style.display === 'none') ? 'block' : 'none'; }
         }
 
-        // Accordion layout (2026-09-02): Monaco measures its container's computed size at
-        // creation time, so an editor created while its ancestor details element is closed can render
-        // at zero size. "Editor" is open by default so this isn't hit on initial load, but if a
-        // user collapses then reopens it, force every live Monaco instance in this section to
-        // re-measure via layout() so none of them render mis-sized. Only call layout() on
-        // instances that are actually non-null at the moment `toggle` fires (e.g. diffEditor only
-        // exists while Compare mode is active; generatedTemplateEditor only after Generate
-        // Template has been used at least once).
-        document.getElementById('editorDetails').addEventListener('toggle', function (evt) {
-          if (!evt.target.open) { return; }
-          if (overrideEditor) { overrideEditor.layout(); }
-          if (mergedEditor) { mergedEditor.layout(); }
-          if (mergedBasesEditor) { mergedBasesEditor.layout(); }
-          if (diffEditor) { diffEditor.layout(); }
-          if (generatedTemplateEditor) { generatedTemplateEditor.layout(); }
-        });
+        // Section reorg (2026-09-04): the Editor section is no longer a collapsible details element —
+        // every section on this page is now always visible, so there is no expand/collapse event
+        // left to force a Monaco re-measure from (the accordion-era `editorDetails` `toggle`
+        // listener that used to call `.layout()` here has been removed). Every Monaco instance on
+        // this page is created with `automaticLayout: true`, which is sufficient on its own now:
+        // it already re-measures on window resize and on its own container's size changes, and
+        // since the container is never hidden (no `display:none` ancestor) at creation time or
+        // afterward, there is no zero-size-at-creation case left to guard against.
 
         // Auto pretty-print JSON content whenever it's (re)loaded into the editable override
         // editor, so the user never sees a minified/however-it-was-stored blob and never has to
@@ -1022,8 +1173,10 @@
           // disposed (Compare mode), no-op instead of throwing on a null dereference.
           if (!overrideEditor) { return; }
           document.getElementById('baseChainField').value = JSON.stringify(baseChainRows);
+          // FR-104: currentContentType is passed as the standalone-with-no-chain fallback — the
+          // server ignores it whenever the resolved chain is non-empty (previewMergeImpl javadoc).
           proxy.previewMerge(overrideEditor.getValue(), JSON.stringify(baseChainRows), explicitlyStandalone,
-              function (t) {
+              currentContentType, function (t) {
             var r = t.responseObject();
             var indicator = document.getElementById('mergedStaleIndicator');
             if (r.ok) {
@@ -1082,7 +1235,13 @@
             note: note,
             activate: activate,
             baseChainJson: JSON.stringify(baseChainRows),
-            explicitlyStandalone: explicitlyStandalone
+            explicitlyStandalone: explicitlyStandalone,
+            // FR-104: only meaningful (and only ever read server-side) on this env Config Set's
+            // very first save while explicitlyStandalone is true — the non-standalone case sends
+            // null here, preserving FR-60's existing "type always follows the chain" behavior
+            // unchanged (ConfigSetPage#saveImpl already defaults an absent/null value to JSON,
+            // exactly as it did before this field existed on the env page's payload).
+            contentType: explicitlyStandalone ? currentContentType : null
           };
           document.getElementById('saveBtn').disabled = true;
           document.getElementById('saveActivateBtn').disabled = true;
@@ -1098,6 +1257,9 @@
             renderVersionHistoryRows(r.versions);
             if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
             document.getElementById('noteField').value = '';
+            // FR-104: this env Config Set's very first successful save locks the content-type
+            // picker's display, same trigger shape as CommonConfigSetPage's identical call.
+            if (r.contentTypeLocked) { applyEnvContentTypeLocked(r.contentTypeValue); }
             // FR-74: refresh the discard-target baseline on every successful save — "last saved"
             // always means the most recent successful save, not the original page load (saves are
             // already in-place AJAX with no page reload, so __overrideSeed/__baseChainSeed alone
@@ -1105,6 +1267,7 @@
             lastSavedOverrideContent = content;
             lastSavedBaseChainJson = JSON.stringify(baseChainRows);
             lastSavedExplicitlyStandalone = explicitlyStandalone;
+            lastSavedContentType = currentContentType;
           });
         }
 
@@ -1126,7 +1289,19 @@
           document.getElementById('explicitlyStandaloneCheckbox').checked = explicitlyStandalone;
           document.getElementById('addBaseChainRowBtn').disabled = explicitlyStandalone;
           document.getElementById('baseChainEditor').className = explicitlyStandalone ? 'ctsync-standalone-active' : '';
+          updateEnvContentTypeRowVisibility(); // FR-104
           renderBaseChainRows();
+
+          // FR-104: revert the content-type picker's live (still-unlocked) selection too — a no-op
+          // once locked (applyEnvContentTypeLocked already replaced the radio group with a permanent
+          // display, so there is nothing left here to revert).
+          currentContentType = lastSavedContentType;
+          if (!document.getElementById('envContentTypeLockedDisplay')) {
+            var contentTypeRadios = document.getElementsByName('envContentTypeRadio');
+            for (var ct = 0; ct &lt; contentTypeRadios.length; ct++) {
+              contentTypeRadios[ct].checked = (contentTypeRadios[ct].value === currentContentType);
+            }
+          }
 
           lastEditContent = lastSavedOverrideContent;
           // switchToEditMode() no-ops if editMode is already true (its normal Compare-mode-exit
@@ -1311,17 +1486,75 @@
           proxy.activate(JSON.stringify({ version: v }), function (t) {
             var r = t.responseObject();
             if (r.ok) {
-              // In-place update (2026-09-02): re-render just the version-history table's
-              // Active-badge/button-disabled-state from the fresh versions list — nothing else on
-              // the page (override editor draft, base-chain editor draft, accordion state) is
-              // touched.
+              // Re-render the version-history table's Active-badge/button-disabled-state from the
+              // fresh versions list.
               renderVersionHistoryRows(r.versions);
-              if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
+              // Real bug fix (2026-09-04, live manual review): activating a version DIFFERENT from
+              // whatever the base-chain/Env-override editor currently has loaded previously left
+              // the operator staring at a stale draft that no longer represented the newly-active
+              // version's actual persisted content — risking an accidental Save-over of the
+              // just-activated version with unrelated draft content. Reload the base-chain editor
+              // rows, the explicitlyStandalone flag, and the Env-override editor's content from the
+              // server's freshly-activated-version payload (`activatedBaseChain`/
+              // `activatedExplicitlyStandalone`/`activatedContent`/`activatedContentType` —
+              // see ConfigSetPage#activateImpl), then recompute the Merged panels and drop any
+              // active Compare-mode selection (both handled by the forced switchToEditMode() call
+              // inside reloadEditorStateFromActivatedVersion below).
+              reloadEditorStateFromActivatedVersion(r);
             } else {
               setActivateButtonsDisabled(false);
               alert(r.error);
             }
           });
+        }
+
+        // Real bug fix (2026-09-04, live manual review): reloads the base-chain editor draft, the
+        // explicitlyStandalone flag, and the Env-override editor's live content from the NEWLY
+        // ACTIVATED version's own persisted state — see activateVersion's call site above. `r` is
+        // proxy.activate's response object, carrying `activatedBaseChain` (array, same
+        // {projectKey, pinMode, pinnedVersionNumber} row shape as baseChainRows),
+        // `activatedExplicitlyStandalone` (boolean), `activatedContent` (string), and
+        // `activatedContentType` (JSON|XML|YAML) — see ConfigSetPage#activateImpl.
+        function reloadEditorStateFromActivatedVersion(r) {
+          // Plain for-loop over r.activatedBaseChain, matching this file's own established
+          // convention for consuming a returned JSONArray field (see renderVersionHistoryRows'
+          // versions loop / findPerReferenceFor's lastPerReference loop above) rather than .map().
+          var activatedChain = r.activatedBaseChain || [];
+          baseChainRows = [];
+          for (var i = 0; i &lt; activatedChain.length; i++) {
+            var ref = activatedChain[i];
+            baseChainRows.push({ projectKey: ref.projectKey, pinMode: ref.pinMode,
+                pinnedVersionNumber: ref.pinnedVersionNumber });
+          }
+          baseChainRowExpanded = baseChainRows.map(function () { return false; }); // FR-71: fresh rows, all collapsed
+          explicitlyStandalone = !!r.activatedExplicitlyStandalone;
+          document.getElementById('explicitlyStandaloneCheckbox').checked = explicitlyStandalone;
+          document.getElementById('addBaseChainRowBtn').disabled = explicitlyStandalone;
+          document.getElementById('baseChainEditor').className = explicitlyStandalone ? 'ctsync-standalone-active' : '';
+          updateEnvContentTypeRowVisibility(); // FR-104
+
+          currentContentType = r.activatedContentType || currentContentType;
+          lastEditContent = r.activatedContent != null ? r.activatedContent : '{}';
+
+          // Force switchToEditMode() to actually recreate overrideEditor from the just-activated
+          // version's content regardless of current mode (its own guard is a no-op when editMode is
+          // already true) — same disposal-then-force technique discardAllChangesClicked already
+          // uses. switchToEditMode() itself recreates overrideEditor, recomputes the Merged panels
+          // (which also re-renders the base-chain rows table), and clears any active Compare-mode
+          // selection — so none of that needs repeating here.
+          clearTimeout(debounceHandle);
+          if (diffEditor) { diffEditor.dispose(); diffEditor = null; }
+          if (editMode &amp;&amp; overrideEditor) { overrideEditor.dispose(); overrideEditor = null; }
+          editMode = false;
+          switchToEditMode();
+
+          // FR-74: "last saved" baseline now reflects the just-activated version too — activating a
+          // version IS itself a legitimate persisted-state change, mirroring saveClicked's own
+          // baseline refresh, so Discard reverts to THIS state, not the pre-activation draft.
+          lastSavedOverrideContent = lastEditContent;
+          lastSavedBaseChainJson = JSON.stringify(baseChainRows);
+          lastSavedExplicitlyStandalone = explicitlyStandalone;
+          lastSavedContentType = currentContentType;
         }
 
         function addSecret() {
