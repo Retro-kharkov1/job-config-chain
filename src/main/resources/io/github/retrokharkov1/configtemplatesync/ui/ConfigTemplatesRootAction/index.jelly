@@ -3,12 +3,56 @@
   <l:layout title="${%title}">
     <l:main-panel>
       <style>
-        /* Scoped to this page only — same input+button spacing convention already used by
-           CommonConfigSetPage/EnvConfigSetPage's ".ctsync-secret-form" row (owner report,
-           UI-polish pass): flex + gap so the input never sits flush against its button. */
-        .ctsync-inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
-        .ctsync-inline-form .setting-input { flex: 1 1 240px; min-width: 180px; width: auto !important; }
+        /* Scoped to this page only (never a global Jenkins style override) — same
+           ".ctsync-page" scoping + bordered jenkins-section card convention already applied to
+           CommonConfigSetPage/EnvConfigSetPage (owner-directed consistency pass, 2026-09-04). This
+           page previously had no f:section on it at all — this is the first one, brought in
+           purely to frame "New Config Set" the same way the other two pages frame their own
+           sections, not a general redesign of this page. */
+        .ctsync-page .jenkins-button { margin: 4px 6px 4px 0; }
+        .ctsync-btn-row { margin: 12px 0 0; }
+        .ctsync-btn-row--right { text-align: right; }
+        /* Bordered-card framing for f:section — identical rule, identical reasoning, and the
+           identical (already-fixed) color token as CommonConfigSetPage/EnvConfigSetPage's own
+           "Bordered-card framing for f:section" comment: Jenkins core's own jenkins-section only
+           draws a top rule via --panel-border-color, which resolves to an all-but-invisible
+           #f4f4f8 on a white page background (confirmed live, then fixed, on those two pages
+           earlier the same day) — --table-border-color is the token already proven to render as a
+           clearly visible line elsewhere on this plugin's own pages, so it is reused here rather
+           than reintroducing the same invisible-border mistake a third time. */
+        .ctsync-page .jenkins-section,
+        .ctsync-page .jenkins-section:first-of-type,
+        .ctsync-page .jenkins-section:last-child {
+          border: 1px solid var(--table-border-color, #ddd);
+          border-radius: var(--form-input-border-radius, 6px);
+          padding: 1.25rem;
+          margin: 16px 0 0;
+        }
+        /* New Config Set form (owner report, 2026-09-04): the projectKey input, content-type
+           radio group and its info hint were previously one cramped inline row (".ctsync-inline-form",
+           now removed) — stacked into a column instead, capped at a comfortable reading width
+           rather than stretching the full page width on desktop. The Create button is deliberately
+           OUTSIDE this rule/the frame (see the markup below) — it lives in its own ".ctsync-btn-row"
+           beneath the bordered card, mirroring how Jenkins core itself typically separates an
+           input-group card from its primary action (e.g. a job configuration page's own
+           Save/Apply row sitting below, not inside, its settings fieldsets). */
+        .ctsync-newconfig-form { display: flex; flex-direction: column; gap: 14px; max-width: 480px; }
+        .ctsync-newconfig-form .setting-input { width: 100% !important; }
+        /* Content-type group gets its own micro-label now that it is a stacked block in its own
+           right rather than an inline afterthought — same visual weight/typography as the
+           "Content type:" label CommonConfigSetPage/EnvConfigSetPage already use for their own
+           (locked-after-first-save) content-type rows, reusing the same ${%contentType.label}
+           bundle key so the wording stays identical everywhere it appears in this plugin. The info
+           hint sits directly below that label and ABOVE the radios themselves (owner report,
+           2026-09-04) — read order becomes label, then "why this choice matters", then the actual
+           choice, instead of the hint trailing after the radios where it previously read as a
+           squeezed-in afterthought. */
+        .ctsync-content-type-label { font-weight: 600; display: block; margin-bottom: 4px; }
+        .ctsync-content-type-hint { color: #666; margin-bottom: 8px; }
+        .ctsync-content-type-radios label { margin-right: 12px; }
       </style>
+      <div class="ctsync-page">
+
       <h1>${%title}</h1>
       <p>
         Global (common) Config Sets. Click a row to open its editor; open a project's env layer
@@ -50,14 +94,42 @@
         </tbody>
       </table>
 
-      <h2>${%newConfigSet.heading}</h2>
-      <p>Enter a project key (e.g. <code>my-app</code>) and open its common Config Set editor
-         (it is created on first Save):</p>
-      <div class="ctsync-inline-form">
-        <input type="text" name="projectKey" id="newProjectKey" placeholder="projectKey" class="setting-input"/>
+      <!-- New Config Set (owner-directed layout redesign, 2026-09-04): heading rendered by
+           f:section's own title bar (matching the "heading lives inside the frame" convention
+           already established by every f:section on CommonConfigSetPage/EnvConfigSetPage), not a
+           separate h2 sitting above it — this keeps a single visual language for "framed section
+           with a heading" across all three pages instead of inventing a second pattern here. -->
+      <f:section title="${%newConfigSet.heading}">
+        <p>${%newConfigSet.introText}</p>
+        <div class="ctsync-newconfig-form">
+          <!-- Visible label instead of a placeholder-only input (accessibility convention already
+               used elsewhere in this plugin — e.g. the Secrets-manifest "Add / update secret"
+               f:entry pairs a real title with its path input rather than relying on placeholder
+               text alone); the placeholder now only carries the example format, exactly like that
+               same secret-path input's own "database.password" placeholder. -->
+          <f:entry title="${%newConfigSet.projectKeyLabel}">
+            <input type="text" name="projectKey" id="newProjectKey" placeholder="my-app" class="setting-input"/>
+          </f:entry>
+          <div>
+            <label class="ctsync-content-type-label">${%contentType.label}</label>
+            <div class="ctsync-content-type-hint">&#9432; ${%contentType.chooseOnceHelp}</div>
+            <div class="ctsync-content-type-radios" id="newContentTypeGroup">
+              <label><input type="radio" name="newContentTypeRadio" value="JSON" id="newContentTypeJson" checked="checked"/> JSON</label>
+              <label><input type="radio" name="newContentTypeRadio" value="XML" id="newContentTypeXml"/> XML</label>
+              <label><input type="radio" name="newContentTypeRadio" value="YAML" id="newContentTypeYaml"/> YAML</label>
+            </div>
+          </div>
+        </div>
+      </f:section>
+
+      <!-- Create button lives OUTSIDE/below the bordered card on purpose — see the
+           ".ctsync-newconfig-form" CSS comment above for the reasoning. -->
+      <div class="ctsync-btn-row ctsync-btn-row--right">
         <button type="button" class="jenkins-button jenkins-button--primary"
                 title="${%newConfigSet.buttonTitle}"
-                onclick="window.location.href = '${rootURL}/${it.urlName}/' + encodeURIComponent(document.getElementById('newProjectKey').value) + '/common/';">${%newConfigSet.buttonLabel}</button>
+                onclick="var k = document.getElementById('newProjectKey').value; var t = document.querySelector('input[name=newContentTypeRadio]:checked').value; window.location.href = '${rootURL}/${it.urlName}/' + encodeURIComponent(k) + '/common/?contentType=' + encodeURIComponent(t);">${%newConfigSet.buttonLabel}</button>
+      </div>
+
       </div>
     </l:main-panel>
   </l:layout>

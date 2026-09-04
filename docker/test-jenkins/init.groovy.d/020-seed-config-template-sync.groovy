@@ -13,7 +13,7 @@
  * start over from a clean seed.
  *
  * Seeds (projectKey="test-app", environment="dev" throughout, per NFR-4 — no
- * IceMobile/Caffenio/apilealtad/andatti references anywhere in this fixture):
+ * references to any motivating/originating client project anywhere in this fixture):
  *   - a common ConfigSet with 2 versions (v2 active) holding one plain key
  *     (App.Name / App.Version) and one manifest-declared secret key (Database.Password)
  *   - an env ConfigSet (dev) with 1 version (active) overlaying Database.Host

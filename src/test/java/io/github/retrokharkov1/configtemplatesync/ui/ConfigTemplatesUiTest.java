@@ -6,7 +6,10 @@ import hudson.model.ManagementLink;
 import org.htmlunit.HttpMethod;
 import org.htmlunit.Page;
 import org.htmlunit.WebRequest;
+import org.htmlunit.html.HtmlButton;
 import org.htmlunit.html.HtmlPage;
+import org.htmlunit.html.HtmlRadioButtonInput;
+import org.htmlunit.html.HtmlTextInput;
 import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
@@ -1509,5 +1512,517 @@ public class ConfigTemplatesUiTest {
         Object row1Json = engine.eval("JSON.stringify(projectOptionsForRow(1))");
         assertEquals("row #2+ must be filtered to row #1's resolved ContentType — 'xml-proj' does not "
                 + "match 'json-proj's JSON type", "[\"json-proj\"]", row1Json);
+    }
+
+    // --- FR-104 (2026-09-03): env content-type picker for the explicitlyStandalone-with-no-chain
+    // gap — a real functional gap found in live manual testing of the already-shipped FR-60/86/87 UI.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    public void doComputeMerge_standaloneEmptyChain_usesClientSuppliedContentType() throws Exception {
+        // Real gap fix: previewMergeImpl previously hardcoded ContentType.JSON whenever the resolved
+        // chain was empty, with no way for an explicitlyStandalone draft to preview as XML/YAML.
+        seedCommon("uitest80", "{\"a\":1}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest80/dev/computeMerge?overlayJson="
+                + java.net.URLEncoder.encode("<root><own>1</own></root>", "UTF-8")
+                + "&baseChainJson=" + java.net.URLEncoder.encode("[]", "UTF-8")
+                + "&explicitlyStandalone=true"
+                + "&standaloneContentType=XML");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        assertEquals("an explicitlyStandalone empty chain must resolve its ContentType from the "
+                + "client's own content-type picker selection, not a hardcoded JSON default",
+                "XML", json.getString("contentType"));
+        assertTrue("the override content must round-trip as XML, not be mis-parsed as JSON",
+                json.getString("merged").contains("<own>1</own>"));
+    }
+
+    @Test
+    public void doComputeMerge_standaloneEmptyChain_missingContentType_stillDefaultsJson() throws Exception {
+        // Backward-compat guard: an explicitlyStandalone caller that never supplies
+        // standaloneContentType at all (e.g. a stale client, or a hand-crafted request) must keep
+        // getting the pre-FR-104 JSON default, not an error.
+        seedCommon("uitest80b", "{\"a\":1}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest80b/dev/computeMerge?overlayJson="
+                + java.net.URLEncoder.encode("{}", "UTF-8")
+                + "&baseChainJson=" + java.net.URLEncoder.encode("[]", "UTF-8")
+                + "&explicitlyStandalone=true");
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        assertEquals("JSON", json.getString("contentType"));
+    }
+
+    @Test
+    public void doComputeMerge_nonStandaloneResolvedChain_ignoresClientSuppliedStandaloneContentType()
+            throws Exception {
+        // Regression guard (must NOT change FR-60's existing behavior): when the chain actually
+        // resolves to ≥1 entry, its ContentType always wins — a standaloneContentType value must
+        // never override it, even if a stale/careless client sends one.
+        seedCommon("uitest81", "{\"a\":1}", "seed"); // JSON, per seedCommon
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest81/dev/computeMerge?overlayJson="
+                + java.net.URLEncoder.encode("{}", "UTF-8")
+                + "&baseChainJson=" + java.net.URLEncoder.encode("[]", "UTF-8") // FR-52 default applies
+                + "&explicitlyStandalone=false"
+                + "&standaloneContentType=XML"); // must be ignored — the chain resolves to JSON
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        assertEquals("a resolved (non-empty) chain's ContentType must always win over any "
+                + "client-supplied standaloneContentType", "JSON", json.getString("contentType"));
+    }
+
+    @Test
+    public void doSubmitSave_envFirstSave_explicitlyStandalone_withContentType_persistsChosenType()
+            throws Exception {
+        seedCommon("uitest82", "{\"a\":1}", "seed"); // establishes projectKey, irrelevant to the env's own type
+
+        jenkins.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        wc.getOptions().setJavaScriptEnabled(false);
+
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest82/dev/submitSave");
+        WebRequest request = new WebRequest(url, HttpMethod.POST);
+        request.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "<root><own>1</own></root>"),
+                new org.htmlunit.util.NameValuePair("note", "first standalone save, XML"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", "[]"),
+                new org.htmlunit.util.NameValuePair("explicitlyStandalone", "true"),
+                new org.htmlunit.util.NameValuePair("contentType", "XML")
+        ));
+        Page result = wc.getPage(request);
+        assertEquals(200, result.getWebResponse().getStatusCode());
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet saved = repository.findEnv("uitest82", "dev");
+        assertNotNull(saved);
+        assertEquals("the env Config Set's own persisted ContentType must be the picker's choice, "
+                + "not the pre-FR-104 hardcoded JSON default", ContentType.XML, saved.getContentType());
+    }
+
+    @Test
+    public void doSubmitSave_envNonStandaloneFirstSave_withNoContentType_stillDefaultsJson()
+            throws Exception {
+        // Regression guard: the ordinary (non-standalone) env first-save path must be completely
+        // unaffected by FR-104 — its client never sends contentType, so this must keep behaving
+        // exactly as it did before this feature existed.
+        seedCommon("uitest82b", "{\"a\":1}", "seed");
+
+        jenkins.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        wc.getOptions().setJavaScriptEnabled(false);
+
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest82b/dev/submitSave");
+        WebRequest request = new WebRequest(url, HttpMethod.POST);
+        request.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "{}"),
+                new org.htmlunit.util.NameValuePair("note", "ordinary first save")
+        ));
+        wc.getPage(request);
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        assertEquals(ContentType.JSON, repository.findEnv("uitest82b", "dev").getContentType());
+    }
+
+    @Test
+    public void doSubmitSave_envContentType_immutableAfterFirstStandaloneSave() throws Exception {
+        seedCommon("uitest83", "{\"a\":1}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet env = new ConfigSet("uitest83", ConfigSetRole.ENV, "dev", "Env", ContentType.XML);
+        int v = env.addVersion("<root><a>1</a></root>", "seed", "seed-author", 1L,
+                Collections.emptyList(), true);
+        env.activate(v);
+        repository.save(env);
+
+        jenkins.jenkins.setCrumbIssuer(null);
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        wc.getOptions().setJavaScriptEnabled(false);
+
+        URL url = new URL(wc.getContextPath() + "configTemplates/uitest83/dev/submitSave");
+        WebRequest request = new WebRequest(url, HttpMethod.POST);
+        // Attempting to smuggle a different contentType on a second save must have no effect — the
+        // field is only meaningful when getConfigSet() == null (FR-59, reused verbatim by FR-104).
+        request.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "<root><a>2</a></root>"),
+                new org.htmlunit.util.NameValuePair("note", "second save, attempted type change"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", "[]"),
+                new org.htmlunit.util.NameValuePair("explicitlyStandalone", "true"),
+                new org.htmlunit.util.NameValuePair("contentType", "YAML")
+        ));
+        wc.getPage(request);
+
+        assertEquals("a second version of an already-locked env Config Set must never change its "
+                + "ContentType, standalone or not", ContentType.XML, repository.findEnv("uitest83", "dev").getContentType());
+    }
+
+    @Test
+    public void envEditPage_rendersContentTypeRow_unlockedWhenNoVersionExists() throws Exception {
+        seedCommon("uitest84", "{\"a\":1}", "seed");
+        // deliberately no seedEnv — this env Config Set does not exist yet.
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest84/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("env page must render the FR-104 content-type row",
+                html.contains("id=\"envContentTypeRow\""));
+        assertTrue("no version yet must render the interactive (unlocked) radio group",
+                html.contains("id=\"envContentTypeUnlockedGroup\""));
+        assertTrue(html.contains("name=\"envContentTypeRadio\""));
+        assertFalse("must not render the locked display before any version exists",
+                html.contains("id=\"envContentTypeLockedDisplay\""));
+    }
+
+    @Test
+    public void envEditPage_rendersContentTypeRow_lockedWhenStandaloneVersionExists() throws Exception {
+        seedCommon("uitest85", "{\"a\":1}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet env = new ConfigSet("uitest85", ConfigSetRole.ENV, "dev", "Env", ContentType.XML);
+        int v = env.addVersion("<root><a>1</a></root>", "seed", "seed-author", 1L,
+                Collections.emptyList(), true);
+        env.activate(v);
+        repository.save(env);
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest85/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("once a version exists, the picker must render the locked/read-only display",
+                html.contains("id=\"envContentTypeLockedDisplay\""));
+        assertFalse("the interactive radio group must no longer render once locked",
+                html.contains("id=\"envContentTypeUnlockedGroup\""));
+    }
+
+    @Test
+    public void envEditPage_rendersContentTypeRow_lockedWhenNonStandaloneVersionExists() throws Exception {
+        // Requirement: locking applies "whether standalone or not" — an ordinary, chain-based env
+        // Config Set's picker (once shown, e.g. via a later explicitlyStandalone toggle) must ALSO
+        // render locked once any version exists, never a fresh unlocked group.
+        seedCommon("uitest86", "{\"a\":1}", "seed");
+        seedEnv("uitest86", "dev", "{}", "seed"); // ordinary, non-standalone version
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest86/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue(html.contains("id=\"envContentTypeLockedDisplay\""));
+        assertFalse(html.contains("id=\"envContentTypeUnlockedGroup\""));
+    }
+
+    @Test
+    public void envEditPage_inlineScript_containsContentTypePickerFunctions_andIsValidJs() throws Exception {
+        seedCommon("uitest87", "{\"a\":1}", "seed");
+        seedEnv("uitest87", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest87/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue(html.contains("function onEnvContentTypeChange"));
+        assertTrue(html.contains("function applyEnvContentTypeLocked"));
+        assertTrue(html.contains("function updateEnvContentTypeRowVisibility"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("env edit page (content-type picker JS)", html);
+    }
+
+    // --- FR-105: "choose content type at creation" moved to the root list page --------------
+
+    @Test
+    public void rootListPage_rendersNewConfigSetContentTypePicker_withJsonPreselectedByDefault() throws Exception {
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates");
+        String html = page.getWebResponse().getContentAsString();
+
+        assertTrue("root page must render the new-project content-type radio group (FR-105)",
+                html.contains("id=\"newContentTypeGroup\""));
+        assertTrue("root page must reuse the same 'choose once — locked forever' helper wording",
+                html.contains("choose once") && html.contains("locked forever after the first Save"));
+
+        Matcher jsonRadio = Pattern.compile("id=\"newContentTypeJson\"[^>]*").matcher(html);
+        assertTrue(jsonRadio.find());
+        assertTrue("JSON radio must render pre-checked by default", jsonRadio.group().contains("checked=\"checked\""));
+
+        Matcher xmlRadio = Pattern.compile("id=\"newContentTypeXml\"[^>]*").matcher(html);
+        assertTrue(xmlRadio.find());
+        assertFalse("XML radio must not be pre-checked by default", xmlRadio.group().contains("checked"));
+
+        Matcher yamlRadio = Pattern.compile("id=\"newContentTypeYaml\"[^>]*").matcher(html);
+        assertTrue(yamlRadio.find());
+        assertFalse("YAML radio must not be pre-checked by default", yamlRadio.group().contains("checked"));
+    }
+
+    @Test
+    public void rootListPage_clickingCreateWithXmlSelected_navigatesWithContentTypeCarriedThrough() throws Exception {
+        // The destination Common page's Monaco AMD loader uses ES2015+ syntax the embedded legacy
+        // HtmlUnit JS engine can't execute (same limitation documented on
+        // editPage_loadsActiveVersionContent above) — script errors during that follow-on page load
+        // are swallowed rather than aborting navigation, so the resulting page's URL (this test's
+        // only assertion target) is still reliably observable.
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnScriptError(false);
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        HtmlPage page = wc.goTo("configTemplates");
+
+        HtmlTextInput projectKeyInput = (HtmlTextInput) page.getElementById("newProjectKey");
+        projectKeyInput.setValueAttribute("uitest90");
+        HtmlRadioButtonInput xmlRadio = (HtmlRadioButtonInput) page.getElementById("newContentTypeXml");
+        xmlRadio.setChecked(true);
+
+        HtmlButton createButton = (HtmlButton) page.querySelector(".ctsync-inline-form button");
+        Page result = createButton.click();
+
+        String url = result.getUrl().toString();
+        assertTrue("clicking create must navigate to the new project's common editor: " + url,
+                url.contains("/uitest90/common/"));
+        assertTrue("the selected content type must be carried through as a query parameter (FR-105): " + url,
+                url.contains("contentType=XML"));
+    }
+
+    @Test
+    public void rootListPage_clickingCreateWithEmptyProjectKey_preservesExistingNavigationShape() throws Exception {
+        // Pre-existing behavior (unchanged by FR-105): an empty projectKey field was never
+        // client-side-validated — the button's onclick handler always navigated regardless, landing
+        // on ".../configTemplates//common/" (an empty, encodeURIComponent-produced path segment).
+        // This test locks in that the FR-105 change is strictly additive (only appends
+        // ?contentType=...) and introduces no new validation/regression for the empty-field case.
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setThrowExceptionOnScriptError(false);
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        HtmlPage page = wc.goTo("configTemplates");
+
+        HtmlButton createButton = (HtmlButton) page.querySelector(".ctsync-inline-form button");
+        Page result = createButton.click();
+
+        String url = result.getUrl().toString();
+        assertTrue("an empty projectKey must still produce the same empty-segment navigation shape "
+                + "as before this change: " + url, url.contains("configTemplates//common/"));
+        assertTrue("the default JSON content type must still be appended: " + url,
+                url.contains("contentType=JSON"));
+    }
+
+    @Test
+    public void commonEditPage_preselectsCarriedThroughContentType_whenProjectDoesNotYetExist() throws Exception {
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest91-new/common/?contentType=XML");
+        String html = page.getWebResponse().getContentAsString();
+
+        assertTrue("the picker must still render unlocked for a brand-new project",
+                html.contains("id=\"contentTypeUnlockedGroup\""));
+        Matcher xmlRadio = Pattern.compile("value=\"XML\"[^>]*").matcher(html);
+        assertTrue(xmlRadio.find());
+        assertTrue("the XML radio must render pre-selected from the carried-through ?contentType= param (FR-105)",
+                xmlRadio.group().contains("checked=\"checked\""));
+
+        Matcher jsonRadio = Pattern.compile("value=\"JSON\"[^>]*").matcher(html);
+        assertTrue(jsonRadio.find());
+        assertFalse("JSON must no longer be the pre-selected radio once XML was carried through",
+                jsonRadio.group().contains("checked=\"checked\""));
+    }
+
+    @Test
+    public void commonEditPage_ignoresIncomingContentTypeParam_whenProjectAlreadyExists() throws Exception {
+        // FR-59's immutability: an existing (locked) Config Set's committed type is authoritative —
+        // an incoming ?contentType=... must never be honored once a first version has been saved.
+        ConfigSet common = seedCommon("uitest92", "{\"a\":1}", "seed"); // JSON, per seedCommon
+        assertEquals(ContentType.JSON, common.getContentType());
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest92/common/?contentType=XML");
+        String html = page.getWebResponse().getContentAsString();
+
+        assertTrue("an existing project's picker must render locked, never the unlocked radio group",
+                html.contains("id=\"contentTypeLockedDisplay\""));
+        assertFalse(html.contains("id=\"contentTypeUnlockedGroup\""));
+        Matcher lockedDisplay = Pattern.compile("id=\"contentTypeLockedDisplay\">([^<]*)").matcher(html);
+        assertTrue(lockedDisplay.find());
+        assertTrue("the locked display must still show the originally-committed JSON type, not the "
+                + "ignored incoming XML param: " + lockedDisplay.group(1),
+                lockedDisplay.group(1).trim().startsWith("JSON"));
+
+        ConfigSetRepository repository = new ConfigSetRepository();
+        assertEquals("the incoming contentType param must have no persistence effect either",
+                ContentType.JSON, repository.findCommon("uitest92").getContentType());
+    }
+
+    // --- Live manual review fixes (2026-09-04): section reorg (accordion -> framed sections,
+    // reordered top-to-bottom), Activate-reloads-editor-state bug, button wording, base-chain
+    // dropdown sizing -------------------------------------------------------------------------
+
+    @Test
+    public void envEditPage_sectionsAreFramedNotCollapsible_andRenderInTheNewOrder() throws Exception {
+        // Owner-directed reorg (2026-09-04): Version history / Secrets manifest / Base chain /
+        // Editor are no longer collapsible <details> accordions, and Version history now renders
+        // FIRST, ahead of Secrets manifest, ahead of the (newly-extracted) Base chain section,
+        // ahead of Editor last.
+        seedCommon("uitest100", "{\"a\":1}", "seed");
+        seedEnv("uitest100", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest100/dev/");
+        String html = page.getWebResponse().getContentAsString();
+
+        assertFalse("none of the four reorganized sections may render as a collapsible <details> "
+                + "accordion anymore", html.contains("<details"));
+        assertTrue("each section must use Jenkins core's own framed-section convention",
+                html.contains("jenkins-section"));
+
+        int versionHistoryIdx = html.indexOf("id=\"versionHistoryDetails\"");
+        int secretsManifestIdx = html.indexOf("id=\"secretsManifestDetails\"");
+        int baseChainIdx = html.indexOf("id=\"baseChainEditor\"");
+        int editorIdx = html.indexOf("id=\"editorDetails\"");
+        assertTrue("all four section markers must be present",
+                versionHistoryIdx >= 0 && secretsManifestIdx >= 0 && baseChainIdx >= 0 && editorIdx >= 0);
+        assertTrue("Version history must render before Secrets manifest",
+                versionHistoryIdx < secretsManifestIdx);
+        assertTrue("Secrets manifest must render before the Base chain section",
+                secretsManifestIdx < baseChainIdx);
+        assertTrue("Base chain must render before the Editor section — it is pulled out entirely, "
+                + "no longer nested inside Editor", baseChainIdx < editorIdx);
+    }
+
+    @Test
+    public void commonEditPage_sectionsAreFramedNotCollapsible() throws Exception {
+        // Consistency pass applied to CommonConfigSetPage too (owner instruction), section ORDER
+        // unchanged there — only the accordion-to-framed-section conversion applies.
+        seedCommon("uitest104", "{\"a\":1}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest104/common/");
+        String html = page.getWebResponse().getContentAsString();
+
+        assertFalse("Common page's sections must also no longer render as <details> accordions",
+                html.contains("<details"));
+        assertTrue("Common page's sections must also use Jenkins core's framed-section convention",
+                html.contains("jenkins-section"));
+    }
+
+    @Test
+    public void envEditPage_inlineScriptsAreSyntacticallyValidJs_afterSectionReorg() throws Exception {
+        seedCommon("uitest105", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+        seedEnv("uitest105", "dev", "{\"database\":{\"host\":\"db.dev.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest105/dev/");
+        assertAllInlineScriptsAreSyntacticallyValidJs(
+                "env edit page (post section-reorg)", page.getWebResponse().getContentAsString());
+    }
+
+    @Test
+    public void doActivate_envPage_reloadsNewlyActivatedVersionsBaseChainAndContent() throws Exception {
+        // Real bug fix: activating a DIFFERENT version than whatever the editor currently has
+        // loaded previously left the operator staring at a stale draft. The activate response must
+        // now carry the NEWLY ACTIVATED version's own persisted content/baseChain/
+        // explicitlyStandalone/contentType so the client can reload its editor state.
+        seedCommon("uitest110", "{\"a\":1}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet env = new ConfigSet("uitest110", ConfigSetRole.ENV, "dev", "Env", ContentType.JSON);
+        int v1 = env.addVersion("{\"v\":1}", "v1", "seed-author", 1L,
+                Collections.singletonList(BaseConfigReference.active("uitest110")), false);
+        env.activate(v1);
+        int v2 = env.addVersion("{\"v\":2}", "v2", "seed-author", 2L, Collections.emptyList(), true);
+        repository.save(env);
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest110/dev/activateVersion?version=" + v2);
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        assertEquals(v2, json.getInt("active"));
+
+        assertEquals("the activate response must carry the newly-activated version's own content, "
+                + "not the previously-active version's", "{\"v\":2}", json.getString("activatedContent"));
+        assertTrue("the activate response must carry the newly-activated version's "
+                + "explicitlyStandalone flag", json.getBoolean("activatedExplicitlyStandalone"));
+        assertEquals("the activate response must carry v2's own (empty, standalone) base chain, not v1's",
+                0, json.getJSONArray("activatedBaseChain").size());
+        assertEquals("JSON", json.getString("activatedContentType"));
+    }
+
+    @Test
+    public void doActivate_envPage_reloadsNonStandaloneVersionsBaseChainBackToAnOlderVersion() throws Exception {
+        seedCommon("uitest111", "{\"a\":1}", "seed");
+        ConfigSetRepository repository = new ConfigSetRepository();
+        ConfigSet env = new ConfigSet("uitest111", ConfigSetRole.ENV, "dev", "Env", ContentType.JSON);
+        int v1 = env.addVersion("{\"v\":1}", "v1", "seed-author", 1L,
+                Collections.singletonList(BaseConfigReference.active("uitest111")), false);
+        env.activate(v1);
+        int v2 = env.addVersion("{\"v\":2}", "v2", "seed-author", 2L,
+                java.util.Arrays.asList(BaseConfigReference.active("uitest111"),
+                        BaseConfigReference.pinned("uitest111", 1)),
+                false);
+        env.activate(v2);
+        repository.save(env);
+
+        // Activate BACK to v1 — must reload v1's own (single-row) chain, not v2's two-row chain.
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        Page result = wc.getPage(wc.getContextPath()
+                + "configTemplates/uitest111/dev/activateVersion?version=" + v1);
+        JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
+        assertTrue(json.getBoolean("ok"));
+        assertEquals("{\"v\":1}", json.getString("activatedContent"));
+        assertFalse(json.getBoolean("activatedExplicitlyStandalone"));
+        assertEquals("activating back to v1 must reload v1's own one-row chain, not v2's two-row chain",
+                1, json.getJSONArray("activatedBaseChain").size());
+    }
+
+    @Test
+    public void envEditPage_inlineScriptsContainReloadEditorStateFunction_andAreValidJs() throws Exception {
+        seedCommon("uitest112", "{\"database\":{\"host\":\"db.internal\"}}", "seed");
+        seedEnv("uitest112", "dev", "{\"database\":{\"host\":\"db.dev.internal\"}}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest112/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("activateVersion must reload the editor state from the newly-activated version",
+                html.contains("function reloadEditorStateFromActivatedVersion"));
+        assertTrue(html.contains("reloadEditorStateFromActivatedVersion(r)"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("env edit page (activate-reload JS)", html);
+    }
+
+    @Test
+    public void envEditPage_addBaseButtonUsesClearerWording() throws Exception {
+        // Button-label wording refinement: "Add base" -> "Add base config" (EN).
+        seedCommon("uitest120", "{\"a\":1}", "seed");
+        seedEnv("uitest120", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest120/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("the Add-base button must use the clearer 'Add base config' wording",
+                html.contains(">&#10133; Add base config</button>") || html.contains("Add base config"));
+    }
+
+    @Test
+    public void envEditPage_baseChainTable_constrainsSelectDropdownWidth() throws Exception {
+        // CSS bug fix: the Project/Pinned-version <select> elements in the base-chain table
+        // inherited Jenkins core's full-width `.jenkins-select__input` sizing, overflowing the
+        // table's narrow columns. Both possible selects per row now share ONE scoped rule.
+        seedCommon("uitest130", "{\"a\":1}", "seed");
+        seedEnv("uitest130", "dev", "{}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest130/dev/");
+        String html = page.getWebResponse().getContentAsString();
+        assertTrue("the base-chain table must scope a compact max-width rule to its own selects, "
+                + "covering both the Project and Pinned-version pickers via one shared selector",
+                html.contains(".ctsync-basechain-table select.jenkins-select__input"));
     }
 }

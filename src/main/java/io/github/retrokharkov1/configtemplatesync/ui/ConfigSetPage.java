@@ -26,6 +26,8 @@ import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepositor
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.Stapler;
+import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 import org.kohsuke.stapler.bind.JavaScriptMethod;
 import org.kohsuke.stapler.interceptor.RequirePOST;
@@ -139,6 +141,36 @@ public abstract class ConfigSetPage {
     }
 
     /**
+     * Jelly-visible: which radio should render pre-selected in the still-unlocked
+     * {@code #contentTypeRow} picker (FR-105 — "choose content type at creation" moved earlier in
+     * the flow). Normally {@link #getContentTypeValue()}'s own JSON default, but honors an
+     * incoming {@code ?contentType=JSON|XML|YAML} query parameter carried over from the root list
+     * page's "New Config Set" picker, when present and well-formed.
+     *
+     * <p>Deliberately never consulted once {@link #isExists()} is {@code true} — an existing
+     * Config Set's committed, already-locked {@link ContentType} is authoritative and this method
+     * simply defers to {@link #getContentTypeValue()} in that case, so an incoming query parameter
+     * on a bookmarked/already-created project's URL is silently ignored rather than ever
+     * influencing a locked type.</p>
+     */
+    public final String getPreselectedContentTypeValue() {
+        if (isExists()) {
+            return getContentTypeValue();
+        }
+        StaplerRequest req = Stapler.getCurrentRequest();
+        String requested = req == null ? null : req.getParameter("contentType");
+        if (requested != null) {
+            try {
+                return ContentType.valueOf(requested).name();
+            } catch (IllegalArgumentException e) {
+                // Unknown/malformed incoming value — fall back to FR-59's own JSON default below
+                // rather than surfacing an error for what is purely a smarter-default convenience.
+            }
+        }
+        return ContentType.JSON.name();
+    }
+
+    /**
      * {@link #getEditorSeedJson()}, pre-encoded into a complete, ready-to-embed JS string literal
      * (quotes included) for the Monaco-editor seed {@code <script>} block. See
      * {@link #toJsScriptStringLiteral(String)} for why this must never be built via
@@ -213,10 +245,13 @@ public abstract class ConfigSetPage {
             ConfigSet configSet = getConfigSet();
             ContentType resolvedContentType;
             if (configSet == null) {
-                // FR-59/FR-68: only meaningful on first save, and only ever supplied by the COMMON
-                // page's client (the env page never sends this field — its type is always resolved,
-                // never chosen, per FR-60). Default to JSON when absent, matching FR-59's literal
-                // wording.
+                // FR-59/FR-68: only meaningful on first save. Historically only ever supplied by the
+                // COMMON page's client (the env page's type is normally always resolved from the base
+                // chain, never chosen, per FR-60). FR-104 (2026-09-03) adds exactly one ENV-page
+                // exception: when the env Config Set's first version is explicitlyStandalone with no
+                // base chain to resolve a type from, the env client now also supplies this same field
+                // from its own content-type picker — validated here identically to Common's. Default
+                // to JSON when absent, matching FR-59's literal wording.
                 resolvedContentType = (contentTypeParam == null || contentTypeParam.trim().isEmpty())
                         ? ContentType.JSON : ContentType.valueOf(contentTypeParam);
             } else {
@@ -560,7 +595,8 @@ public abstract class ConfigSetPage {
     private JSONObject activateImpl(int version) {
         JSONObject result = new JSONObject();
         ConfigSet configSet = getConfigSet();
-        if (configSet == null || configSet.getVersion(version) == null) {
+        ConfigSetVersion activated = configSet == null ? null : configSet.getVersion(version);
+        if (activated == null) {
             result.put("ok", false);
             result.put("error", "No such version: " + version);
             return result;
@@ -573,6 +609,27 @@ public abstract class ConfigSetPage {
         // Active-badge/button-disabled-state from this instead of location.reload()-ing the whole
         // page — see #versionsAsJsonArray's javadoc.
         result.put("versions", versionsAsJsonArray());
+        // Real bug fix (2026-09-04, live manual review of EnvConfigSetPage): activating a version
+        // DIFFERENT from whatever a caller's editor currently has loaded must not leave that editor
+        // showing a stale draft that no longer represents the newly-active version's real content —
+        // EnvConfigSetPage's client reloads its base-chain editor rows/explicitlyStandalone
+        // flag/Env-override content from these fields after a successful activate (see that page's
+        // own reloadEditorStateFromActivatedVersion JS function). Generic on this shared base class
+        // (not env-specific) since every ConfigSetVersion carries this same shape regardless of
+        // role; these are harmless additional fields for CommonConfigSetPage's own activateVersion
+        // JS, which does not read them.
+        result.put("activatedContent", activated.getContentJson());
+        result.put("activatedExplicitlyStandalone", activated.isExplicitlyStandalone());
+        net.sf.json.JSONArray activatedBaseChain = new net.sf.json.JSONArray();
+        for (BaseConfigReference ref : activated.getBaseChain()) {
+            JSONObject refRow = new JSONObject();
+            refRow.put("projectKey", ref.getProjectKey());
+            refRow.put("pinMode", ref.getPinMode().name());
+            refRow.put("pinnedVersionNumber", ref.getPinnedVersionNumber());
+            activatedBaseChain.add(refRow);
+        }
+        result.put("activatedBaseChain", activatedBaseChain);
+        result.put("activatedContentType", configSet.getContentType().name());
         return result;
     }
 

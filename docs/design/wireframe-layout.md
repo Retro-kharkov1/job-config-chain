@@ -126,23 +126,38 @@
 
 ---
 
-## Page 1 — Global "Config Templates" — list view (FR-30)
+## Page 1 — Global "Config Templates" — list view (FR-30, FR-105 layout redesign 2026-09-04)
 
 ```
-┌─ Manage Jenkins ▸ Config Templates ──────────────────────────────────────────────┐
-│                                                                                    │
-│  Config Templates                                          [ + New Config Set ]  │
-│                                                                                    │
-│  ┌─ Name ────────────────┬─ Type ─┬─ Active version ─┬─ Last modified ──────────┐ │
-│  │ apilealtad-common      │ JSON   │ v7                │ 2026-08-20 by ib       │ │
-│  │ andatti-common         │ XML    │ v3                │ 2026-07-11 by ib       │ │
-│  │ shared-secrets-common  │ YAML   │ v1                │ 2026-09-01 by ib       │ │
-│  └────────────────────────┴────────┴───────────────────┴────────────────────────┘ │
-│    (click a row -> opens the edit page below)                                    │
-└────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Manage Jenkins ▸ Config Templates ──────────────────────────────────────────────────┐
+│                                                                                        │
+│  Config Templates                                                                     │
+│                                                                                        │
+│  ┌─ Name ────────────────┬─ Type ─┬─ Active version ─┬─ Last modified ──────────┐     │
+│  │ sample-app-common      │ JSON   │ v7                │ 2026-08-20 by ib       │     │
+│  │ billing-common         │ XML    │ v3                │ 2026-07-11 by ib       │     │
+│  │ shared-secrets-common  │ YAML   │ v1                │ 2026-09-01 by ib       │     │
+│  └────────────────────────┴────────┴───────────────────┴────────────────────────┘     │
+│    (click a row -> opens the edit page below)                                        │
+│                                                                                        │
+│  ┌─ New Config Set ──────────────────────────────────────────────────────────────┐   │
+│  │                                                                                 │   │
+│  │  Create a new project's common Config Set. It is created the moment you Save. │   │
+│  │                                                                                 │   │
+│  │  Project key                                                                   │   │
+│  │  [ my-app_______________________________ ]                                    │   │
+│  │                                                                                 │   │
+│  │  Content type:                                                                 │   │
+│  │  ⓘ choose once — locked forever after the first Save                          │   │
+│  │  ( ● JSON )   ( ○ XML )   ( ○ YAML )                                           │   │
+│  │                                                                                 │   │
+│  └─────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                            [ Open / Create ]           │
+│                                                                                        │
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Behavior: table only, one action ("New"), each row opens the same edit page used for creation —
+Behavior: table only, one action per row (click -> opens the same edit page used for creation) —
 same interaction shape as Jenkins' own Manage Jenkins → Managed Files list. **New `Type` column
 (FR-67):** a plain read-only text cell (`JSON`/`XML`/`YAML`), reading `cs.contentType` — the value
 already frozen at that Config Set's first save (FR-59); no icon/badge/color, consistent with every
@@ -150,12 +165,31 @@ other column on this table being plain text. Position is fixed at `Name | Type |
 Last modified`, matching the plan's own column order exactly (`docs/development/
 multi-format-content-plan-2026-09-02.md`).
 
+**"New Config Set" layout redesign (owner report, 2026-09-04):** the form previously rendered as one
+cramped inline row (projectKey input + radio group + trailing hint + button all side by side — never
+actually drawn into this wireframe when FR-105 shipped earlier the same day, a gap this pass closes).
+Now:
+- **Project key** and the **content-type group** are stacked in a column inside a bordered card
+  (`f:section`, same bordered-card convention as `CommonConfigSetPage`/`EnvConfigSetPage`'s own
+  sections — `border: 1px solid var(--table-border-color, #ddd)`), heading rendered by the section's
+  own title bar rather than a separate `h2` above it.
+- **Project key** gets a real visible label ("Project key") instead of relying on placeholder text
+  alone (placeholder now only carries the example format, `my-app`) — matches the accessibility
+  convention already used by the Secrets-manifest "Add / update secret" `f:entry` pairing elsewhere
+  in this plugin.
+- The **content-type micro-label** ("Content type:") and its **info hint** both sit ABOVE the radio
+  row, in that order (label, then hint, then the actual choice) — the hint no longer trails after the
+  radios where it previously read as a squeezed-in afterthought.
+- The **"Open / Create" button sits OUTSIDE/below the bordered card**, right-aligned, never inside
+  it — mirroring how Jenkins core itself typically separates an input-group card from its primary
+  action (e.g. a job configuration page's Save/Apply row below its settings fieldsets).
+
 ---
 
 ## Page 1 — Global Config Set edit view (FR-31, FR-32, FR-33)
 
 ```
-┌─ Config Templates ▸ apilealtad-common ────────────────────────────────────┐
+┌─ Config Templates ▸ sample-app-common ────────────────────────────────────┐
 │                                                                            │
 │  [ if invalid content: ⚠ Save blocked: invalid XML — see marker below ]   │
 │                                                                            │
@@ -345,10 +379,10 @@ Behavior:
 ## Page 2 — Env level — list view (FR-34)
 
 ```
-┌─ apilealtad ▸ dev ▸ Env Config Sets ──────────────────────────────────────┐
+┌─ sample-app ▸ dev ▸ Env Config Sets ──────────────────────────────────────┐
 │                                                    [ + New Env Config Set ]│
 │  ┌─ Name ──────────────┬─ Active version ─┬─ Last modified ──────────┐   │
-│  │ apilealtad-dev        │ v4                │ 2026-08-19 by ib       │   │
+│  │ sample-app-dev        │ v4                │ 2026-08-19 by ib       │   │
 │  └───────────────────────┴───────────────────┴─────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────────┘
 ```
@@ -376,14 +410,14 @@ list COMMON Config Sets sharing that resolved type (FR-72 — additive UX on top
 bypasses this picker):
 
 ```
-┌─ apilealtad ▸ dev ▸ apilealtad-dev ──────────────────────────────────────────────────┐
+┌─ sample-app ▸ dev ▸ sample-app-dev ──────────────────────────────────────────────────┐
 │                                                                                        │
 │  Base chain (ordered — later rows win on overlapping keys, folded left→right, FR-8/    │
 │  FR-55). Any COMMON-role Config Set from ANY project may be referenced (NFR-8). Row #1's│
 │  project sets this chain's content type — later rows' project pickers only offer       │
 │  matching-type COMMON Config Sets (FR-72).                                             │
 │  ┌────────────────────────────────────────────────────────────────────────────────────┐│
-│  │ ▸ #1  [ apilealtad-common          ▾ ]   ●Active  ○Pin                    ▲ ▼ ✕    ││ ← collapsed
+│  │ ▸ #1  [ sample-app-common          ▾ ]   ●Active  ○Pin                    ▲ ▼ ✕    ││ ← collapsed
 │  ├────────────────────────────────────────────────────────────────────────────────────┤│
 │  │ ▾ #2  [ shared-secrets-common       ▾ ]  ○Active  ●Pin  [ v3 · 2026-08-01 ·        ]││ ← expanded
 │  │        (filtered: JSON-typed COMMON Config Sets only)     "freeze billing keys" ▾ ]  ││
@@ -502,7 +536,7 @@ prior pass:**
 │  │  ▾ v4's frozen base chain (read-only — recorded at that version's own save time,│
 │  │    per FR-51; not editable here — editing only happens in the live editor above,│
 │  │    then saved as a NEW version):                                               │
-│  │    1. apilealtad-common — ACTIVE (resolved to v7 at that save)                 │
+│  │    1. sample-app-common — ACTIVE (resolved to v7 at that save)                 │
 │  │    2. shared-secrets-common — PINNED v3 ("freeze billing keys")                │
 │  └──────────────────────────────────────────────────────────────────────────────────┘│
 ```
@@ -518,7 +552,7 @@ prior pass:**
 - **Cross-chain content-type mismatch (FR-61)** — confirmed no new UI chrome. On `doSave`, if the
   resolved base-chain rows don't all share one `ContentType`, the save is blocked and the EXISTING
   `saveBanner` (the same element already rendering "Save blocked: invalid JSON…" today) shows:
-  `Save blocked: mismatched content types in base chain — apilealtad-common (JSON), shared-secrets-
+  `Save blocked: mismatched content types in base chain — sample-app-common (JSON), shared-secrets-
   common (XML) must all share one content type.` — naming every conflicting `projectKey` + its
   `ContentType`, per FR-61's literal wording. This is the SAME banner element, not a second one;
   fires from the same `doSave` call path the JSON-syntax error banner already uses. FR-72's picker
@@ -594,12 +628,12 @@ one full-width read-only panel, so it is never visually confusable with the Merg
 live draft preview sitting nearby:
 
 ```
-┌─ apilealtad ▸ dev ▸ apilealtad-dev ──────────────────────────────────────────────────┐
+┌─ sample-app ▸ dev ▸ sample-app-dev ──────────────────────────────────────────────────┐
 │                                                                                      │
 │  Base chain (2 rows) — see the editor above                [ ← Back to editor view ] │
 │                                                                                      │
 │  ⓘ Effective template from the base chain's ACTIVE/PINNED versions, per this env's   │
-│    own ACTIVE version's frozen chain (FR-51/FR-52) ⊕ apilealtad-dev ACTIVE v4 —      │
+│    own ACTIVE version's frozen chain (FR-51/FR-52) ⊕ sample-app-dev ACTIVE v4 —      │
 │    NOT the Env-override panel's or base-chain editor's in-progress unsaved edits     │
 │    (FR-16)                                                                          │
 │                                                                                      │

@@ -195,11 +195,19 @@ public class EnvConfigSetPage extends ConfigSetPage {
      * earlier manual checks, when in fact the classic method (this one) was intercepting every
      * JS-proxy call and always merging against a {@code null}/default overlay instead of the real
      * live content the browser sent.</p>
+     *
+     * <p><b>{@code standaloneContentType} (FR-104, added 2026-09-03):</b> the env-override editor's
+     * own content-type picker selection — meaningful ONLY as a fallback when the resolved chain is
+     * genuinely empty (i.e. {@code explicitlyStandalone} with zero base-chain rows), which is the one
+     * case FR-60's "always resolve type from the chain" rule has nothing to resolve from. Ignored
+     * whenever the chain resolves to ≥1 entry — that case's type always comes from the chain, exactly
+     * as before this parameter existed.</p>
      */
     public JSONObject doComputeMerge(@QueryParameter String overlayJson, @QueryParameter String baseChainJson,
-                                      @QueryParameter boolean explicitlyStandalone) {
+                                      @QueryParameter boolean explicitlyStandalone,
+                                      @QueryParameter(fixEmpty = true) String standaloneContentType) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        return previewMergeImpl(overlayJson, baseChainJson, explicitlyStandalone);
+        return previewMergeImpl(overlayJson, baseChainJson, explicitlyStandalone, standaloneContentType);
     }
 
     /**
@@ -207,12 +215,14 @@ public class EnvConfigSetPage extends ConfigSetPage {
      * See {@link ConfigSetPage#doActivateVersion(int)} javadoc.
      */
     @JavaScriptMethod(name = "previewMerge")
-    public JSONObject jsPreviewMerge(String overlayJson, String baseChainJson, boolean explicitlyStandalone) {
+    public JSONObject jsPreviewMerge(String overlayJson, String baseChainJson, boolean explicitlyStandalone,
+                                      String standaloneContentType) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        return previewMergeImpl(overlayJson, baseChainJson, explicitlyStandalone);
+        return previewMergeImpl(overlayJson, baseChainJson, explicitlyStandalone, standaloneContentType);
     }
 
-    private JSONObject previewMergeImpl(String overlayRaw, String baseChainJson, boolean explicitlyStandalone) {
+    private JSONObject previewMergeImpl(String overlayRaw, String baseChainJson, boolean explicitlyStandalone,
+                                         String standaloneContentType) {
         JSONObject result = new JSONObject();
 
         List<BaseConfigReference> chain = tryParseBaseChain(baseChainJson);
@@ -255,7 +265,13 @@ public class EnvConfigSetPage extends ConfigSetPage {
                     + " must all share one content type.");
             return result;
         }
-        ContentType type = distinctTypes.isEmpty() ? ContentType.JSON : distinctTypes.iterator().next();
+        // FR-104: a genuinely empty resolved chain only ever occurs when explicitlyStandalone is
+        // true (a non-standalone empty draft chain is substituted with the FR-52 default above, so
+        // `resolved` is never empty for that case) — there is no chain to resolve a ContentType from,
+        // so fall back to the client's own content-type picker selection instead of hardcoding JSON.
+        ContentType type = !distinctTypes.isEmpty()
+                ? distinctTypes.iterator().next()
+                : parseContentTypeOrDefault(standaloneContentType, ContentType.JSON);
         TreeFormat format = TreeFormats.forType(type);
 
         TreeNode overlay;
@@ -301,6 +317,26 @@ public class EnvConfigSetPage extends ConfigSetPage {
             result.put("ok", false);
             result.put("error", e.getMessage());
             return result;
+        }
+    }
+
+    /**
+     * FR-104: parses a client-supplied {@link ContentType} name defensively — used only for the
+     * standalone-with-empty-chain fallback in {@link #previewMergeImpl}, where the value comes from
+     * the env-override editor's own content-type picker rather than a resolved base chain. Never
+     * throws (a malformed/absent value degrades to {@code fallback}) since this is a live-preview
+     * convenience, not a save-time contract — {@link ConfigSetPage#saveImpl} independently validates
+     * the same picker's submitted value at save time via {@link ContentType#valueOf(String)}, same
+     * convention as {@link CommonConfigSetPage}'s own picker.
+     */
+    private static ContentType parseContentTypeOrDefault(String raw, ContentType fallback) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return fallback;
+        }
+        try {
+            return ContentType.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            return fallback;
         }
     }
 

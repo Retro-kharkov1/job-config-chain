@@ -1075,10 +1075,10 @@ project/version could not be resolved," the same shape as `resolveEffective`'s e
 message, just for a differently-sourced reference (the `version` parameter, not a base-chain entry):
 
 ```
-Env Config Set for projectKey 'apilealtad-env-qa', environment 'qa' has no version 12 to resolve (explicit 'version' parameter)
+Env Config Set for projectKey 'sample-app-env-qa', environment 'qa' has no version 12 to resolve (explicit 'version' parameter)
 ```
 ```
-Common Config Set for projectKey 'apilealtad' has no version 12 to resolve (explicit 'version' parameter, useBase=true)
+Common Config Set for projectKey 'sample-app' has no version 12 to resolve (explicit 'version' parameter, useBase=true)
 ```
 
 (Exact strings already given in §2's code.)
