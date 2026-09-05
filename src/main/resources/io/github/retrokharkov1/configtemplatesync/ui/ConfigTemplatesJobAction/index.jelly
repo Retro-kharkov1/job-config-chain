@@ -1,0 +1,94 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
+  <l:layout title="${it.job.displayName} — Config Templates">
+    <l:main-panel>
+      <style>
+        .ctsync-page .jenkins-section,
+        .ctsync-page .jenkins-section:first-of-type {
+          border: 1px solid var(--table-border-color, #ddd);
+          border-radius: var(--form-input-border-radius, 6px);
+          padding: 1.25rem;
+          margin: 0 0 32px;
+        }
+        .ctsync-page .jenkins-section__title { font-weight: 700; font-size: 1.15em; margin-bottom: 14px; }
+        .ctsync-inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+        .ctsync-inline-form .setting-input { flex: 1 1 240px; min-width: 180px; width: auto !important; }
+        .ctsync-hint { color: #666; margin-bottom: 8px; }
+      </style>
+      <div class="ctsync-page">
+
+      <h1>${%heading}</h1>
+
+      <!-- FR-76 state 1/2/3 all share the same editable association form: the operator can always
+           set, change or clear the association from here, so no state is a dead end. -->
+      <f:section title="${%association.heading}">
+        <j:if test="${!it.hasAssociation()}">
+          <div class="ctsync-hint">&#9432; ${%association.none}</div>
+        </j:if>
+        <f:form method="post" action="saveAssociation" name="associationForm">
+          <f:entry title="${%association.projectKey}" field="projectKey">
+            <f:textbox name="projectKey" value="${it.projectKey}"/>
+          </f:entry>
+          <f:entry title="${%association.environment}" field="environment">
+            <f:textbox name="environment" value="${it.environment}"/>
+          </f:entry>
+          <f:block>
+            <f:submit value="${%association.save}"/>
+          </f:block>
+        </f:form>
+      </f:section>
+
+      <!-- FR-76 state 2/3: the project's environments, each its own item leading to its own
+           job-scoped page (FR-77) — the "Configure" pattern repeated one level down. -->
+      <j:if test="${it.hasAssociation()}">
+        <f:section title="${%env.heading}">
+          <table class="jenkins-table" style="width:100%">
+            <thead>
+              <tr>
+                <th>${%env.column.environment}</th>
+                <th>${%env.column.activeVersion}</th>
+                <th>${%env.column.associated}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <j:forEach var="cs" items="${it.envConfigSets}">
+                <tr>
+                  <td><a href="${cs.environment}/">${cs.environment}</a></td>
+                  <td>
+                    <j:choose>
+                      <j:when test="${cs.activeVersion != null}">v${cs.activeVersion.versionNumber}</j:when>
+                      <j:otherwise>${%env.noActiveVersion}</j:otherwise>
+                    </j:choose>
+                  </td>
+                  <td>
+                    <j:choose>
+                      <j:when test="${cs.environment == it.environment}">${%env.thisJob}</j:when>
+                      <j:otherwise>
+                        <form method="post" action="associateEnvironment" style="margin:0">
+                          <input type="hidden" name="environment" value="${cs.environment}"/>
+                          <button type="submit" class="jenkins-button">${%env.associate}</button>
+                        </form>
+                      </j:otherwise>
+                    </j:choose>
+                  </td>
+                </tr>
+              </j:forEach>
+              <j:if test="${empty(it.envConfigSets)}">
+                <tr><td colspan="3">${%env.none}</td></tr>
+              </j:if>
+            </tbody>
+          </table>
+
+          <div class="ctsync-hint">${%env.newHint}</div>
+          <div class="ctsync-inline-form">
+            <input type="text" id="newEnvName" placeholder="dev" class="setting-input"/>
+            <button type="button" class="jenkins-button jenkins-button--primary"
+                    onclick="window.location.href = encodeURIComponent(document.getElementById('newEnvName').value) + '/';">${%env.newButton}</button>
+          </div>
+        </f:section>
+      </j:if>
+
+      </div>
+    </l:main-panel>
+  </l:layout>
+</j:jelly>

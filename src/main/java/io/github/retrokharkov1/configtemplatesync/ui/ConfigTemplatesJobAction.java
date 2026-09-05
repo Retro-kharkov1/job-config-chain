@@ -165,6 +165,24 @@ public class ConfigTemplatesJobAction implements Action {
         return HttpResponses.redirectToDot();
     }
 
+
+    /**
+     * Dispatches the trailing {@code <environment>} path segment of
+     * {@code /job/<name>/configTemplates/<environment>} to the job-scoped env screen (FR-77).
+     *
+     * <p>A catch-all {@code getDynamic(String)} rather than a named getter, for the same reason
+     * {@link ConfigTemplatesRootAction} and {@link ProjectConfigPage} already use one: Jenkins core's
+     * post-SECURITY-595 Stapler getter-routing filter does not route arbitrary named getters.</p>
+     *
+     * <p>The environment is resolved against the job's CURRENT association, read fresh — never
+     * against a value cached at construction time. A job with no association still gets a rendered
+     * page (never a dead end): the wrapper is built with a blank project key and its view explains
+     * the state instead of silently editing the wrong Config Set.</p>
+     */
+    public Object getDynamic(String environment) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        return new JobScopedEnvConfigSetPage(job, getProjectKey(), environment, new ConfigSetRepository());
+    }
     private static boolean isBlank(String value) {
         return value == null || value.isEmpty();
     }
