@@ -1778,7 +1778,7 @@ public class ConfigTemplatesUiTest {
         HtmlRadioButtonInput xmlRadio = (HtmlRadioButtonInput) page.getElementById("newContentTypeXml");
         xmlRadio.setChecked(true);
 
-        HtmlButton createButton = (HtmlButton) page.querySelector(".ctsync-inline-form button");
+        HtmlButton createButton = (HtmlButton) page.getElementById("newConfigSetCreate");
         Page result = createButton.click();
 
         String url = result.getUrl().toString();
@@ -1800,7 +1800,7 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
         HtmlPage page = wc.goTo("configTemplates");
 
-        HtmlButton createButton = (HtmlButton) page.querySelector(".ctsync-inline-form button");
+        HtmlButton createButton = (HtmlButton) page.getElementById("newConfigSetCreate");
         Page result = createButton.click();
 
         String url = result.getUrl().toString();
