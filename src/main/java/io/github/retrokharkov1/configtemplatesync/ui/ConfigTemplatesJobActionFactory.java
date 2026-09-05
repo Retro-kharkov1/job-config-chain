@@ -23,9 +23,10 @@ import java.util.Collections;
  *
  * <p><b>Permission gate</b> mirrors {@link ConfigTemplatesRootAction}: the link itself is only
  * contributed for users holding {@link Jenkins#ADMINISTER}, consistent with how the rest of this
- * plugin (root list, per-project pages) is gated. The destination page independently re-checks
- * this same permission on every request via {@code ConfigTemplatesRootAction#getTarget()}, so
- * this factory-level check is a visibility convenience, not the sole enforcement point.</p>
+ * plugin (root list, per-project pages) is gated. {@link ConfigTemplatesJobAction} independently
+ * re-checks this same permission on every request (its own {@code doXxx} handlers and, once T4/T5
+ * land, its rendered page and per-environment dispatch), so this factory-level check is a
+ * visibility convenience, not the sole enforcement point.</p>
  */
 @Extension
 public class ConfigTemplatesJobActionFactory extends TransientActionFactory<Job> {
@@ -41,8 +42,6 @@ public class ConfigTemplatesJobActionFactory extends TransientActionFactory<Job>
         if (jenkins == null || !jenkins.hasPermission(Jenkins.ADMINISTER)) {
             return Collections.emptySet();
         }
-        ConfigTemplatesJobProperty property =
-                (ConfigTemplatesJobProperty) target.getProperty((Class) ConfigTemplatesJobProperty.class);
-        return Collections.singleton(new ConfigTemplatesJobAction(property));
+        return Collections.singleton(new ConfigTemplatesJobAction(target));
     }
 }
