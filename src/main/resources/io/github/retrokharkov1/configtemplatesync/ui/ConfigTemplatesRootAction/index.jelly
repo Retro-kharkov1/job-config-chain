@@ -26,7 +26,17 @@
           border: 1px solid var(--table-border-color, #ddd);
           border-radius: var(--form-input-border-radius, 6px);
           padding: 1.25rem;
-          margin: 16px 0 0;
+          margin: 28px 0 0;
+        }
+/* Section headings (owner report, 2026-09-05): Jenkins core renders jenkins-section__title
+           at normal weight, so inside a bordered card the section's topic carried no more visual
+           weight than the body text under it and the cards read as undifferentiated blocks. Bolded
+           and slightly enlarged, with breathing room below it, so each card's topic reads as a
+           heading at a glance. Scoped to this page's own container — never a global core override. */
+        .ctsync-page .jenkins-section__title {
+          font-weight: 700;
+          font-size: 1.15em;
+          margin-bottom: 14px;
         }
         /* New Config Set form (owner report, 2026-09-04): the projectKey input, content-type
            radio group and its info hint were previously one cramped inline row (".ctsync-inline-form",
