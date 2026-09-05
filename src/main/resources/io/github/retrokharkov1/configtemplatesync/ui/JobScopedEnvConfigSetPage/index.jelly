@@ -1,0 +1,22 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout">
+  <j:choose>
+    <!-- FR-77: a job with no association must still render something actionable here rather than
+         silently editing whichever Config Set the URL happened to name. -->
+    <j:when test="${empty(it.projectKey)}">
+      <l:layout title="${it.environment} — Config Templates">
+        <l:main-panel>
+          <h1>${it.environment}</h1>
+          <p>${%noAssociation}</p>
+          <p><a href="../">&#8592; ${%backToJobPage}</a></p>
+        </l:main-panel>
+      </l:layout>
+    </j:when>
+    <j:otherwise>
+      <!-- FR-77a: this renders the SAME EnvConfigSetPage object the global URL renders, not a
+           job-scoped copy of the editor. One save path, one validation path, one persisted entity —
+           guaranteed by construction, not by convention. -->
+      <st:include page="index.jelly" it="${it.delegate}" from="${it.delegate}"/>
+    </j:otherwise>
+  </j:choose>
+</j:jelly>
