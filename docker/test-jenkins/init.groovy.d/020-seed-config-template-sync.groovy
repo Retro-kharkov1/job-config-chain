@@ -32,6 +32,7 @@ import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole
 import io.github.retrokharkov1.configtemplatesync.model.ContentType
 import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository
+import io.github.retrokharkov1.configtemplatesync.ui.ConfigTemplatesJobProperty
 import jenkins.model.Jenkins
 import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition
@@ -113,12 +114,13 @@ if (existingCredential != null) {
 // ---------------------------------------------------------------------------------------
 // 3) The e2e Pipeline job itself — created, never auto-triggered.
 // ---------------------------------------------------------------------------------------
-if (jenkins.getItemByFullName(JOB_NAME) != null) {
-    logger("Job '${JOB_NAME}' already exists — skipping.")
+def job = jenkins.getItemByFullName(JOB_NAME)
+if (job != null) {
+    logger("Job '${JOB_NAME}' already exists — skipping creation.")
 } else if (!FIXTURE_JENKINSFILE.exists()) {
     logger("[ERROR] Fixture Jenkinsfile not found at ${FIXTURE_JENKINSFILE} — image build is broken, job NOT created.")
 } else {
-    def job = jenkins.createProject(WorkflowJob.class, JOB_NAME)
+    job = jenkins.createProject(WorkflowJob.class, JOB_NAME)
     job.setDefinition(new CpsFlowDefinition(FIXTURE_JENKINSFILE.text, true))
     job.setDescription(
             "e2e smoke test for the config-template-sync plugin: runs configTemplateValidate then " +
@@ -126,6 +128,35 @@ if (jenkins.getItemByFullName(JOB_NAME) != null) {
             "Not auto-triggered on startup — click Build Now.")
     job.save()
     logger("Created job '${JOB_NAME}' (not triggered).")
+}
+
+// ---------------------------------------------------------------------------------------
+// 4) The job's Config Templates association (ConfigTemplatesJobProperty) — the same thing a
+//    human sets by hand on /job/<name>/configure, applied here so the fixture ships with it.
+//
+//    Deliberately OUTSIDE the create-or-skip block above: an already-existing job (a volume
+//    seeded by an older image) must still pick the association up on the next start, instead of
+//    the seed skipping the whole block and leaving the job without it.
+//
+//    Why this matters: ConfigTemplatesJobAction resolves its sidebar link from THIS property. No
+//    property means projectKey is empty, and the action correctly falls back to the generic
+//    /configTemplates/ root list instead of deep-linking to this job's own env page — which is
+//    precisely the behaviour the fixture exists to demonstrate. Previously the association only
+//    ever existed because someone set it through the UI, so it lived solely in the jenkins_home
+//    volume and vanished with the next `docker compose down -v` (owner report, 2026-09-05).
+// ---------------------------------------------------------------------------------------
+if (job != null) {
+    def existing = job.getProperty(ConfigTemplatesJobProperty.class)
+    if (existing != null && existing.projectKey == PROJECT_KEY && existing.environment == ENVIRONMENT) {
+        logger("Job '${JOB_NAME}' already associated with ${PROJECT_KEY}/${ENVIRONMENT} — skipping.")
+    } else {
+        if (existing != null) {
+            job.removeProperty(ConfigTemplatesJobProperty.class)
+        }
+        job.addProperty(new ConfigTemplatesJobProperty(PROJECT_KEY, ENVIRONMENT))
+        job.save()
+        logger("Associated job '${JOB_NAME}' with ${PROJECT_KEY}/${ENVIRONMENT}.")
+    }
 }
 
 logger("Seed script finished.")
