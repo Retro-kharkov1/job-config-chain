@@ -1,49 +1,48 @@
 package io.github.retrokharkov1.configtemplatesync.ui;
 
 import hudson.model.Action;
+import hudson.model.Job;
+import hudson.util.HttpResponses;
+import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
+import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 import jenkins.model.Jenkins;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.interceptor.RequirePOST;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * A "find the plugin from any job page" discoverability link, contributed to every
  * {@link hudson.model.Job}'s sidebar by {@link ConfigTemplatesJobActionFactory}.
  *
- * <p>When the job has a {@link ConfigTemplatesJobProperty} configured with a non-blank
- * {@code projectKey}, this is a genuine job-specific deep link straight into that project's
- * Config Set — the structural mapping comes from that property, never invented here. When no
- * such property is configured (the default for any job that has not opted in), this falls back
- * to the plugin's generic root list page ({@link ConfigTemplatesRootAction}), exactly like the
- * existing {@code /manage/} entry does — so existing jobs that haven't set up the association
- * keep working unchanged.</p>
+ * <p>Unlike the plugin's global {@code /configTemplates/...} pages, this action renders its OWN
+ * page (FR-76) — it never issues an HTTP redirect. That page is the single place a job's
+ * {@link ConfigTemplatesJobProperty} association is viewed AND edited, presenting one of three
+ * content states depending on that property's current values:</p>
+ * <ul>
+ *   <li>no property (or a blank {@code projectKey}) — "not yet associated", with an editable
+ *       {@code projectKey} field and a Save action;</li>
+ *   <li>{@code projectKey} set, {@code environment} blank — the association form plus a list of
+ *       every existing env Config Set for that project (mirrors {@link ProjectConfigPage});</li>
+ *   <li>{@code projectKey} AND {@code environment} both set — same as above, with the job's chosen
+ *       environment highlighted and its job-scoped per-environment page (FR-77, task T5)
+ *       prominent.</li>
+ * </ul>
  *
- * <p><b>Destination when only {@code projectKey} is set (owner clarification, 2026-09-02):</b>
- * this links to the project OVERVIEW page ({@code /configTemplates/<projectKey>}, i.e.
- * {@link ProjectConfigPage}), NOT {@code /configTemplates/<projectKey>/common}. Rationale: the
- * common Config Set is the shared, project-wide layer — it is not itself job/environment
- * specific, so landing there does not fulfill "reload/manage THIS JOB's config" the way the
- * overview page does. {@link ProjectConfigPage} lists every existing env Config Set for the
- * project AND has the "New Env Config Set" creation input right on it (see that class's
- * {@code index.jelly}), so it is the actionable next step when a job is tied to a project but has
- * not (yet) picked/created a specific environment — never a dead end.</p>
- *
- * <p><b>Destination when {@code projectKey} + {@code environment} are both set, but that env
- * Config Set has no saved version yet:</b> still links straight to
- * {@code /configTemplates/<projectKey>/<environment>} ({@link EnvConfigSetPage}) — confirmed by
- * reading {@link ConfigSetPage#isExists()} and {@code EnvConfigSetPage/index.jelly}: a never-saved
- * env Config Set renders a small "does not exist yet" info banner ({@code %notExistYet}) but the
- * full editor (Monaco seeded with {@code "{}"}, content-type picker unlocked, base-chain editor,
- * Save button) still renders underneath it, ready for a first save — this is already a coherent,
- * actionable landing page (not a broken/empty screen), so no further UX change was needed here.</p>
+ * <p><b>The property is never cached.</b> This class holds the owning {@link Job} itself, not a
+ * {@link ConfigTemplatesJobProperty} snapshot, and re-reads {@code job.getProperty(...)} on every
+ * call via {@link #getProperty()} — a cached reference would go stale the moment
+ * {@link #doSaveAssociation(String, String)}/{@link #doAssociateEnvironment(String)} (or any other
+ * code path) saves a new property onto the job, and FR-77's per-environment page explicitly
+ * requires resolving against the job's CURRENT association at request time, not one captured when
+ * this action was constructed.</p>
  *
  * <p><b>Label</b> is kept character-for-character identical to
- * {@link ConfigTemplatesRootAction#getDisplayName()} ("Config Templates") in both cases, so this
- * is immediately recognizable as the same feature regardless of which page the user found it
- * from or whether the job-specific association is configured; only the destination/tooltip
- * ({@link #getDescription()}-style text via {@link #getUrlName()}'s target and this class's
- * javadoc) differs.</p>
+ * {@link ConfigTemplatesRootAction#getDisplayName()} ("Config Templates"), so this is immediately
+ * recognizable as the same feature regardless of whether the job-specific association is
+ * configured.</p>
  *
  * <p><b>{@link #getUrlName()} returns a plain, job-relative segment</b> ({@code "configTemplates"},
  * no leading {@code "/"}), per the {@code hudson.model.Action#getUrlName()} javadoc
@@ -52,30 +51,19 @@ import java.io.IOException;
  * object will be exposed to /foo/bar/zot/xyz" — since the parent here is the {@link
  * hudson.model.Job} itself (bound to {@code /job/<name>}), this action is exposed at {@code
  * /job/<name>/configTemplates}, exactly like the built-in "Configure" sidebar entry
- * ({@code /job/<name>/configure}) works. This makes the sidebar link itself job-scoped, matching
- * every other Jenkins job action, instead of an external link into the plugin's own
- * {@code /configTemplates/...} URL space.</p>
+ * ({@code /job/<name>/configure}) works.</p>
  *
- * <p>The actual destination (generic root list / project overview / specific env page) still
- * lives under {@code /configTemplates/...} — that real work is not duplicated here. Instead,
- * {@link #doIndex(StaplerRequest, StaplerResponse)} is Stapler's conventional "handle a request landing exactly on
- * this object's own URL" entry point (dispatched for {@code /job/<name>/configTemplates} and
- * {@code /job/<name>/configTemplates/}), and it issues an HTTP redirect ({@code
- * StaplerResponse#sendRedirect2}) to whichever of the three destinations {@link
- * #resolveDestinationUrl()} computes — the exact same 3-case resolution logic this class always
- * had, just now driving a redirect target instead of a precomputed link href.</p>
+ * <p>Rendering itself (the FR-76 three-state page) is {@code ConfigTemplatesJobAction/index.jelly}
+ * — a separate task (T4), not part of this class. The per-environment
+ * {@code /job/<name>/configTemplates/<environment>} dispatch (FR-77, {@code getDynamic(String)})
+ * is also a separate task (T5), deliberately not added here.</p>
  */
 public class ConfigTemplatesJobAction implements Action {
 
-    /** {@code null} means "not configured for this job" — the generic root-list fallback. */
-    private final ConfigTemplatesJobProperty property;
+    private final Job<?, ?> job;
 
-    public ConfigTemplatesJobAction() {
-        this(null);
-    }
-
-    public ConfigTemplatesJobAction(ConfigTemplatesJobProperty property) {
-        this.property = property;
+    public ConfigTemplatesJobAction(Job<?, ?> job) {
+        this.job = job;
     }
 
     @Override
@@ -89,23 +77,6 @@ public class ConfigTemplatesJobAction implements Action {
         return "Config Templates";
     }
 
-    /**
-     * Tooltip-style description surfaced by the sidebar link, distinguishing the job-specific
-     * deep link from the generic browse-everything fallback while the visible label itself stays
-     * identical in both cases.
-     */
-    public String getDescription() {
-        String projectKey = property == null ? null : property.getProjectKey();
-        if (projectKey == null || projectKey.isEmpty()) {
-            return "Browse all Config Templates";
-        }
-        String environment = property.getEnvironment();
-        if (environment == null || environment.isEmpty()) {
-            return "Open this job's Config Templates project (pick or create an environment)";
-        }
-        return "Open this job's Config Templates";
-    }
-
     @Override
     public String getUrlName() {
         // Plain relative segment (no leading "/"): Stapler exposes this action at
@@ -113,47 +84,88 @@ public class ConfigTemplatesJobAction implements Action {
         return "configTemplates";
     }
 
-    /**
-     * Stapler's conventional handler for a request landing exactly on this action's own URL
-     * ({@code /job/<name>/configTemplates}, and {@code /job/<name>/configTemplates/}) — redirects
-     * to whichever real destination page {@link #resolveDestinationUrl()} computes. Permission is
-     * re-checked here (mirroring every other doXxx entry point in this plugin, e.g. {@code
-     * ConfigSetPage#doSubmitSave}) rather than relying solely on {@link
-     * ConfigTemplatesJobActionFactory}'s factory-level gate, since that gate only controls whether
-     * the sidebar *link* is rendered, not whether this URL is reachable.
-     *
-     * <p>The redirect target is built as {@code req.getContextPath() + resolveDestinationUrl()},
-     * NOT the raw {@link #resolveDestinationUrl()} string alone: unlike {@code
-     * Action#getUrlName()} (where Stapler itself resolves a leading {@code "/"} against the
-     * webapp's context path per that method's javadoc), {@link StaplerResponse#sendRedirect2}
-     * issues a plain HTTP redirect with no such context-path translation, so a Jenkins instance
-     * not deployed at the servlet-container root (e.g. {@code /jenkins/...}, as this plugin's own
-     * {@code JenkinsRule} tests run under) would otherwise be redirected to the wrong host-root
-     * path instead of {@code <contextPath>/configTemplates/...}.</p>
-     */
-    public void doIndex(StaplerRequest req, StaplerResponse rsp) throws IOException {
-        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        rsp.sendRedirect2(req.getContextPath() + resolveDestinationUrl());
+    /** The job this action was contributed to — read fresh, never cached. Exposed for the Jelly view. */
+    public Job<?, ?> getJob() {
+        return job;
     }
 
     /**
-     * The same 3-case resolution logic this class always used to compute {@code getUrlName()}'s
-     * link href, now producing a redirect target instead — see this class's javadoc for the
-     * destination rationale in each case.
+     * The job's current {@link ConfigTemplatesJobProperty}, or {@code null} if it has none. Always
+     * re-reads {@code job.getProperty(...)} rather than returning a cached field — see this class's
+     * javadoc for why a cached reference would be unsafe here.
      */
-    private String resolveDestinationUrl() {
-        String projectKey = property == null ? null : property.getProjectKey();
-        if (projectKey == null || projectKey.isEmpty()) {
-            // Not configured at all: genuinely "nothing set up, browse everything".
-            return "/" + ConfigTemplatesRootAction.URL_NAME;
+    public ConfigTemplatesJobProperty getProperty() {
+        return job.getProperty(ConfigTemplatesJobProperty.class);
+    }
+
+    /** {@code true} once a non-blank {@code projectKey} has been associated with this job. */
+    public boolean hasAssociation() {
+        ConfigTemplatesJobProperty property = getProperty();
+        return property != null && !isBlank(property.getProjectKey());
+    }
+
+    /** The current {@code projectKey}, or {@code ""} if this job has no association. */
+    public String getProjectKey() {
+        ConfigTemplatesJobProperty property = getProperty();
+        return property == null ? "" : property.getProjectKey();
+    }
+
+    /** The current {@code environment}, or {@code ""} if none has been picked yet. */
+    public String getEnvironment() {
+        ConfigTemplatesJobProperty property = getProperty();
+        return property == null ? "" : property.getEnvironment();
+    }
+
+    /**
+     * Every existing env Config Set for the currently-associated project, or an empty list when
+     * this job has no association — the FR-76 project-only/both-set states' env list, mirroring
+     * {@link ProjectConfigPage#getEnvConfigSets()}.
+     */
+    public List<ConfigSet> getEnvConfigSets() {
+        String projectKey = getProjectKey();
+        if (isBlank(projectKey)) {
+            return List.of();
         }
-        String environment = property.getEnvironment();
-        if (environment == null || environment.isEmpty()) {
-            // Project set, no environment yet: land on the actionable project OVERVIEW page
-            // (lists env Config Sets + "New Env Config Set" input), not the project-wide common
-            // page — see this class's javadoc for why.
-            return "/" + ConfigTemplatesRootAction.URL_NAME + "/" + projectKey;
-        }
-        return "/" + ConfigTemplatesRootAction.URL_NAME + "/" + projectKey + "/" + environment;
+        return new ConfigSetRepository().listEnv(projectKey);
+    }
+
+    /**
+     * Saves the association form (FR-76's editable {@code projectKey}/{@code environment} fields)
+     * as a new {@link ConfigTemplatesJobProperty} on this job.
+     *
+     * <p><b>Permission:</b> {@link Jenkins#ADMINISTER} is checked first (this whole page is
+     * admin-only, same as every other entry point in this plugin), and {@link Job#CONFIGURE} on the
+     * specific target job is ALSO checked (owner decision, design §6 risk 1): today
+     * {@code Jenkins.ADMINISTER} already implies {@code Job.CONFIGURE}, so this changes no observable
+     * behavior — the point is to make the intent ("this handler mutates one specific job's config,
+     * so it must hold that job's own CONFIGURE permission too") explicit in code, so nobody deletes
+     * this check later as "redundant" if the outer {@code ADMINISTER} gate is ever relaxed.</p>
+     */
+    @RequirePOST
+    public HttpResponse doSaveAssociation(@QueryParameter String projectKey,
+                                           @QueryParameter String environment) throws IOException {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        job.checkPermission(Job.CONFIGURE);
+        job.addProperty(new ConfigTemplatesJobProperty(projectKey, environment));
+        return HttpResponses.redirectToDot(); // FR-76: reload of this same page shows the saved values
+    }
+
+    /**
+     * The FR-76 project-only state's one-click "associate this job with {@code <environment>}"
+     * action: keeps the job's current {@code projectKey} and only updates {@code environment}.
+     *
+     * <p>Same permission model as {@link #doSaveAssociation(String, String)} — see that method's
+     * javadoc.</p>
+     */
+    @RequirePOST
+    public HttpResponse doAssociateEnvironment(@QueryParameter String environment) throws IOException {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        job.checkPermission(Job.CONFIGURE);
+        job.addProperty(new ConfigTemplatesJobProperty(getProjectKey(), environment));
+        return HttpResponses.redirectToDot();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isEmpty();
     }
 }
