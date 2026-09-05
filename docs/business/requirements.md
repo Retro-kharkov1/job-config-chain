@@ -12,6 +12,34 @@
 > job-association numbers (`ConfigTemplatesJobPropertyFormPersistenceTest.java`) has been updated to
 > match. See the renumbered section near the end of §4 for the job-association FRs.
 >
+> **Update (2026-09-05):** FR-75–FR-78 in the "Job association" block were REWRITTEN (content, not just
+> numbers this time) per an owner correction: the "Config Templates Association" section must not live
+> inside `/job/<name>/configure` — that URL was cited only as an example of the "own sidebar item → own
+> page" pattern. The association now has its own dedicated page at `/job/<name>/configTemplates`,
+> rendered directly (no `sendRedirect2`) with three content states (no association / project-only /
+> project+environment). The existing job-sidebar "Config Templates" item (already contributed by
+> `ConfigTemplatesJobActionFactory`) is the single navigation affordance into this feature and is not
+> duplicated; individual environments do NOT get their own sidebar entries, only in-page links. The
+> pattern repeats one level down per environment via a JOB-SCOPED page,
+> `/job/<name>/configTemplates/<environment>` (owner explicitly rejected reusing the existing global
+> `/configTemplates/<projectKey>/<environment>` page for this — "нет" when asked directly), specified in
+> the rewritten **FR-77**. A new **FR-77a** makes the resulting two-URLs-one-Config-Set situation a
+> numbered, testable data-safety requirement (one shared save/validate path, one persisted entity, canonical
+> URL stays the global page). FR-76/77 also spell out, bullet by bullet, which UI conventions MUST mirror
+> `/job/<name>/configure` exactly (sidebar mechanism, URL shape, breadcrumbs, post-save behavior, form
+> furniture). **Update (2026-09-05, same day, second pass):** these "mirror Configure" points were
+> re-verified against Jenkins core 2.568.3 itself (unpacked `jenkins-core-2.568.3.jar` inside the running
+> test container) and are now stated in FR-75/FR-76/FR-77 as confirmed facts rather than open questions:
+> `hudson/model/Job/configure.jelly`'s `f:descriptorList`/`h.getJobPropertyDescriptors(it)` is the exact
+> mechanism that must stop surfacing `ConfigTemplatesJobProperty` for it to disappear from `/job/<name>/configure`
+> (FR-75); `hudson/model/AbstractProject/sidepanel.jelly` confirms plugin `Action`s always render via
+> `actions.jelly`, strictly after core's own `<p:configurable/>` block (Configure/Build Now/Delete) — so a
+> plugin sidebar item can never be placed above or among those core items, only in the same KIND of
+> `l:task`-equivalent slot (FR-76); and the `/job/<name>/configure` → `/job/<name>/configTemplates` URL
+> mirroring was confirmed live (FR-76/FR-77). A new **FR-78a** records the migration note and explicitly
+> supersedes the old FR-78 acceptance criteria. FR-79 and everything after it are unchanged and keep their
+> existing numbers.
+>
 > Status: DRAFT v2 (BSA pass 2, 2026-08-27 — folds in the admin-UI specification). v1 was written from
 > scratch against the raw design discussion (`C:\Users\retro\.claude\plans\jenkins-woolly-dragonfly.md`,
 > earlier revision) and the task description of the already-pushed MVP. **Limitation (still applies to
@@ -1130,50 +1158,287 @@ dependency and can proceed to `tech-lead` immediately, per the plan's own SDLC s
 
 **Job association (added 2026-09-02, renumbered 2026-09-03 from a standalone FR-71–FR-74 to avoid the
 collision noted in the consolidation note at the top of this document — no requirement content changed,
-only the numbers)**
+only the numbers; FR-75–FR-78 REWRITTEN 2026-09-05 per owner correction, content changed this time — see
+the consolidation note at the top of this document and the two rationale paragraphs immediately below)**
 
-A `Job` MAY opt into a Config Templates project/environment via a per-job property, surfacing a
-job-sidebar "Config Templates" link.
+**Owner correction (2026-09-05):** the previous FR-75–FR-78 had the "Config Templates Association" section
+embedded inside the job's own `/job/<name>/configure` form, with the sidebar action immediately
+redirecting away from `/job/<name>/configTemplates` to one of three destinations under the plugin's own
+`/configTemplates/...` URL space. The owner clarified `/job/<name>/configure` was cited only as an EXAMPLE
+OF THE PATTERN ("own sidebar item → own full page"), never as the location the association should live in.
+Nothing about this feature is rendered inside `/job/<name>/configure` any more, and it never gets an
+`f:optionalBlock`/`f:descriptorList` row-group there again — the association gets its own page instead,
+reached from its own sidebar item, exactly the way `/job/<name>/configure` is reached from the
+"Configure" sidebar item.
+
+**Second owner clarification (same day):** "Configure" is the example of the pattern, and the pattern
+repeats ONE LEVEL DOWN, per environment — the job's own page is not a single flat form covering
+association-plus-editing in one block; it presents the job's association at the top, then hands off to a
+per-environment "own item → own page" screen for the actual environment Config Set, rather than cramming
+environment content inline. FR-77 below spells out that per-environment screen.
+
+**Third owner clarification (2026-09-05, same day):** the per-environment screen MUST itself stay
+job-scoped — `/job/<name>/configTemplates/<environment>` — never the existing global
+`/configTemplates/<projectKey>/<environment>` page reached by ordinary navigation. Asked explicitly
+whether the per-env page should be `/configTemplates/test-app/dev/`, the owner answered "нет". The
+"own item → own page" pattern must hold all the way down without ever throwing the operator out of
+their job's context: from the job page the operator drills into an environment and stays under
+`/job/<name>/...`, exactly as every other job-scoped screen ("Configure", "Build History") does. FR-77
+below specifies the job-scoped screen itself; FR-77a specifies how the resulting two-URLs-one-Config-Set
+situation is kept safe and unambiguous.
+
+A `Job` MAY opt into a Config Templates project/environment via a per-job property. That property is
+viewed and edited exclusively on the job's own dedicated `/job/<name>/configTemplates` page (FR-76), never
+inside `/job/<name>/configure`.
 
 - **FR-75**: Any `Job` MAY carry a `ConfigTemplatesJobProperty` (`hudson.model.JobProperty<Job<?,?>>`)
   recording `projectKey` (string, optional/blank-able) and `environment` (string, optional/blank-able).
-  Both default to blank (`""`), never `null`, when unset. A job with no property, or a blank
-  `projectKey`, is **not associated** — the default state for every job that hasn't opted in, and must
-  never block normal job configuration/use. `environment` blank while `projectKey` is set is a valid,
-  meaningful state (tied to the project's common Config Set only), not an incomplete configuration.
-  `DescriptorImpl.doCheckProjectKey` MUST return `FormValidation.warning` (never `.error`) when the
-  entered `projectKey` doesn't match an existing Config Set — a job may legitimately be wired to a
+  This remains the persistence mechanism — native Jenkins `JobProperty` state, serialized with the rest of
+  the job to `config.xml` via XStream under `$JENKINS_HOME`, exactly like every other job property; no
+  external store of any kind. Both fields default to blank (`""`), never `null`, when unset. A job with no
+  property, or a blank `projectKey`, is **not associated** — the default state for every job that hasn't
+  opted in, and must never block normal job configuration/use. `environment` blank while `projectKey` is
+  set is a valid, meaningful state (tied to the project's common Config Set only), not an incomplete
+  configuration. `DescriptorImpl.doCheckProjectKey` MUST return `FormValidation.warning` (never `.error`)
+  when the entered `projectKey` doesn't match an existing Config Set — a job may legitimately be wired to a
   project key before that Config Set exists, or after it's deleted; this check must never block saving.
-- **FR-76**: Every `Job` is contributed a "Config Templates" sidebar action, gated on
-  `Jenkins.ADMINISTER`, whose destination resolves from the job's `ConfigTemplatesJobProperty` in
-  exactly three cases: no property/blank `projectKey` → `/configTemplates` (generic root list);
-  `projectKey` set, `environment` blank → `/configTemplates/<projectKey>` (project overview — lists
-  every env Config Set and offers "New Env Config Set" creation, an actionable next step; explicitly
-  NOT `/configTemplates/<projectKey>/common`, since the common Config Set is project-wide, not
-  job/environment-specific); both set → `/configTemplates/<projectKey>/<environment>` (deep-links
-  straight to the job's env Config Set, even if never saved yet — its page still renders a full, usable
-  editor under a "does not exist yet" banner, never a broken/empty screen). The visible label is
-  `"Config Templates"` in all three cases, identical to the global entry's own label; only the
-  destination and tooltip differ.
-- **FR-77**: The job-sidebar action's URL MUST be the plain, job-relative segment `"configTemplates"`
-  (no leading `/`), so Stapler exposes it at `/job/<name>/configTemplates` — exactly mirroring the
-  built-in "Configure" entry at `/job/<name>/configure`, rather than an external link into the plugin's
-  own `/configTemplates/...` URL space. A request landing exactly on that URL MUST be handled by
-  `doIndex`, which re-checks `Jenkins.ADMINISTER` independently of the sidebar-visibility gate, then
-  issues an HTTP redirect (`sendRedirect2`) to `req.getContextPath() + <FR-76's resolved destination>` —
-  the context path MUST be prepended explicitly, since `sendRedirect2` performs no context-path
-  translation of its own (unlike `Action#getUrlName()`'s leading-`/` convention), so instances not
-  deployed at the servlet-container root still redirect correctly.
-- **FR-78**: Saving the "Config Templates Association" section on `/job/<name>/configure` (a real HTML
-  form submission) MUST result in a `ConfigTemplatesJobProperty` being persisted with the submitted
-  values intact: `GET /job/<name>/config.xml` MUST contain the property element (not an empty
-  `<properties/>`); reloading `/configure` afterward MUST show the same values pre-filled; the job's
-  "Config Templates" sidebar link MUST then resolve per FR-76 on the very next page load, no extra save/
-  restart/reindex required. **This was a confirmed, root-caused bug** (a nested `<f:section>` in
-  `config.jelly` breaking Jenkins' row-adjacency-based form-JSON reconstruction, per
-  `docs/development/job-property-form-persistence-root-cause.md`) — fixed and verified live in a real
-  browser (2026-09-02/03): `config.xml` now persists the property correctly, and the sidebar link
-  deep-links to the right destination.
+  **Unlike the previous FR-75, this property is NOT contributed as a `JobPropertyDescriptor` row rendered
+  by `/job/<name>/configure`'s `f:descriptorList`.** Verified mechanism (Jenkins core 2.568.3,
+  `hudson/model/Job/configure.jelly`): the job configure page's form is
+  ```
+  <f:form ...>
+    <f:descriptorList field="properties" descriptors="${h.getJobPropertyDescriptors(it)}" forceRowSet="true"/>
+    <st:include page="configure-entries.jelly"/>
+    <f:saveApplyBar/>
+  </f:form>
+  ```
+  — the ONLY reason the "Config Templates Association" block currently appears on `/job/<name>/configure` is
+  that `f:descriptorList` auto-renders every `JobPropertyDescriptor` core's own `h.getJobPropertyDescriptors(it)`
+  returns, with no per-descriptor opt-out on the plugin's side. `<f:saveApplyBar/>` is what supplies core's
+  Save/Apply affordances on that page — unrelated to this property once it stops being surfaced there. The
+  fix is therefore to stop this descriptor being returned by `h.getJobPropertyDescriptors(it)` for
+  `ConfigTemplatesJobProperty` — i.e. its `DescriptorImpl` must stop matching whatever inclusion rule that
+  helper applies (commonly achieved by having the descriptor's applicability check return `false` for the
+  job type, or by not registering it as a `JobPropertyDescriptor` extension at all and instead keeping only
+  the plain persistence class) — so `f:descriptorList` never emits a row-group for it on `/job/<name>/configure`
+  again, while `project.addProperty(...)`/`job.getProperty(...)` keep working exactly as today. Its
+  `config.jelly` (if any `Describable`-driven fragment is reused at all) is rendered only on the FR-76 page,
+  never on the job configure form. This sidesteps the entire `f:descriptorList`/`f:optionalBlock`/
+  row-adjacency bug class documented in `docs/development/job-property-form-persistence-root-cause.md` by
+  construction: that class of bug only exists for properties submitted through `Job#doConfigSubmit`'s
+  `"properties"` JSON sub-object via that same `f:descriptorList` rendering, and this property is no longer
+  submitted through that path at all (see FR-76's own submit handler).
+  *Acceptance:* `ConfigTemplatesJobProperty` continues to round-trip via direct construction
+  (`new ConfigTemplatesJobProperty(...)` + `project.addProperty(...)`) exactly as today's
+  `ConfigTemplatesJobActionAssociationTest`/`ConfigTemplatesJobActionTest` already exercise; `doCheckProjectKey`
+  keeps returning `.warning`, never `.error`, for an unknown key.
+
+- **FR-76**: Every `Job` is contributed a "Config Templates" sidebar action which, when its own URL is
+  requested, renders a real page of its own — it never issues an HTTP redirect. That page, gated on
+  `Jenkins.ADMINISTER` (re-checked on render, independent of the sidebar-visibility gate), is the single
+  place the job's association is viewed AND edited, replacing the old sendRedirect2's three destinations
+  with three page STATES of this one page (see FR-78 for the precise mapping):
+  - **No association (no property, or blank `projectKey`):** the page explains that this job is not yet
+    tied to a Config Templates project, and presents an editable `projectKey` field (with FR-75's
+    `.warning`-only validation) plus a Save action — a real form, submitted to this page's own handler
+    (FR-76 below), not to `Job#doConfigSubmit`. This is the actionable next step; the page is never a bare
+    "nothing here" dead end.
+  - **`projectKey` set, `environment` blank:** the page shows the project name/key, the same editable
+    association form as above (so the operator can change or clear the `projectKey`, or now pick/create an
+    environment), AND a list of every existing env Config Set for that project, each rendered as its own
+    link into its own dedicated **job-scoped** page per FR-77 (`/job/<name>/configTemplates/<environment>`
+    — mirroring "Configure" one level down: item → own page, repeated per environment, never a jump into
+    the plugin's global `/configTemplates/...` URL space) — plus a "New Env Config Set" creation input,
+    exactly as `ProjectConfigPage` already offers today. Explicitly NOT a link to the common Config Set
+    page, since the common Config Set is project-wide, not job/environment-specific — same rationale the
+    previous FR-76 already established. Selecting or creating an environment here also offers a one-click
+    "associate this job with `<env>`" action that updates this job's `ConfigTemplatesJobProperty.environment`
+    via this page's own save handler (not a page navigation) so the job's association stays a first-class,
+    job-owned setting rather than something inferred implicitly from having merely visited an env page.
+  - **`projectKey` AND `environment` both set:** the page shows everything from the previous state, with
+    the job's chosen environment visually distinguished (e.g. highlighted row) and its per-environment
+    job-scoped link (FR-77) prominent — deep-linking straight to
+    `/job/<name>/configTemplates/<environment>` even if that Config Set has never been saved yet, which per
+    today's `ConfigSetPage#isExists()`/`EnvConfigSetPage/index.jelly` behavior renders a full, usable editor
+    under a "does not exist yet" banner rather than a broken/empty screen (FR-77 carries the same behavior
+    over to the job-scoped URL). The editable association form (to change `projectKey`/`environment`, or
+    clear the association entirely) remains present and functional in this state too — this page is never a
+    one-way door.
+  - **No per-environment sidebar entries.** Even though Jenkins' `TransientActionFactory` mechanism can
+    contribute more than one `Action` per job, individual environments do NOT each get their own job-sidebar
+    item — they are reached exclusively via the links on this page (and, one level down, via links on the
+    per-environment page itself, FR-77). *Justification (one sentence):* job-sidebar items are stable,
+    job-identity-level entry points — exactly like "Configure" and "Build History", which stay fixed
+    regardless of a job's changing state — whereas the set of environments for a job's associated project is
+    dynamic project data, so it belongs as in-page navigation content rather than a variable-length sidebar
+    contribution; the "own item → own page" pattern is still fully satisfied because the top level (one
+    sidebar item → this one job page) is met by the existing "Config Templates" entry, and the per-
+    environment "own page" step is met by FR-77's dedicated URL, reached by an ordinary link exactly the way
+    "Configure" itself links onward to sub-sections without minting a sidebar item for each one.
+  - **Placement, breadcrumbs, post-save behavior, and form furniture MUST mirror `/job/<name>/configure`
+    itself** — Configure is the reference implementation to copy. The following is now verified directly
+    against Jenkins core 2.568.3 (inspected inside the running test container), so these are stated as
+    confirmed facts, not open questions:
+    - *Sidebar rendering mechanism and placement (VERIFIED, core 2.568.3):*
+      `hudson/model/AbstractProject/sidepanel.jelly` builds the job sidebar as:
+      ```
+      <l:tasks>
+        <l:task contextMenu="false" href="${url}/" icon="symbol-details" title="Status"/>
+        <l:task href="${url}/changes" icon="symbol-changes" title="Changes"/>
+        <l:task href="${url}/ws/" icon="symbol-folder" title="Workspace" permission="${it.WORKSPACE}"/>
+        <j:if test="${it.configurable}"><p:configurable/></j:if>
+        <st:include page="actions.jelly"/>
+      </l:tasks>
+      ```
+      "Configure", "Build Now", and "Delete" are emitted by `<p:configurable/>`
+      (`lib/hudson/project/configurable.jelly`, itself just more `<l:task href="..." icon="..." permission="..."
+      title="..."/>` entries) — a **core-only** block. Plugin-contributed `Action`s (including this plugin's
+      "Config Templates" entry, via `ConfigTemplatesJobActionFactory`/`ConfigTemplatesJobAction`) are rendered
+      by the subsequent `<st:include page="actions.jelly"/>`, which unconditionally comes AFTER `<p:configurable/>`
+      in the markup. **Consequence, stated plainly so no implementer wastes time on it:** an Action-contributed
+      sidebar item can never be placed above or among "Configure"/"Build Now"/"Delete" — that ordering is fixed
+      by core and is not configurable from a plugin. "Same placement as Configure" therefore means, and can only
+      mean, "the same KIND of sidebar affordance" — an `l:task`-equivalent entry with an `href`/`icon`/`title` and
+      a permission gate, rendered in the standard tasks list via the plugin-actions slot — not a claim about
+      ordinal position relative to core's own items. This plugin's existing mechanism
+      (`ConfigTemplatesJobActionFactory`/`ConfigTemplatesJobAction`, already implemented) already satisfies this;
+      no change is needed here beyond what FR-78 already specifies.
+    - *URL convention (VERIFIED, live):* "Configure" is the job-relative segment `"configure"`
+      (`/job/<name>/configure`). `/job/<name>/configTemplates` already mirrors this exactly — confirmed live:
+      Stapler resolves it and issues a 302 to the trailing-slash form, the same behavior any job-relative
+      action segment gets. No further action needed here; FR-77's `/job/<name>/configTemplates/<environment>`
+      extends the identical convention one segment deeper.
+    - *Breadcrumbs:* the page MUST render via the same `<l:layout>`/ancestor-based breadcrumb mechanism
+      `/job/<name>/configure` itself uses, so the job's existing breadcrumb trail is shown with this page's
+      own crumb appended (e.g. `... › <job> › Config Templates`) — standard Jenkins core behavior for any
+      job-scoped Action page, not something this plugin must build itself; it falls out of using `<l:layout>`
+      under a job-scoped URL the same way core's own job pages do. This plugin's existing Jelly views
+      (`ProjectConfigPage`, `CommonConfigSetPage`, `EnvConfigSetPage`) are all global `RootAction`-family pages
+      with no job ancestor in their URL, so none of them are direct precedent in this codebase for this exact
+      job-scoped rendering — implementer should do a quick live check that the crumb appears once the view is
+      wired under `/job/<name>/...`, but this is a routine consequence of the URL becoming job-scoped, not an
+      open design question.
+    - *Post-save behavior:* the association form's Save action MUST behave the way core's own
+      `<f:saveApplyBar/>` behaves on `/job/<name>/configure` (the element confirmed above to supply that page's
+      Save/Apply affordances) — i.e. use the same `f:saveApplyBar`-driven Save (and, if desired, Apply) UX,
+      rather than an independently-invented button/redirect. Implementer should reuse `f:saveApplyBar` directly
+      on the FR-76 page's form for this reason, rather than a bespoke `<f:submit>`.
+    - *Form furniture:* the association-edit form MUST use the same standard Jenkins form building blocks
+      Configure's own sections use — `f:entry`/`f:textbox` field rows submitted as a real `f:form`, with
+      `f:saveApplyBar` per above — so it reads as a native Jenkins configuration screen. This part is also
+      grounded in this repo's own code: this plugin already uses exactly this `f:entry`/`f:textbox` convention
+      for its other pages' inline forms (e.g. `ProjectConfigPage/index.jelly`'s `.ctsync-inline-form`), so the
+      same convention carries over directly with no open question.
+  *Acceptance:* `GET /job/<name>/configTemplates` returns a rendered HTML page (HTTP 200, no redirect
+  response) in all three states above; the association form's Save action persists to the same
+  `ConfigTemplatesJobProperty` FR-75 defines, verifiable via `GET /job/<name>/config.xml`; every one of the
+  three states offers at least one actionable next step (never a page with no way forward); a non-admin
+  requesting the page gets a permission failure, never a silently empty or broken page; the rendered page
+  shows the job's breadcrumb trail with its own crumb appended; no environment gets its own sidebar entry.
+
+- **FR-77**: The "own item → own page" pattern that "Configure" exemplifies for the job as a whole is
+  repeated one level down, per environment, and MUST stay job-scoped — never throwing the operator out of
+  their job's context into the plugin's global `/configTemplates/...` URL space:
+  - **URL shape:** `/job/<name>/configTemplates/<environment>` — a plain, job-relative multi-segment path
+    (no leading `/`), exactly mirroring `/job/<name>/configure`'s own job-relative convention one level
+    deeper. This explicitly REPLACES the earlier draft of this FR, which proposed reusing the existing
+    global `/configTemplates/<projectKey>/<environment>` page reached by ordinary navigation — the owner
+    rejected that explicitly (asked directly whether the page should be `/configTemplates/test-app/dev/`,
+    answered "нет").
+  - **Stapler wiring requirement (stated as a requirement, not an implementation):** `ConfigTemplatesJobAction`
+    MUST expose the trailing `<environment>` path segment to a dedicated per-environment view via Stapler's
+    standard nested-object dispatch convention for an extra path segment beyond an action's own URL (e.g. a
+    `getDynamic(String, StaplerRequest, StaplerResponse)`-style hook, or an equivalent nested-action object
+    returned for that token) — the mechanism must make `/job/<name>/configTemplates/<environment>` resolve
+    to that view; which exact Stapler API accomplishes this is an implementation detail left to the
+    developer, not mandated here.
+  - **Environment resolution is always against the REQUESTING JOB'S OWN, CURRENT association**, read at
+    request time from that job's `ConfigTemplatesJobProperty.projectKey` — never a project key embedded,
+    cached, or assumed from anywhere else. This is what prevents a stale bookmarked URL from silently acting
+    against a project the job is no longer associated with (see the wrong-association case below).
+  - **No association / blank `projectKey` on this job:** the per-environment URL cannot resolve to any
+    project at all. It MUST render an explanatory page state (not a stack trace, not a 404 with no way
+    back, and never a silent create/edit against some default or global project) telling the operator this
+    job has no Config Templates project set, with a link back to the FR-76 page to set one. No Config Set
+    read or write happens in this state.
+  - **Environment does not exist yet** (job has a `projectKey`, but no `ConfigSetVersion` has ever been
+    saved for `<environment>` under it): renders the same full, usable editor under a "does not exist yet"
+    banner that the global `EnvConfigSetPage`/`ConfigSetPage#isExists()` already produce today — never a
+    broken/empty screen.
+  - **Content and semantics** are identical to the existing global per-environment editor (Monaco,
+    content-type picker, base-chain editor, Save, version history) — see FR-77a for exactly how that
+    identity is guaranteed rather than merely asserted.
+  - **Permission gate:** `Jenkins.ADMINISTER`, re-checked on render, exactly as FR-76's page and the
+    existing global page already do.
+  - **Breadcrumbs:** appends its own crumb one level under the job's `/job/<name>/configTemplates` page's
+    crumb (e.g. `... › <job> › Config Templates › <environment>`), by the same `<l:layout>`/ancestor-based
+    core mechanism as FR-76's page (see FR-76's breadcrumb bullet — this is a routine, verified consequence
+    of the URL being job-scoped, not an open question).
+  *Acceptance:* `GET /job/<name>/configTemplates/<environment>` renders a full editor for a job with a
+  matching association; a job with no `projectKey` gets the explanatory no-association state, never an
+  error page or a silent write; a never-saved environment renders the "does not exist yet" banner plus a
+  usable editor, never a broken/empty screen; a non-admin gets a permission failure; the URL never redirects
+  into `/configTemplates/...`.
+
+- **FR-77a (two-URL data-safety requirement):** the SAME environment Config Set becomes reachable from two
+  URLs once FR-77 ships: the existing global `/configTemplates/<projectKey>/<environment>` page
+  (`EnvConfigSetPage` — remains canonical for the project/environment dimension, e.g. still how
+  `ProjectConfigPage`'s own env list links to it) and the new job-scoped
+  `/job/<name>/configTemplates/<environment>` page (a job-context view onto that same data, for any job
+  whose current association's `projectKey`/`environment` match). This MUST be kept safe and unambiguous as
+  follows:
+  1. Both URLs MUST render the same editor with identical semantics — same fields, same validation rules,
+     same Save behavior — implemented by delegating to exactly ONE shared underlying save/validate code
+     path (e.g. both handlers calling into the same `ConfigSetPage`-family logic that already backs
+     `EnvConfigSetPage`). There MUST NOT be a second, independently-written implementation for the
+     job-scoped screen that could drift from the global one.
+  2. There is exactly ONE persisted entity and ONE version history per `<projectKey>/<environment>`
+     regardless of which URL was used to save it — a save via the job-scoped URL MUST be visible immediately
+     via the global URL, and vice versa.
+  3. The global `/configTemplates/<projectKey>/<environment>` page remains the CANONICAL URL for that
+     Config Set (the system of record for the project/environment dimension, still linked to from
+     `ProjectConfigPage` and elsewhere in the plugin's global navigation); the job-scoped URL is a
+     job-context view onto that same data, not a competing or job-exclusive copy.
+  4. The job-scoped screen MUST visibly state which Config Set it is showing (`<projectKey>`/`<environment>`,
+     for job `<jobName>`) and link to the canonical global page. The global page is NOT required to
+     enumerate every job associated with it, but MUST NOT present itself as if it were exclusive to one job.
+  *Acceptance:* saving via the job-scoped URL, then loading the global URL for the same
+  `<projectKey>/<environment>` (or vice versa), shows identical persisted content and identical version
+  history; submitting the same invalid input on both URLs produces the identical validation error; no
+  behavioral divergence is observable between the two URLs for the same environment.
+
+- **FR-78**: The job-sidebar action itself is the SINGLE navigation affordance into this feature from a
+  job — this rewrite does not add a second or duplicate job-sidebar control of any kind (per the owner's
+  "под job там в меню кнопка на переход есть" note: the existing item is what this spec builds on, not
+  something new). Its label `"Config Templates"` and icon
+  `symbol-document-text-outline-plugin-ionicons-api` stay exactly as they are today, gated on
+  `Jenkins.ADMINISTER` for sidebar visibility, identical to the global entry's own label/icon so it reads as
+  the same feature everywhere. Its URL MUST remain the plain, job-relative segment `"configTemplates"`
+  (no leading `/`), so Stapler exposes it at `/job/<name>/configTemplates` — exactly mirroring the built-in
+  "Configure" entry at `/job/<name>/configure`. **Only its destination behavior changes, and this explicitly
+  SUPERSEDES the previous FR-77's `sendRedirect2` requirement:** a request landing exactly on that URL MUST
+  be handled by `doIndex` rendering the FR-76 page directly (re-checking `Jenkins.ADMINISTER` independently
+  of the sidebar-visibility gate, as before), not issuing any HTTP redirect. The three old redirect
+  destinations (generic root list / project overview / specific env page) are NOT deleted requirements —
+  they become the three PAGE STATES FR-76 defines (no association / `projectKey`-only / both set) and the
+  job-scoped per-environment link FR-77 defines, rendered as content and navigation on one page instead of
+  being resolved server-side into a redirect target.
+  *Acceptance:* the sidebar entry's label/icon/tooltip render identically to today, and there is exactly one
+  "Config Templates" item in the job's sidebar (never one per environment); `GET /job/<name>/configTemplates`
+  never returns an HTTP 3xx response; a non-admin sees no sidebar entry and, if they request the URL
+  directly, gets a permission failure rather than a redirect.
+
+- **FR-78a (migration note):** jobs whose `ConfigTemplatesJobProperty` was already persisted (under either
+  the previous or the corrected design — persistence itself, per FR-75, is unchanged) keep working exactly
+  as before: the `config.xml` property element's shape (`projectKey`/`environment` fields) is unchanged, so
+  no data migration, upgrade script, or one-time job re-save is required. Only the UI surface changes: what
+  used to be an embedded section on `/job/<name>/configure` plus an immediate redirect is now the FR-76
+  page. **This also fully supersedes the previous FR-78's acceptance criteria** (which asserted that saving
+  the association section on `/job/<name>/configure` persists the property and that reloading `/configure`
+  shows it pre-filled) — those criteria describe a form that no longer exists. They are replaced by FR-76's
+  and FR-78's acceptance criteria above: the association is saved via the FR-76 page's own handler, verified
+  via `GET /job/<name>/config.xml`, and reloading the FR-76 page (not `/configure`) shows the same values
+  pre-filled.
 
 **Pipeline-level resolution overrides (added 2026-09-03)**
 
