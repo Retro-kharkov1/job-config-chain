@@ -107,9 +107,19 @@
           border: 1px solid var(--table-border-color, #ddd);
           border-radius: var(--form-input-border-radius, 6px);
           padding: 1.25rem;
-          margin: 0 0 16px;
+          margin: 0 0 28px;
         }
         .ctsync-page .jenkins-section:last-child { margin-bottom: 0; }
+        /* Section headings (owner report, 2026-09-05): Jenkins core renders jenkins-section__title
+           at normal weight, so inside a bordered card the section's topic carried no more visual
+           weight than the body text under it and the cards read as undifferentiated blocks. Bolded
+           and slightly enlarged, with breathing room below it, so each card's topic reads as a
+           heading at a glance. Scoped to this page's own container — never a global core override. */
+        .ctsync-page .jenkins-section__title {
+          font-weight: 700;
+          font-size: 1.15em;
+          margin-bottom: 14px;
+        }
         /* Table-scroll behavior (same plan): contain a long Version-history/Secrets-manifest
            table's growth so page buttons/sections below it stay reachable, without requiring the
            whole page to scroll. Applied to the wrapper div, never the table element itself —
