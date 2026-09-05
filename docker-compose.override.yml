@@ -1,0 +1,55 @@
+# Development loop: mount the built .hpi instead of rebuilding the whole image.
+#
+# Compose loads this file automatically alongside docker-compose.yml, so the plain
+# `docker compose up -d` documented there keeps working — it just also picks up whatever
+# `target/config-template-sync.hpi` currently holds.
+#
+# Why this exists (two separate problems, one fix):
+#
+#  1. SPEED. docker-compose.yml's image bakes the .hpi in at build time (Dockerfile stage 1,
+#     `mvn -B clean verify`), so a one-line Jelly/CSS edit costs a full dependency download plus
+#     the entire test suite — minutes, to look at a font weight. The full build stays exactly
+#     where it belongs: as the pre-commit verification, not as the way to see a layout change.
+#
+#  2. CORRECTNESS. The official Jenkins image copies /usr/share/jenkins/ref/plugins/*.hpi into
+#     $JENKINS_HOME only when the file is not already there (no `.override` marker involved here).
+#     $JENKINS_HOME is the persistent `jenkins_home` volume, so once it has been populated a
+#     rebuilt image does NOT replace the plugin — the only thing that "works" is `down -v`, which
+#     destroys every seeded Config Set, credential and job on every single edit. Bind-mounting the
+#     .hpi straight into the plugins directory sidesteps the ref-copy mechanism entirely: the file
+#     is already present, so the copy is skipped and the mount is what Jenkins explodes on boot.
+#
+# The loop:
+#     docker compose --profile build run --rm builder   # ~40s warm, produces target/*.hpi
+#     docker compose restart jenkins                    # ~30s
+#
+# NOTE: the bind mount's source must exist before `up`, or Docker helpfully creates a DIRECTORY at
+# that path and Jenkins fails to load the plugin. Run the builder once on a fresh clone (the repo
+# ignores target/). If you ever see that, `rm -rf target/config-template-sync.hpi` and re-run it.
+services:
+  jenkins:
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./target/config-template-sync.hpi:/var/jenkins_home/plugins/config-template-sync.hpi
+
+  # Build-only service: never started by `up` (it sits behind a profile), invoked explicitly via
+  # `--profile build run --rm builder`. Kept inside compose on purpose so the whole workflow stays
+  # one compose project rather than a stray `docker run` nobody else can reproduce.
+  #
+  # Skips tests deliberately — this service exists to produce a binary to look at. Correctness is
+  # the full `docker compose build`'s job, which runs `mvn clean verify` with the suite.
+  #
+  # JDK 11 matches <java.level>11</java.level> in pom.xml, exactly as Dockerfile stage 1 does.
+  builder:
+    profiles: ["build"]
+    image: maven:3.9-eclipse-temurin-11
+    working_dir: /build
+    command: mvn -B package -DskipTests
+    volumes:
+      - .:/build
+      # Named volume so dependencies are downloaded once, not on every rebuild — the image build
+      # has no such cache, which is why its stage 1 re-fetches the whole tree every time.
+      - maven_repo:/root/.m2
+
+volumes:
+  maven_repo:
