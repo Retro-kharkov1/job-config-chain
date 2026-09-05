@@ -30,8 +30,33 @@ services:
   jenkins:
     volumes:
       - jenkins_home:/var/jenkins_home
-      - ./target/config-template-sync.hpi:/var/jenkins_home/plugins/config-template-sync.hpi
-
+      # Read-only, and deliberately NOT mounted straight onto
+      # /var/jenkins_home/plugins/config-template-sync.hpi. Bind-mounting a file into that
+      # directory makes Docker create the directory itself, owned by root — and the container
+      # runs as the `jenkins` user, which then cannot mkdir the plugins/<name>/ folder Jenkins
+      # explodes an .hpi into. The plugin silently never loads: /configTemplates 404s and
+      # init.groovy.d dies with "unable to resolve class" on every plugin class. It only appears
+      # to work when the volume already existed (created jenkins-owned by an earlier boot) and
+      # breaks on the next `down -v`. Observed 2026-09-05.
+      - ./target/config-template-sync.hpi:/opt/config-template-sync-dev/config-template-sync.hpi:ro
+    # Copy the mounted build into the plugins directory as the `jenkins` user, then hand over to
+    # the image's own entrypoint. Runs on every start, so `docker compose restart jenkins` after a
+    # rebuild is all the dev loop needs; Jenkins re-explodes the plugin because the .hpi it finds
+    # is newer than the exploded directory beside it.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        mkdir -p /var/jenkins_home/plugins
+        if [ -f /opt/config-template-sync-dev/config-template-sync.hpi ]; then
+          cp /opt/config-template-sync-dev/config-template-sync.hpi \
+             /var/jenkins_home/plugins/config-template-sync.hpi
+          rm -rf /var/jenkins_home/plugins/config-template-sync
+          echo "[dev-override] installed locally built config-template-sync.hpi"
+        else
+          echo "[dev-override] WARNING: target/config-template-sync.hpi missing — run: docker compose --profile build run --rm builder"
+        fi
+        exec /usr/local/bin/jenkins.sh
   # Build-only service: never started by `up` (it sits behind a profile), invoked explicitly via
   # `--profile build run --rm builder`. Kept inside compose on purpose so the whole workflow stays
   # one compose project rather than a stray `docker run` nobody else can reproduce.
