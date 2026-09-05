@@ -21,6 +21,29 @@ up` reuses whatever was last built.)
 
 Open **http://localhost:28080** — no login screen, you land straight on the dashboard.
 
+## Iterating on the plugin (the fast loop)
+
+`docker compose up --build` rebuilds the image, which means a full dependency download plus the
+entire test suite inside Dockerfile stage 1 — minutes, to look at a one-line Jelly/CSS change.
+Worse, it does not even take effect on an already-seeded volume: the Jenkins image copies
+`/usr/share/jenkins/ref/plugins/*.hpi` into `$JENKINS_HOME` only when the file is not already
+there, so a rebuilt image leaves the OLD plugin in place until someone runs `down -v` and destroys
+all the seeded data.
+
+`docker-compose.override.yml` (loaded automatically) fixes both by bind-mounting the built `.hpi`
+straight into the plugins directory. The loop becomes:
+
+```
+docker compose --profile build run --rm builder   # mvn package -DskipTests, cached ~/.m2
+docker compose restart jenkins
+```
+
+Measured at ~40s end to end on a warm cache, with every seeded Config Set, credential and job
+still intact. On a fresh clone run the builder once before the first `up` — the bind mount needs
+its source file to exist, or Docker creates a directory at that path instead.
+
+Keep `docker compose build` (tests and all) as the verification step before committing.
+
 To fully reset back to a clean seeded state (wipe everything the seed script created plus
 anything you clicked/typed on top of it):
 
