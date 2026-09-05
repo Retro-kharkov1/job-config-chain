@@ -17,10 +17,15 @@
            `.jenkins-select` classes set an explicit `width: 100%`, which — being a real
            `width` declaration, not just a flex-basis — wins over `flex: 1 1 ...` and forces
            each child onto its own row regardless of flex-wrap. Scoped to this page only. */
-        .ctsync-secret-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; }
-        .ctsync-secret-form .ctsync-secret-path-input { flex: 1 1 240px; min-width: 180px; width: auto !important; }
-        .ctsync-secret-form .jenkins-select { flex: 0 0 auto; width: auto !important; }
-        .ctsync-secret-form .jenkins-select__input { width: auto !important; }
+        /* Secret-path row layout (owner report, 2026-09-04) — see CommonConfigSetPage/index.jelly's
+           identical note: path input narrowed ~1/3, credential dropdown widened by the same
+           amount, Bind-credential button moved to its own left-aligned row below. */
+        .ctsync-secret-form { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 8px 0 16px; }
+        .ctsync-secret-form-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+        .ctsync-secret-form .ctsync-secret-path-input { flex: 1 1 160px; min-width: 120px; width: auto !important; }
+        .ctsync-secret-form .jenkins-select { flex: 1 1 320px; width: auto !important; }
+        .ctsync-secret-form .jenkins-select__input { width: 100% !important; }
+        .ctsync-secret-form .jenkins-button { margin-top: 4px; }
         /* Compare interaction redesign (2026-09-01, owner report) — click-a-row-to-compare,
            with no checkbox anywhere in the history table. The whole row is the click target,
            so it needs a pointer cursor and a clear "currently being compared" highlight. */
@@ -194,7 +199,7 @@
                     onclick="selectHistoryRow(${v.versionNumber});"
                     onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectHistoryRow(${v.versionNumber}); }">
                   <td data-th="${%column.version}">v${v.versionNumber}</td>
-                  <td data-th="${%column.created}">${v.timestampEpochMillis}</td>
+                  <td data-th="${%column.created}" class="ctsync-created-cell" data-epoch="${v.timestampEpochMillis}">${v.timestampEpochMillis}</td>
                   <td data-th="${%column.createdBy}">${v.author}</td>
                   <td data-th="${%column.note}">${v.note}</td>
                   <td data-th="${%column.baseChain}">
@@ -331,13 +336,15 @@
         </template>
         <f:entry title="${%addSecret.entryTitle}">
           <div class="ctsync-secret-form">
-            <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
-            <div class="jenkins-select">
-              <select class="jenkins-select__input" id="secretCredentialId">
-                <j:forEach var="cid" items="${it.availableCredentialIds}">
-                  <option value="${cid}">${cid}</option>
-                </j:forEach>
-              </select>
+            <div class="ctsync-secret-form-fields">
+              <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
+              <div class="jenkins-select">
+                <select class="jenkins-select__input" id="secretCredentialId">
+                  <j:forEach var="cid" items="${it.availableCredentialIds}">
+                    <option value="${cid}">${cid}</option>
+                  </j:forEach>
+                </select>
+              </div>
             </div>
             <button type="button" class="jenkins-button"
                     title="${%bindCredential.title}"
@@ -593,6 +600,22 @@
         // refreshed on every successful save, read back by discardAllChangesClicked.
         var lastSavedContentType = currentContentType;
         var yamlCheckTimer = null;
+
+        // Version-history "Created" column (owner report, 2026-09-04) — see
+        // CommonConfigSetPage/index.jelly's identical helper/note.
+        function formatTimestamp(epochMillis) {
+          if (epochMillis === null || epochMillis === undefined || isNaN(epochMillis)) { return String(epochMillis); }
+          var d = new Date(Number(epochMillis));
+          if (isNaN(d.getTime())) { return String(epochMillis); }
+          return d.toLocaleString();
+        }
+
+        (function () {
+          var cells = document.querySelectorAll('.ctsync-created-cell');
+          for (var i = 0; i &lt; cells.length; i++) {
+            cells[i].textContent = formatTimestamp(cells[i].getAttribute('data-epoch'));
+          }
+        })();
 
         // FR-63/FR-64: JSON/XML/YAML all dispatch through this one language-mode lookup — no
         // per-format special-casing anywhere else in this script beyond it (mirrors the Global
@@ -1357,7 +1380,7 @@
             }
           };
           tr.querySelector('.js-version').textContent = 'v' + v.versionNumber;
-          tr.querySelector('.js-created').textContent = v.timestampEpochMillis;
+          tr.querySelector('.js-created').textContent = formatTimestamp(v.timestampEpochMillis);
           tr.querySelector('.js-createdBy').textContent = v.author;
           tr.querySelector('.js-note').textContent = v.note;
 
