@@ -39,6 +39,16 @@ import java.util.Set;
  * {@code getCommonActiveVersionContentJsonForScript}/{@code isCommonPickerLocked}) is replaced
  * wholesale by the multi-base chain editor (FR-55, tech-lead §10: hard-removed, page-internal UI
  * glue with no external contract — not deprecated).</p>
+ *
+ * <p><b>Second call site (FR-77/FR-77a):</b> this same package-private constructor is also called
+ * by {@code JobScopedEnvConfigSetPage} (job-scoped design, see
+ * {@code docs/development/tech-lead-job-scoped-config-templates-2026-09-05.md} §2.2), which
+ * delegates to a plain {@code EnvConfigSetPage} instance rather than re-implementing any
+ * save/validate/activate/merge-preview logic, so that the job-scoped URL
+ * ({@code /job/&lt;name&gt;/configTemplates/&lt;environment&gt;}) and this class's own global URL
+ * share exactly one save/validate path and one persisted {@code ConfigSet} entity. Both call
+ * sites are noted here so a future reader sees them from one place before changing this
+ * constructor's contract.</p>
  */
 public class EnvConfigSetPage extends ConfigSetPage {
 
