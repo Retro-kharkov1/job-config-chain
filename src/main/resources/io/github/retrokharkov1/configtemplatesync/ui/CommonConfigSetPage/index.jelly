@@ -107,9 +107,12 @@
           border: 1px solid var(--table-border-color, #ddd);
           border-radius: var(--form-input-border-radius, 6px);
           padding: 1.25rem;
-          margin: 0 0 28px;
+          margin: 0 0 32px;
         }
-        .ctsync-page .jenkins-section:last-child { margin-bottom: 0; }
+        /* No :last-child margin reset here on purpose: f:section renders each
+           a section.jenkins-section element inside its own wrapper div, so EVERY section is
+           its parent's last child and such a rule would zero the gap between all of them
+           rather than only after the final one (observed live, 2026-09-05). */
         /* Section headings (owner report, 2026-09-05): Jenkins core renders jenkins-section__title
            at normal weight, so inside a bordered card the section's topic carried no more visual
            weight than the body text under it and the cards read as undifferentiated blocks. Bolded
