@@ -17,10 +17,19 @@
            `.jenkins-select` classes set an explicit `width: 100%`, which — being a real
            `width` declaration, not just a flex-basis — wins over `flex: 1 1 ...` and forces
            each child onto its own row regardless of flex-wrap. Scoped to this page only. */
-        .ctsync-secret-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; }
-        .ctsync-secret-form .ctsync-secret-path-input { flex: 1 1 240px; min-width: 180px; width: auto !important; }
-        .ctsync-secret-form .jenkins-select { flex: 0 0 auto; width: auto !important; }
-        .ctsync-secret-form .jenkins-select__input { width: auto !important; }
+        /* Secret-path row layout (owner report, 2026-09-04): path input narrowed by ~1/3 (240px
+           -> 160px basis) and the credential dropdown widened by the same amount it gave up
+           (240 -> 320px basis), since the path is normally a short dotted key while the
+           credential id is often the longer of the two values. The Bind-credential button moved
+           onto its own row below (left-aligned, its own top margin) instead of trailing inline
+           after the dropdown — a form with a visibly different width for its two inputs read
+           awkwardly with a same-row button squeezed in after them. */
+        .ctsync-secret-form { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 8px 0 16px; }
+        .ctsync-secret-form-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+        .ctsync-secret-form .ctsync-secret-path-input { flex: 1 1 160px; min-width: 120px; width: auto !important; }
+        .ctsync-secret-form .jenkins-select { flex: 1 1 320px; width: auto !important; }
+        .ctsync-secret-form .jenkins-select__input { width: 100% !important; }
+        .ctsync-secret-form .jenkins-button { margin-top: 4px; }
         /* Compare interaction redesign (2026-09-01, owner report) — click-a-row-to-compare,
            with no checkbox anywhere in the history table. The whole row is the click target,
            so it needs a pointer cursor and a clear "currently being compared" highlight. */
@@ -180,13 +189,15 @@
         </template>
         <f:entry title="${%addSecret.entryTitle}">
           <div class="ctsync-secret-form">
-            <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
-            <div class="jenkins-select">
-              <select class="jenkins-select__input" id="secretCredentialId">
-                <j:forEach var="cid" items="${it.availableCredentialIds}">
-                  <option value="${cid}">${cid}</option>
-                </j:forEach>
-              </select>
+            <div class="ctsync-secret-form-fields">
+              <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
+              <div class="jenkins-select">
+                <select class="jenkins-select__input" id="secretCredentialId">
+                  <j:forEach var="cid" items="${it.availableCredentialIds}">
+                    <option value="${cid}">${cid}</option>
+                  </j:forEach>
+                </select>
+              </div>
             </div>
             <button type="button" class="jenkins-button"
                     title="${%bindCredential.title}"
@@ -210,7 +221,7 @@
                     onclick="selectHistoryRow(${v.versionNumber});"
                     onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectHistoryRow(${v.versionNumber}); }">
                   <td data-th="${%column.version}">v${v.versionNumber}</td>
-                  <td data-th="${%column.created}">${v.timestampEpochMillis}</td>
+                  <td data-th="${%column.created}" class="ctsync-created-cell" data-epoch="${v.timestampEpochMillis}">${v.timestampEpochMillis}</td>
                   <td data-th="${%column.createdBy}">${v.author}</td>
                   <td data-th="${%column.note}">${v.note}</td>
                   <td data-th="${%column.active}">
@@ -417,6 +428,29 @@
         // Re-clicking this same row exits back to edit mode (a simple selectHistoryRow toggle).
         var selectedCompareVersion = null;
         var lastComparedVersionContent = '';
+
+        // Version-history "Created" column (owner report, 2026-09-04): the server only ever
+        // knows the raw epoch-millis timestamp, not the operator's locale/timezone, so
+        // formatting happens client-side via the browser's own Intl locale (no args to
+        // toLocaleString() -> the user agent's own configured locale/timezone, exactly matching
+        // what the rest of the browser chrome already displays dates in). Falls back to the raw
+        // number only if the value is missing/garbage, never throws.
+        function formatTimestamp(epochMillis) {
+          if (epochMillis === null || epochMillis === undefined || isNaN(epochMillis)) { return String(epochMillis); }
+          var d = new Date(Number(epochMillis));
+          if (isNaN(d.getTime())) { return String(epochMillis); }
+          return d.toLocaleString();
+        }
+
+        // Reformat the server-rendered (pre-JS) "Created" cells on initial page load — this
+        // script tag sits after the table in the document, so the table is already parsed by
+        // the time this top-level statement runs.
+        (function () {
+          var cells = document.querySelectorAll('.ctsync-created-cell');
+          for (var i = 0; i &lt; cells.length; i++) {
+            cells[i].textContent = formatTimestamp(cells[i].getAttribute('data-epoch'));
+          }
+        })();
 
         // FR-63/FR-64: JSON/XML/YAML all dispatch through this one language-mode lookup — no
         // per-format special-casing anywhere else in this script beyond it.
@@ -667,7 +701,7 @@
             }
           };
           tr.querySelector('.js-version').textContent = 'v' + v.versionNumber;
-          tr.querySelector('.js-created').textContent = v.timestampEpochMillis;
+          tr.querySelector('.js-created').textContent = formatTimestamp(v.timestampEpochMillis);
           tr.querySelector('.js-createdBy').textContent = v.author;
           tr.querySelector('.js-note').textContent = v.note;
           var badge = tr.querySelector('.js-activeBadge');
