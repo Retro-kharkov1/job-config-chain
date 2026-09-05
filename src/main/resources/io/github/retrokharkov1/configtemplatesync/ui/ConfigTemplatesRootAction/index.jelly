@@ -125,7 +125,7 @@
       <!-- Create button lives OUTSIDE/below the bordered card on purpose — see the
            ".ctsync-newconfig-form" CSS comment above for the reasoning. -->
       <div class="ctsync-btn-row ctsync-btn-row--right">
-        <button type="button" class="jenkins-button jenkins-button--primary"
+        <button type="button" id="newConfigSetCreate" class="jenkins-button jenkins-button--primary"
                 title="${%newConfigSet.buttonTitle}"
                 onclick="var k = document.getElementById('newProjectKey').value; var t = document.querySelector('input[name=newContentTypeRadio]:checked').value; window.location.href = '${rootURL}/${it.urlName}/' + encodeURIComponent(k) + '/common/?contentType=' + encodeURIComponent(t);">${%newConfigSet.buttonLabel}</button>
       </div>
