@@ -17,8 +17,6 @@
       </style>
       <div class="ctsync-page">
 
-      <h1>${%heading}</h1>
-
       <!-- FR-76 state 1/2/3 all share the same editable association form: the operator can always
            set, change or clear the association from here, so no state is a dead end. -->
       <f:section title="${%association.heading}">
@@ -29,7 +27,7 @@
           <f:entry title="${%association.projectKey}" field="projectKey">
             <f:textbox name="projectKey" value="${it.projectKey}"/>
           </f:entry>
-          <f:entry title="${%association.environment}" field="environment">
+          <f:entry title="" field="environment">
             <f:textbox name="environment" value="${it.environment}"/>
           </f:entry>
           <f:block>
