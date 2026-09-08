@@ -57,7 +57,10 @@ echo "==> [2/2] Building with Maven (${MAVEN_IMAGE}), -Drevision=${SEMVER}"
 # `false` makes a leftover-file clean warning non-fatal instead of aborting an otherwise
 # healthy build; it does not skip cleaning, it only stops one locked leftover from failing
 # the whole run.
-docker run --rm -v "${SCRIPT_DIR}:/repo" -w /repo "${MAVEN_IMAGE}" \
+# Named volume `config-template-sync-m2` persists the local Maven repo across separate
+# `docker-build.sh` invocations (a plain `docker run --rm` has no state of its own between runs) —
+# without it, every invocation re-downloads the full dependency tree from scratch.
+docker run --rm -v "${SCRIPT_DIR}:/repo" -v "config-template-sync-m2:/root/.m2" -w /repo "${MAVEN_IMAGE}" \
   mvn -Drevision="${SEMVER}" -Dmaven.clean.failOnError=false clean verify
 
 echo "==> Done. Artifact: target/config-template-sync.hpi (Plugin-Version: ${SEMVER})"
