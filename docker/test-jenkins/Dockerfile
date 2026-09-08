@@ -29,7 +29,12 @@ FROM maven:3.9-eclipse-temurin-11 AS plugin-builder
 WORKDIR /build
 COPY pom.xml ./
 COPY src ./src
-RUN mvn -B clean verify
+# BuildKit cache mount for the local Maven repo: without it, every `docker compose up --build`
+# re-downloads the entire dependency tree from scratch inside the ephemeral build container,
+# since normal COPY/RUN layers don't persist across builds the way a named volume would on a
+# long-lived host. This mount persists across builds (keyed by the target path) even though the
+# container itself is thrown away — dependencies are fetched once, not on every rebuild.
+RUN --mount=type=cache,target=/root/.m2 mvn -B clean verify
 
 ########################################################################
 # Stage 2: Jenkins controller with base plugins + this plugin's .hpi baked in at
