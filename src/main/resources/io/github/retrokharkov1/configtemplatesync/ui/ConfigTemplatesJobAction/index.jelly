@@ -2,89 +2,1308 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
   <l:layout title="${it.job.displayName} — Config Templates">
     <l:main-panel>
+      <st:bind var="proxy" value="${it}"/>
+
       <style>
+        /* Same page-level styling as EnvConfigSetPage/index.jelly — kept in sync deliberately,
+           since both host the same _shared/*.jelly fragments. */
+        .ctsync-page .jenkins-button { margin: 4px 6px 4px 0; }
+        .ctsync-page table.jenkins-table .jenkins-button { margin: 2px 4px; }
+        .ctsync-section-header { margin: 12px 0 4px; }
+        .ctsync-btn-row { margin: 4px 0 12px; }
+        .ctsync-secret-form { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 8px 0 16px; }
+        .ctsync-secret-form-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+        .ctsync-secret-form .ctsync-secret-path-input { flex: 1 1 160px; min-width: 120px; width: auto !important; }
+        .ctsync-secret-form .jenkins-select { flex: 1 1 320px; width: auto !important; }
+        .ctsync-secret-form .jenkins-select__input { width: 100% !important; }
+        .ctsync-secret-form .jenkins-button { margin-top: 4px; }
+        .ctsync-history-row { cursor: pointer; }
+        .ctsync-history-row:hover { background-color: var(--table-hover-color, #f0f6ff); }
+        .ctsync-history-row--selected,
+        .ctsync-history-row--selected:hover { background-color: var(--table-highlight-color, #d9edf7); }
+        .ctsync-btn-row--right { text-align: right; }
+        .ctsync-banner-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+        .ctsync-banner-row > #compareBannerText { margin-right: 16px; }
+        /* .ctsync-editor-header-row: no longer rendered (owner report, 2026-09-11 — both pane
+           headers are now bare title-only h3 elements, structurally identical to each other). */
+        /* Owner report, 2026-09-11: the mode-toggle button/checking-indicator live here now,
+           below the Override editor, so the header row above stays title-only and structurally
+           identical to "Merged bases"'s own bare h3 header. */
+        .ctsync-editor-toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+        .ctsync-merge-grid { max-width: 100%; box-sizing: border-box; }
+        .ctsync-merge-top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-width: 0; align-items: stretch; }
+        .ctsync-merge-full { margin-top: 12px; }
+        /* Overflow fix (owner report, 2026-09-10): "what works for ctsync-basechain-row-detail
+           should work here too" — the base-chain row's resolved/diff pane already stays inside
+           the page at narrow widths because a plain table cell shrinks-to-fit; a CSS grid item
+           does NOT shrink below its content's intrinsic width by default (min-width: auto), so a
+           fixed-height Monaco instance inside .ctsync-merge-pane was pushing the whole grid (and
+           the page) wider than the viewport as the window narrowed. min-width: 0 lets the grid
+           track actually shrink; overflow-x: auto keeps any residual overflow scrollable INSIDE
+           the pane instead of leaking out to the page. Same treatment applied to
+           .ctsync-basechain-diff-container below for consistency, even though that one already
+           behaved correctly via table shrink-to-fit. */
+        .ctsync-merge-pane { min-width: 0; max-width: 100%; overflow-x: auto; box-sizing: border-box; }
+        @media (max-width: 768px) {
+          .ctsync-merge-top { grid-template-columns: 1fr; }
+          .ctsync-page .ctsync-history-table thead { display: none; }
+          .ctsync-page .ctsync-history-table,
+          .ctsync-page .ctsync-history-table tbody,
+          .ctsync-page .ctsync-history-table tr,
+          .ctsync-page .ctsync-history-table td { display: block; width: 100% !important; }
+          .ctsync-page .ctsync-history-table tr { border-bottom: 1px solid var(--table-border-color, #ddd); padding: 6px 0; }
+          .ctsync-page .ctsync-history-table td { padding: 2px 4px; }
+          .ctsync-page .ctsync-history-table td[data-th]::before {
+            content: attr(data-th) ": ";
+            font-weight: 600;
+            display: inline-block;
+            min-width: 90px;
+          }
+          .ctsync-editor-toolbar-row { justify-content: flex-start; }
+          .ctsync-banner-row > #compareBannerText { margin-right: 0; margin-bottom: 8px; display: block; }
+        }
         .ctsync-page .jenkins-section,
-        .ctsync-page .jenkins-section:first-of-type {
+        .ctsync-page .jenkins-section:first-of-type,
+        .ctsync-page .jenkins-section:last-child {
           border: 1px solid var(--table-border-color, #ddd);
           border-radius: var(--form-input-border-radius, 6px);
           padding: 1.25rem;
           margin: 0 0 32px;
         }
-        .ctsync-page .jenkins-section__title { font-weight: 700; font-size: 1.15em; margin-bottom: 14px; }
-        .ctsync-inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
-        .ctsync-inline-form .setting-input { flex: 1 1 240px; min-width: 180px; width: auto !important; }
-        .ctsync-hint { color: #666; margin-bottom: 8px; }
+        .ctsync-page .jenkins-section__title {
+          font-weight: 700;
+          font-size: 1.15em;
+          margin-bottom: 14px;
+        }
+        /* Contained-scrollbar fix (ux-ui-designer spec, 2026-09-11): the wrapper div — not the
+           table — owns overflow-y:auto and is therefore what the browser paints the native
+           scrollbar against. Previously only the inner table.jenkins-table had a radius, so the
+           scrollbar rendered as a square-edged strip outside the table's rounded frame (confirmed
+           live). Border+radius now live on this wrapper itself; overflow-x:hidden is required
+           alongside overflow-y:auto so the box reliably clips its own scrollbar to the radius in
+           all evergreen browsers, not just Chrome. */
+        .ctsync-scroll-table {
+          max-height: 50vh;
+          overflow-y: auto;
+          overflow-x: hidden;
+          width: fit-content;
+          max-width: 100%;
+          border: 1px solid var(--table-border-color, #ddd);
+          border-radius: var(--form-input-border-radius, 6px);
+          /* Phantom-overflow fix — see ConfigTemplatesRootAction/index.jelly's identical comment. */
+          box-sizing: border-box;
+        }
+        .ctsync-scroll-table table.jenkins-table {
+          border: none;
+          border-radius: 0;
+          margin: 0;
+          border-spacing: 0;
+        }
+        /* Base-chain full-width override (owner report, 2026-09-11): the base-chain table's
+           expanded row hosts a two-pane Monaco resolved-content diff that gets squeezed under
+           fit-content — this table alone needs the wrapper to take the full available width. */
+        .ctsync-scroll-table--full-width {
+          width: 100%;
+          max-width: 100%;
+        }
+        .ctsync-scroll-table {
+          scrollbar-width: thin;
+          scrollbar-color: var(--text-color-secondary, #8c8c8c) transparent;
+        }
+        .ctsync-scroll-table::-webkit-scrollbar { width: 10px; }
+        .ctsync-scroll-table::-webkit-scrollbar-track { background: transparent; }
+        .ctsync-scroll-table::-webkit-scrollbar-thumb {
+          background-color: var(--text-color-secondary, #8c8c8c);
+          border-radius: var(--form-input-border-radius, 6px);
+          border: 2px solid var(--table-background, #fff);
+        }
+        .ctsync-scroll-table::-webkit-scrollbar-thumb:hover {
+          background-color: var(--table-hover-color, #f0f6ff);
+        }
+        /* Sticky-header fix (owner report, 2026-09-10): the scrollbar for a narrower table (e.g.
+           the 60%-wide secrets-manifest table) was pinned to the wrapper's full-width right edge
+           instead of the table's own right edge, since the wrapper div always stretched to its
+           full flex/grid width regardless of the table's own narrower computed width — width:
+           fit-content above makes the wrapper hug the table's actual width instead. Sticky header
+           keeps the column labels visible while only the body rows scroll inside this fixed-height
+           wrapper; position: sticky targets the header cells directly (not the header row/group
+           element) for the most reliable cross-browser support, since this wrapper div is each
+           header cell's own nearest scrolling ancestor. */
+        .ctsync-scroll-table thead th {
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          background-color: var(--table-background, #fff);
+          /* Phantom-scrollbar fix (owner report, 2026-09-11) — see CommonConfigSetPage's
+             identical comment: box-shadow replaces border-bottom to avoid the sticky-cell
+             border/content-height double-counting quirk. */
+          box-shadow: 0 2px 0 0 var(--table-border-color, #ddd);
+        }
+        /* Empty-state row — see ConfigTemplatesRootAction/index.jelly's identical comment. */
+        .ctsync-empty-state-row td {
+          padding: 32px 16px;
+          text-align: center;
+          color: var(--text-color-secondary, #666);
+          font-size: 0.95em;
+          border: none;
+        }
+        .ctsync-basechain-table { width: 100%; margin-bottom: 8px; }
+        .ctsync-basechain-table th, .ctsync-basechain-table td { padding: 4px 6px; text-align: left; }
+        .ctsync-basechain-table select.jenkins-select__input { width: 100%; max-width: 200px; }
+        .ctsync-basechain-row select, .ctsync-basechain-row input[type="radio"] { vertical-align: middle; }
+        /* Cursor sweep (owner report, 2026-09-10): every genuinely-clickable radio/checkbox and its
+           wrapping label element gets a pointer cursor so hover state makes clear it's interactive
+           — does NOT touch Jenkins' own jenkins-button, which already gets this from core CSS. */
+        .ctsync-basechain-row input[type="radio"],
+        .ctsync-basechain-row label,
+        .ctsync-standalone-row input[type="checkbox"],
+        .ctsync-standalone-row label,
+        #contentTypeUnlockedGroup input[type="radio"],
+        #contentTypeUnlockedGroup label { cursor: pointer; }
+        .ctsync-basechain-reorder-btn, .ctsync-basechain-remove-btn { min-width: 28px; }
+        /* Toggle icon redesign (ux-ui-designer spec, 2026-09-11): filled circular button with a
+           crisp inline-SVG chevron instead of a bare ▸/▾ glyph link, so it reads as clickable at
+           rest, not just on hover. */
+        .ctsync-basechain-row-toggle {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 26px; height: 26px; /* bumped from designer's 24px to clear WCAG 2.5.8 target-size with margin */
+          color: var(--text-color, #333); text-decoration: none; cursor: pointer;
+          background-color: var(--table-hover-color, #f0f6ff);
+          border: 1px solid var(--table-border-color, #ccc);
+          border-radius: 50%;
+          transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+        }
+        .ctsync-basechain-row-toggle:hover {
+          background-color: var(--table-highlight-color, #d9edf7);
+          border-color: var(--link-color, #0059b3);
+          color: var(--link-color, #0059b3);
+        }
+        .ctsync-basechain-row-toggle:active { transform: scale(0.92); }
+        .ctsync-basechain-row-toggle:focus-visible {
+          outline: 2px solid var(--link-color, #0059b3);
+          outline-offset: 2px;
+        }
+        .ctsync-basechain-resolved-pre { max-height: 220px; overflow: auto; background: #f6f6f6; padding: 6px; }
+        .ctsync-basechain-resolved-caption { font-size: 0.9em; color: #555; margin-bottom: 4px; }
+        .ctsync-basechain-history-detail { margin-top: 4px; padding-left: 16px; font-size: 0.9em; }
+        /* Same containment as .ctsync-merge-pane above (2026-09-10 overflow fix) — kept explicit
+           here too even though the table shrink-to-fit already avoided the bug in practice. */
+        .ctsync-basechain-diff-container { max-width: 100%; overflow-x: auto; box-sizing: border-box; }
+        /* Drag-and-drop row reordering (ux-ui-designer spec, 2026-09-11) — additive to the ▲/▼
+           reorder buttons, which remain the accessible fallback path. */
+        /* Real-mouse-gesture fix (owner report, 2026-09-11) — see EnvConfigSetPage/index.jelly's
+           identical comment for the two root causes fixed here (missing -webkit-user-drag,
+           undersized hit target). */
+        .ctsync-basechain-drag-cell { width: 32px; padding: 4px; text-align: center; }
+        .ctsync-basechain-drag-handle {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 20px; height: 32px; color: var(--text-color-secondary, #999); cursor: grab;
+          -webkit-user-drag: element;
+        }
+        .ctsync-basechain-drag-handle svg { -webkit-user-drag: element; pointer-events: none; }
+        .ctsync-basechain-drag-handle:hover { color: var(--link-color, #0059b3); }
+        .ctsync-basechain-row select,
+        .ctsync-basechain-row input[type="radio"],
+        .ctsync-basechain-row button,
+        .ctsync-basechain-row-toggle,
+        .ctsync-basechain-open-link { -webkit-user-drag: none; }
+        /* "↗ open in new tab" secondary action — see EnvConfigSetPage/index.jelly's identical
+           comment/rules (border visible at rest, owner report 2026-09-11). */
+        .ctsync-basechain-open-link {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 22px;
+          height: 22px;
+          margin-left: 6px;
+          color: var(--text-color-secondary, #666);
+          text-decoration: none;
+          cursor: pointer;
+          background-color: transparent;
+          border: 1px solid var(--table-border-color, #ccc);
+          border-radius: 50%;
+          transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+        .ctsync-basechain-open-link:hover {
+          background-color: var(--table-hover-color, #f0f6ff);
+          border-color: var(--table-border-color, #ccc);
+          color: var(--link-color, #0059b3);
+        }
+        .ctsync-basechain-open-link:focus-visible {
+          outline: 2px solid var(--link-color, #0059b3);
+          outline-offset: 2px;
+        }
+        .ctsync-basechain-row.ctsync-basechain-row--dragging { opacity: 0.5; cursor: grabbing; }
+        .ctsync-basechain-row.ctsync-basechain-row--drop-target { border-top: 2px solid var(--link-color, #0059b3); }
+        @media (max-width: 480px) {
+          .ctsync-basechain-table, .ctsync-basechain-table tbody, .ctsync-basechain-table tr,
+          .ctsync-basechain-table td { display: block; width: 100% !important; }
+          .ctsync-basechain-row { border-bottom: 1px solid var(--table-border-color, #ddd); padding: 6px 0; }
+          .ctsync-basechain-drag-cell { display: none; }
+        }
       </style>
+
       <div class="ctsync-page">
 
-      <!-- FR-76 state 1/2/3 all share the same editable association form: the operator can always
-           set, change or clear the association from here, so no state is a dead end. -->
-      <f:section title="${%association.heading}">
-        <j:if test="${!it.hasAssociation()}">
-          <div class="ctsync-hint">&#9432; ${%association.none}</div>
-        </j:if>
-        <f:form method="post" action="saveAssociation" name="associationForm">
-          <f:entry title="${%association.projectKey}" field="projectKey">
-            <f:textbox name="projectKey" value="${it.projectKey}"/>
-          </f:entry>
-          <f:entry title="" field="environment">
-            <f:textbox name="environment" value="${it.environment}"/>
-          </f:entry>
-          <f:block>
-            <f:submit value="${%association.save}"/>
-          </f:block>
-        </f:form>
-      </f:section>
-
-      <!-- FR-76 state 2/3: the project's environments, each its own item leading to its own
-           job-scoped page (FR-77) — the "Configure" pattern repeated one level down. -->
-      <j:if test="${it.hasAssociation()}">
-        <f:section title="${%env.heading}">
-          <table class="jenkins-table" style="width:100%">
-            <thead>
-              <tr>
-                <th>${%env.column.environment}</th>
-                <th>${%env.column.activeVersion}</th>
-                <th>${%env.column.associated}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <j:forEach var="cs" items="${it.envConfigSets}">
-                <tr>
-                  <td><a href="${cs.environment}/">${cs.environment}</a></td>
-                  <td>
-                    <j:choose>
-                      <j:when test="${cs.activeVersion != null}">v${cs.activeVersion.versionNumber}</j:when>
-                      <j:otherwise>${%env.noActiveVersion}</j:otherwise>
-                    </j:choose>
-                  </td>
-                  <td>
-                    <j:choose>
-                      <j:when test="${cs.environment == it.environment}">${%env.thisJob}</j:when>
-                      <j:otherwise>
-                        <form method="post" action="associateEnvironment" style="margin:0">
-                          <input type="hidden" name="environment" value="${cs.environment}"/>
-                          <button type="submit" class="jenkins-button">${%env.associate}</button>
-                        </form>
-                      </j:otherwise>
-                    </j:choose>
-                  </td>
-                </tr>
-              </j:forEach>
-              <j:if test="${empty(it.envConfigSets)}">
-                <tr><td colspan="3">${%env.none}</td></tr>
-              </j:if>
-            </tbody>
-          </table>
-
-          <div class="ctsync-hint">${%env.newHint}</div>
-          <div class="ctsync-inline-form">
-            <input type="text" id="newEnvName" placeholder="dev" class="setting-input"/>
-            <button type="button" class="jenkins-button jenkins-button--primary"
-                    onclick="window.location.href = encodeURIComponent(document.getElementById('newEnvName').value) + '/';">${%env.newButton}</button>
-          </div>
-        </f:section>
+      <j:if test="${!it.exists}">
+        <div class="alert alert-info">${%notExistYet}</div>
       </j:if>
+
+      <!-- Same four shared fragments EnvConfigSetPage/index.jelly renders — see this project's
+           tech-lead design contract (2026-09-09) and ConfigTemplatesJobAction's own javadoc for the
+           method-name-parity guarantee this relies on. -->
+      <st:include class="${it.sharedBlocksClass}" page="versionHistoryBlock.jelly" it="${it}"/>
+      <st:include class="${it.sharedBlocksClass}" page="secretsManifestBlock.jelly" it="${it}"/>
+      <st:include class="${it.sharedBlocksClass}" page="baseChainBlock.jelly" it="${it}"/>
+      <st:include class="${it.sharedBlocksClass}" page="editorBlock.jelly" it="${it}"/>
+
+      <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
+      <link rel="stylesheet" href="${rootURL}/plugin/config-template-sync/monaco/vs/editor/editor.main.css"/>
+      <script>
+        var __overrideSeed = <j:out value="${it.editorSeedJsonForScript}"/>;
+        var __availableProjectKeys = <j:out value="${it.availableCommonProjectKeysJsonForScript}"/>;
+        var __baseChainSeed = <j:out value="${it.baseChainSeedJsonForScript}"/>;
+        var __commonVersionCatalog = <j:out value="${it.commonVersionCatalogJsonForScript}"/>;
+        var overrideEditor, mergedEditor, mergedBasesEditor, debounceHandle, diffEditor;
+        var generatedTemplateEditor;
+        var lastGeneratedTemplateText = '';
+        var editMode = true;
+        var lastEditContent = __overrideSeed;
+        var selectedCompareVersion = null;
+        var lastComparedVersionContent = '';
+
+        // Base-chain editor draft state — deliberately no explicitlyStandalone concept at all (see
+        // ConfigTemplatesJobAction's own javadoc): an empty baseChainRows array unambiguously means
+        // "no bases," never a synthesized self-referencing default.
+        var availableProjectKeys = JSON.parse(__availableProjectKeys);
+        var commonVersionCatalog = JSON.parse(__commonVersionCatalog);
+        var baseChainRows = JSON.parse(__baseChainSeed);
+        var baseChainRowExpanded = baseChainRows.map(function () { return false; });
+        var lastPerReference = [];
+        // Bug 1 fix (tech-lead contract, 2026-09-10): one live Monaco diff-editor instance per
+        // currently-expanded base-chain row, tracked here so renderBaseChainRows() can dispose every
+        // instance from the PREVIOUS render before buildBaseChainRowElement creates fresh ones on
+        // this render — otherwise every keystroke-triggered recompute (a fresh renderBaseChainRows()
+        // call) leaks one more Monaco instance per still-expanded row.
+        var baseChainDiffEditors = [];
+        var lastSavedOverrideContent = __overrideSeed;
+        var lastSavedBaseChainJson = __baseChainSeed;
+        var currentContentType = '${it.contentTypeValue}';
+        var lastSavedContentType = currentContentType;
+        var yamlCheckTimer = null;
+
+        function formatTimestamp(epochMillis) {
+          if (epochMillis === null || epochMillis === undefined || isNaN(epochMillis)) { return String(epochMillis); }
+          var d = new Date(Number(epochMillis));
+          if (isNaN(d.getTime())) { return String(epochMillis); }
+          return d.toLocaleString();
+        }
+
+        (function () {
+          var cells = document.querySelectorAll('.ctsync-created-cell');
+          for (var i = 0; i &lt; cells.length; i++) {
+            cells[i].textContent = formatTimestamp(cells[i].getAttribute('data-epoch'));
+          }
+        })();
+
+        // Initial page load renders versionHistoryTbody/secretsManifestTbody server-side (Jelly
+        // forEach), never through renderVersionHistoryRows/renderSecretsManifestRows — so those two
+        // wraps need their own phantom-scroll reconciliation pass here too (baseChainRowsTableWrap
+        // is covered by the renderBaseChainRows() call fired from the require() callback below).
+        reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+        reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+
+        function languageForType(type) {
+          if (type === 'XML') { return 'xml'; }
+          if (type === 'YAML') { return 'yaml'; }
+          return 'json';
+        }
+
+        function registerXmlYamlFormatProviders() {
+          ['xml', 'yaml'].forEach(function (lang) {
+            monaco.languages.registerDocumentFormattingEditProvider(lang, {
+              provideDocumentFormattingEdits: function (model) {
+                return new Promise(function (resolve) {
+                  var type = lang === 'xml' ? 'XML' : 'YAML';
+                  proxy.formatContent(JSON.stringify({ content: model.getValue(), contentType: type }), function (t) {
+                    var r = t.responseObject();
+                    if (!r.ok) { resolve([]); return; }
+                    resolve([{ range: model.getFullModelRange(), text: r.formatted }]);
+                  });
+                });
+              }
+            });
+          });
+        }
+
+        function runXmlDiagnostics(ed) {
+          var markers = [];
+          try {
+            var doc = new DOMParser().parseFromString(ed.getValue(), 'application/xml');
+            var errorNode = doc.getElementsByTagName('parsererror')[0];
+            if (errorNode) {
+              markers.push({
+                severity: monaco.MarkerSeverity.Error,
+                message: errorNode.textContent || 'Malformed XML',
+                startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
+              });
+            }
+          } catch (e) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Error,
+              message: String(e),
+              startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
+            });
+          }
+          monaco.editor.setModelMarkers(ed.getModel(), 'ctsync-xml', markers);
+        }
+
+        function scheduleYamlDiagnostics(ed) {
+          if (yamlCheckTimer) { clearTimeout(yamlCheckTimer); }
+          var indicator = document.getElementById('checkingIndicator');
+          if (indicator) { indicator.style.display = 'inline'; }
+          var content = ed.getValue();
+          yamlCheckTimer = setTimeout(function () {
+            proxy.validateContent(JSON.stringify({ content: content, contentType: 'YAML' }), function (t) {
+              if (indicator) { indicator.style.display = 'none'; }
+              var r = t.responseObject();
+              var markers = [];
+              if (!r.ok) {
+                markers.push({
+                  severity: monaco.MarkerSeverity.Error,
+                  message: r.error || 'Malformed YAML',
+                  startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
+                });
+              }
+              monaco.editor.setModelMarkers(ed.getModel(), 'ctsync-yaml', markers);
+            });
+          }, 500);
+        }
+
+        function wireLiveDiagnostics(ed) {
+          if (!ed) { return; }
+          ed.onDidChangeModelContent(function () {
+            if (currentContentType === 'XML') {
+              runXmlDiagnostics(ed);
+            } else if (currentContentType === 'YAML') {
+              scheduleYamlDiagnostics(ed);
+            }
+          });
+        }
+
+        require.config({ paths: { vs: '${rootURL}/plugin/config-template-sync/monaco/vs' } });
+        require(['vs/editor/editor.main'], function () {
+          monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+            validate: true, allowComments: false, schemas: []
+          });
+          registerXmlYamlFormatProviders();
+          overrideEditor = monaco.editor.create(document.getElementById('overrideEditor'), {
+            value: __overrideSeed, language: languageForType(currentContentType), automaticLayout: true
+          });
+          formatEditorContent(overrideEditor);
+          wireLiveDiagnostics(overrideEditor);
+          mergedEditor = monaco.editor.create(document.getElementById('mergedEditor'), {
+            value: '', language: languageForType(currentContentType), readOnly: true, automaticLayout: true
+          });
+          mergedBasesEditor = monaco.editor.create(document.getElementById('mergedBasesEditor'), {
+            value: '', language: languageForType(currentContentType), readOnly: true, automaticLayout: true
+          });
+          updateContentTypeRowVisibility();
+          renderBaseChainRows();
+          recomputeMerge();
+          attachOverrideChangeListener();
+        });
+
+        // Visible only while the base chain is genuinely empty (no chain to resolve a type from) —
+        // no explicitlyStandalone checkbox concept here, unlike EnvConfigSetPage: an empty
+        // baseChainRows array is itself the trigger.
+        function updateContentTypeRowVisibility() {
+          var row = document.getElementById('contentTypeRow');
+          if (row) { row.style.display = (baseChainRows.length === 0) ? '' : 'none'; }
+        }
+
+        function onContentTypeChange(type) {
+          if (currentContentType === type) { return; }
+          currentContentType = type;
+          var lang = languageForType(type);
+          if (overrideEditor) { monaco.editor.setModelLanguage(overrideEditor.getModel(), lang); }
+          if (mergedEditor) { monaco.editor.setModelLanguage(mergedEditor.getModel(), lang); }
+          if (mergedBasesEditor) { monaco.editor.setModelLanguage(mergedBasesEditor.getModel(), lang); }
+          recomputeMerge();
+        }
+
+        function applyContentTypeLocked(type) {
+          if (document.getElementById('contentTypeLockedDisplay')) { return; }
+          var unlockedGroup = document.getElementById('contentTypeUnlockedGroup');
+          if (!unlockedGroup) { return; }
+          var locked = document.createElement('span');
+          locked.id = 'contentTypeLockedDisplay';
+          locked.textContent = type + ' 🔒 (locked — set at first Save, immutable)';
+          unlockedGroup.parentNode.replaceChild(locked, unlockedGroup);
+          currentContentType = type;
+        }
+
+        // ---- Base-chain editor ----
+
+        function addBaseChainRow() {
+          var defaultProject = availableProjectKeys.length > 0 ? availableProjectKeys[0] : '';
+          baseChainRows.push({ projectKey: defaultProject, pinMode: 'ACTIVE', pinnedVersionNumber: 0 });
+          baseChainRowExpanded.push(false);
+          updateContentTypeRowVisibility();
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        function removeBaseChainRow(index) {
+          baseChainRows.splice(index, 1);
+          baseChainRowExpanded.splice(index, 1);
+          updateContentTypeRowVisibility();
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        // Shared reorder helper (drag-and-drop + ▲/▼ buttons both funnel through this) — splices
+        // baseChainRows/baseChainRowExpanded from fromIndex to toIndex, then re-renders and
+        // recomputes the merge exactly once.
+        function reorderBaseChainRow(fromIndex, toIndex) {
+          if (fromIndex === toIndex || fromIndex &lt; 0 || fromIndex >= baseChainRows.length ||
+              toIndex &lt; 0 || toIndex >= baseChainRows.length) { return; }
+          var row = baseChainRows.splice(fromIndex, 1)[0];
+          baseChainRows.splice(toIndex, 0, row);
+          var expanded = baseChainRowExpanded.splice(fromIndex, 1)[0];
+          baseChainRowExpanded.splice(toIndex, 0, expanded);
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        function moveBaseChainRow(index, delta) {
+          var target = index + delta;
+          if (target &lt; 0 || target >= baseChainRows.length) { return; }
+          reorderBaseChainRow(index, target);
+        }
+
+        // Drag-and-drop state — tracks the index a drag started from, and the row element
+        // currently marked as the drop target, so dragend can always clean up regardless of
+        // whether drop succeeded.
+        var baseChainDragSourceIndex = null;
+        var baseChainDropTargetRow = null;
+
+        function clearBaseChainDropTarget() {
+          if (baseChainDropTargetRow) {
+            baseChainDropTargetRow.classList.remove('ctsync-basechain-row--drop-target');
+            baseChainDropTargetRow = null;
+          }
+        }
+
+        function toggleBaseChainRowExpanded(index) {
+          baseChainRowExpanded[index] = !baseChainRowExpanded[index];
+          renderBaseChainRows();
+        }
+
+        function projectOptionsForRow(index) {
+          if (index === 0 || baseChainRows.length === 0) {
+            return availableProjectKeys;
+          }
+          var contextType = commonVersionCatalog.typeByProject[baseChainRows[0].projectKey];
+          if (!contextType) {
+            return availableProjectKeys;
+          }
+          return availableProjectKeys.filter(function (key) {
+            return commonVersionCatalog.typeByProject[key] === contextType;
+          });
+        }
+
+        function onBaseChainProjectChange(index, projectKey) {
+          baseChainRows[index].projectKey = projectKey;
+          baseChainRows[index].pinMode = 'ACTIVE';
+          baseChainRows[index].pinnedVersionNumber = 0;
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        function onBaseChainModeChange(index, mode) {
+          baseChainRows[index].pinMode = mode;
+          if (mode === 'ACTIVE') {
+            baseChainRows[index].pinnedVersionNumber = 0;
+          } else {
+            var versions = commonVersionCatalog.versionsByProject[baseChainRows[index].projectKey] || [];
+            baseChainRows[index].pinnedVersionNumber = versions.length > 0 ? versions[0].version : 0;
+          }
+          renderBaseChainRows();
+          recomputeMerge();
+        }
+
+        function onBaseChainPinnedVersionChange(index, versionNumber) {
+          baseChainRows[index].pinnedVersionNumber = parseInt(versionNumber, 10);
+          recomputeMerge();
+        }
+
+        function renderBaseChainRows() {
+          var body = document.getElementById('baseChainRowsBody');
+          // Bug 1 fix: dispose every base-chain-row diff-editor instance from the previous render
+          // before rebuilding — see baseChainDiffEditors' own declaration comment above.
+          for (var d = 0; d &lt; baseChainDiffEditors.length; d++) {
+            baseChainDiffEditors[d].dispose();
+          }
+          baseChainDiffEditors = [];
+          body.innerHTML = '';
+          for (var i = 0; i &lt; baseChainRows.length; i++) {
+            var built = buildBaseChainRowElement(baseChainRows[i], i);
+            if (Array.isArray(built)) {
+              built.forEach(function (el) { body.appendChild(el); });
+            } else {
+              body.appendChild(built);
+            }
+          }
+          document.getElementById('baseChainField').value = JSON.stringify(baseChainRows);
+          if (baseChainRows.length === 0) {
+            body.appendChild(buildEmptyStateRow(7, '${%emptyState.noBaseChain}'));
+          }
+          reconcilePhantomScrollSoon(document.getElementById('baseChainRowsTableWrap'));
+        }
+
+        // Shared by every AJAX-rendered table on this page (ux-ui-designer correction,
+        // 2026-09-11): builds the same "single spanning row" empty-state markup the server itself
+        // renders on initial page load, so a table that becomes empty via an in-place update
+        // matches the server-rendered shape exactly instead of hiding the whole table/header.
+        function buildEmptyStateRow(colspan, message) {
+          var tr = document.createElement('tr');
+          tr.className = 'ctsync-empty-state-row';
+          var td = document.createElement('td');
+          td.colSpan = colspan;
+          td.textContent = message;
+          tr.appendChild(td);
+          return tr;
+        }
+
+        // Phantom-scroll reconciliation (owner report, 2026-09-11): every .ctsync-scroll-table wrap
+        // measures scrollHeight exactly 2px above clientHeight even for a single/near-empty row —
+        // a Chromium measurement artifact, not real overflow (confirmed live: removing border,
+        // overflow-y, padding/margin on the wrap left the 89/87 numbers unchanged). Force
+        // overflow-y:hidden whenever the "overflow" is below a small tolerance so the phantom 2px
+        // never paints a scrollbar; genuine overflow is many tens/hundreds of px once rows exist,
+        // so a 4px tolerance carries no risk of masking it. Shared verbatim across every host file
+        // that owns a .ctsync-scroll-table wrapper.
+        function reconcilePhantomScroll(wrapEl) {
+          if (!wrapEl) { return; }
+          var realOverflow = wrapEl.scrollHeight - wrapEl.clientHeight;
+          wrapEl.style.overflowY = (realOverflow > 4) ? 'auto' : 'hidden';
+        }
+
+        // Belt-and-suspenders re-check shortly after render — web-font loading or async layout can
+        // still nudge row heights a couple px after the initial synchronous measurement.
+        function reconcilePhantomScrollSoon(wrapEl) {
+          reconcilePhantomScroll(wrapEl);
+          // Nashorn-based JS-engine unit tests (ConfigTemplatesUiTest) run this same script without
+          // a setTimeout global — guard it so those tests keep exercising the immediate reconcile
+          // pass without needing a timer shim.
+          if (typeof setTimeout === 'function') {
+            setTimeout(function () { reconcilePhantomScroll(wrapEl); }, 50);
+          }
+        }
+
+        function buildBaseChainRowElement(row, index) {
+          var tr = document.createElement('tr');
+          tr.className = 'ctsync-basechain-row';
+          tr.draggable = true;
+
+          // Drag handle cell — only the handle itself starts a row drag; other interactive
+          // controls in this row (select/radios/buttons/toggle) must keep working normally.
+          var handleTd = document.createElement('td');
+          handleTd.className = 'ctsync-basechain-drag-cell';
+          var handle = document.createElement('span');
+          handle.className = 'ctsync-basechain-drag-handle';
+          handle.setAttribute('aria-hidden', 'true');
+          handle.title = 'Drag to reorder';
+          // Hit-target fix (owner report, 2026-09-11): rendered size bumped from 8x16 to 12x24
+          // (viewBox coordinates unchanged — the browser scales the same glyph up), matching the
+          // wider .ctsync-basechain-drag-cell/-drag-handle boxes above.
+          handle.innerHTML = '&lt;svg viewBox="0 0 8 16" width="12" height="24" aria-hidden="true" focusable="false"&gt;'
+              + '&lt;circle cx="2" cy="2" r="1.3" fill="currentColor"/&gt;&lt;circle cx="6" cy="2" r="1.3" fill="currentColor"/&gt;'
+              + '&lt;circle cx="2" cy="8" r="1.3" fill="currentColor"/&gt;&lt;circle cx="6" cy="8" r="1.3" fill="currentColor"/&gt;'
+              + '&lt;circle cx="2" cy="14" r="1.3" fill="currentColor"/&gt;&lt;circle cx="6" cy="14" r="1.3" fill="currentColor"/&gt;'
+              + '&lt;/svg&gt;';
+          handleTd.appendChild(handle);
+          tr.appendChild(handleTd);
+
+          tr.addEventListener('dragstart', (function (idx) {
+            return function (e) {
+              var fromHandle = e.target &amp;&amp; e.target.closest &amp;&amp; e.target.closest('.ctsync-basechain-drag-handle');
+              if (!fromHandle) { e.preventDefault(); return; }
+              baseChainDragSourceIndex = idx;
+              e.dataTransfer.setData('text/plain', String(idx));
+              e.dataTransfer.effectAllowed = 'move';
+              tr.classList.add('ctsync-basechain-row--dragging');
+            };
+          })(index));
+
+          tr.addEventListener('dragover', (function (idx) {
+            return function (e) {
+              if (baseChainDragSourceIndex === null) { return; }
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              if (baseChainDropTargetRow !== tr) {
+                clearBaseChainDropTarget();
+                tr.classList.add('ctsync-basechain-row--drop-target');
+                baseChainDropTargetRow = tr;
+              }
+            };
+          })(index));
+
+          tr.addEventListener('drop', (function (idx) {
+            return function (e) {
+              e.preventDefault();
+              var sourceIndex = baseChainDragSourceIndex;
+              clearBaseChainDropTarget();
+              if (sourceIndex === null || sourceIndex === idx) { return; }
+              reorderBaseChainRow(sourceIndex, idx);
+            };
+          })(index));
+
+          tr.addEventListener('dragend', function () {
+            baseChainDragSourceIndex = null;
+            clearBaseChainDropTarget();
+            var rows = document.querySelectorAll('.ctsync-basechain-row--dragging');
+            for (var r = 0; r &lt; rows.length; r++) { rows[r].classList.remove('ctsync-basechain-row--dragging'); }
+          });
+
+          var toggleTd = document.createElement('td');
+          var toggleLink = document.createElement('a');
+          toggleLink.href = '#';
+          toggleLink.className = 'ctsync-basechain-row-toggle';
+          toggleLink.setAttribute('role', 'button');
+          toggleLink.setAttribute('aria-expanded', baseChainRowExpanded[index] ? 'true' : 'false');
+          toggleLink.title = baseChainRowExpanded[index] ? 'Collapse resolved content' : 'Expand resolved content';
+          toggleLink.innerHTML = '&lt;svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"&gt;'
+              + '&lt;path d="' + (baseChainRowExpanded[index] ? 'M4 6l4 4 4-4' : 'M6 4l4 4-4 4') + '" '
+              + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/&gt;&lt;/svg&gt;';
+          toggleLink.onclick = (function (idx) {
+            return function (e) { e.preventDefault(); toggleBaseChainRowExpanded(idx); };
+          })(index);
+          toggleTd.appendChild(toggleLink);
+          tr.appendChild(toggleTd);
+
+          var idxTd = document.createElement('td');
+          idxTd.textContent = (index + 1);
+          tr.appendChild(idxTd);
+
+          var projectTd = document.createElement('td');
+          var projectSelect = document.createElement('select');
+          projectSelect.className = 'jenkins-select__input';
+          var options = projectOptionsForRow(index);
+          for (var p = 0; p &lt; options.length; p++) {
+            var opt = document.createElement('option');
+            opt.value = options[p];
+            opt.text = options[p];
+            if (options[p] === row.projectKey) { opt.selected = true; }
+            projectSelect.appendChild(opt);
+          }
+          projectSelect.onchange = (function (idx) {
+            return function () { onBaseChainProjectChange(idx, this.value); };
+          })(index);
+          // Inline flex row (owner report, 2026-09-11): the select is block-level/full-width
+          // inside its td, which pushed the open-link anchor onto its own line below it instead
+          // of sitting beside it — wrap both in a flex row so they render side by side.
+          var configKeyWrap = document.createElement('div');
+          configKeyWrap.style.display = 'flex';
+          configKeyWrap.style.alignItems = 'center';
+          configKeyWrap.style.gap = '6px';
+          projectSelect.style.flex = '1 1 auto';
+          configKeyWrap.appendChild(projectSelect);
+          // Open-in-new-tab link next to the Config Key select (docs/design/job-wireframe.md,
+          // Block 3) — same convention as EnvConfigSetPage's identical row builder. Small
+          // icon-button treatment (owner report, 2026-09-11), matching the row-toggle chevron's
+          // visual language rather than a bare Unicode glyph link.
+          if (row.projectKey) {
+            var openLink = document.createElement('a');
+            openLink.href = '${rootURL}/configTemplates/' + encodeURIComponent(row.projectKey) + '/';
+            openLink.target = '_blank';
+            openLink.rel = 'noopener noreferrer';
+            openLink.className = 'ctsync-basechain-open-link';
+            openLink.style.flex = '0 0 auto';
+            openLink.title = 'Open ' + row.projectKey + ' in a new tab';
+            openLink.innerHTML = '&lt;svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"&gt;'
+                + '&lt;path d="M6.5 3H3.5C3.22 3 3 3.22 3 3.5v9c0 .28.22.5.5.5h9c.28 0 .5-.22.5-.5v-3M9 3h4v4M13 3L7 9" '
+                + 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/&gt;&lt;/svg&gt;';
+            configKeyWrap.appendChild(openLink);
+          }
+          projectTd.appendChild(configKeyWrap);
+          tr.appendChild(projectTd);
+
+          var modeTd = document.createElement('td');
+          modeTd.appendChild(buildModeRadio(row, index, 'ACTIVE', 'Active'));
+          modeTd.appendChild(buildModeRadio(row, index, 'PINNED', 'Pin'));
+          tr.appendChild(modeTd);
+
+          var versionTd = document.createElement('td');
+          if (row.pinMode === 'PINNED') {
+            var versionSelect = document.createElement('select');
+            versionSelect.className = 'jenkins-select__input';
+            var versions = commonVersionCatalog.versionsByProject[row.projectKey] || [];
+            for (var v = 0; v &lt; versions.length; v++) {
+              var vopt = document.createElement('option');
+              vopt.value = versions[v].version;
+              vopt.text = 'v' + versions[v].version + ' — ' + versions[v].note;
+              if (versions[v].version === row.pinnedVersionNumber) { vopt.selected = true; }
+              versionSelect.appendChild(vopt);
+            }
+            versionSelect.onchange = (function (idx) {
+              return function () { onBaseChainPinnedVersionChange(idx, this.value); };
+            })(index);
+            versionTd.appendChild(versionSelect);
+          }
+          tr.appendChild(versionTd);
+
+          var actionsTd = document.createElement('td');
+          var upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
+          upBtn.title = 'Move up (higher precedence rows come later)';
+          upBtn.innerHTML = '&#9650;';
+          upBtn.disabled = (index === 0);
+          upBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, -1); }; })(index);
+          actionsTd.appendChild(upBtn);
+
+          var downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
+          downBtn.title = 'Move down (later rows win on overlapping keys)';
+          downBtn.innerHTML = '&#9660;';
+          downBtn.disabled = (index === baseChainRows.length - 1);
+          downBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, 1); }; })(index);
+          actionsTd.appendChild(downBtn);
+
+          var removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.className = 'jenkins-button jenkins-button--destructive ctsync-basechain-remove-btn';
+          removeBtn.title = 'Remove this base from the chain';
+          removeBtn.innerHTML = '&#10005;';
+          removeBtn.onclick = (function (idx) { return function () { removeBaseChainRow(idx); }; })(index);
+          actionsTd.appendChild(removeBtn);
+
+          tr.appendChild(actionsTd);
+
+          if (!baseChainRowExpanded[index]) {
+            return tr;
+          }
+
+          var detailTr = document.createElement('tr');
+          detailTr.className = 'ctsync-basechain-row-detail';
+          var detailTd = document.createElement('td');
+          detailTd.colSpan = 7;
+          // Bug 1 fix (tech-lead contract, 2026-09-10): two-pane read-only Monaco diff instead of a
+          // flat "pre" block — left pane is this row's PRECEDING cumulative fold (rows 1..index-1, or "{}"
+          // for row #1 itself), right pane is the cumulative fold INCLUDING this row, so expanding a
+          // row shows exactly what that one row changed. lastPerReference is built by
+          // previewMergeImpl in the exact same chain order as baseChainRows — BaseChainResolver.
+          // resolve() iterates the request chain 1:1 into its output list, and previewMergeImpl bails
+          // out (returning ok:false with no perReference at all) before populating any entry on the
+          // first unresolvable reference — so whenever a response is ok:true, lastPerReference is
+          // guaranteed to be the same length and order as baseChainRows, making a plain positional
+          // index lookup safe here (unlike the old content-matching findPerReferenceFor helper this
+          // replaces, which is no longer needed).
+          if (index &lt; lastPerReference.length) {
+            var curRef = lastPerReference[index];
+            var caption = document.createElement('div');
+            caption.className = 'ctsync-basechain-resolved-caption';
+            caption.textContent = 'Resolved content (read-only) — ' + curRef.projectKey + ', '
+                + curRef.pinMode + ' (v' + curRef.resolvedVersionNumber + ')';
+            detailTd.appendChild(caption);
+            var diffContainer = document.createElement('div');
+            diffContainer.className = 'ctsync-basechain-diff-container';
+            diffContainer.style.height = '260px';
+            diffContainer.style.border = '1px solid #ccc';
+            detailTd.appendChild(diffContainer);
+            var leftContent = index === 0 ? '{}' : lastPerReference[index - 1].cumulativeJson;
+            var rightContent = curRef.cumulativeJson;
+            var lang = languageForType(currentContentType);
+            var leftModel = monaco.editor.createModel(leftContent, lang);
+            var rightModel = monaco.editor.createModel(rightContent, lang);
+            var rowDiffEditor = monaco.editor.createDiffEditor(diffContainer, {
+              readOnly: true,
+              automaticLayout: true,
+              renderSideBySide: true
+            });
+            rowDiffEditor.setModel({ original: leftModel, modified: rightModel });
+            baseChainDiffEditors.push(rowDiffEditor);
+          } else {
+            detailTd.textContent = 'Not yet resolvable — check the project/version picker above.';
+          }
+          detailTr.appendChild(detailTd);
+          return [tr, detailTr];
+        }
+
+        function buildModeRadio(row, index, value, label) {
+          var wrapper = document.createElement('label');
+          wrapper.style.marginRight = '8px';
+          var radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.name = 'baseChainMode-' + index;
+          radio.checked = (row.pinMode === value);
+          radio.onchange = (function (idx, v) { return function () { onBaseChainModeChange(idx, v); }; })(index, value);
+          wrapper.appendChild(radio);
+          wrapper.appendChild(document.createTextNode(' ' + label));
+          return wrapper;
+        }
+
+        function toggleBaseChainDetail(versionNumber) {
+          var el = document.getElementById('baseChainDetail-' + versionNumber);
+          if (el) { el.style.display = (el.style.display === 'none') ? 'block' : 'none'; }
+        }
+
+        function formatEditorContent(ed) {
+          if (!ed) { return; }
+          var attemptsLeft = 6;
+          function attempt() {
+            var before = ed.getValue();
+            var action = ed.getAction('editor.action.formatDocument');
+            if (!action) {
+              if (--attemptsLeft > 0) { setTimeout(attempt, 200); }
+              return;
+            }
+            Promise.resolve(action.run()).then(function () {
+              if (ed.getValue() === before &amp;&amp; --attemptsLeft > 0) {
+                setTimeout(attempt, 200);
+              }
+            });
+          }
+          setTimeout(attempt, 0);
+        }
+
+        function attachOverrideChangeListener() {
+          overrideEditor.onDidChangeModelContent(function () {
+            clearTimeout(debounceHandle);
+            debounceHandle = setTimeout(recomputeMerge, 300);
+          });
+        }
+
+        function switchToEditMode() {
+          if (editMode) { return; }
+          if (diffEditor) { diffEditor.dispose(); diffEditor = null; }
+          overrideEditor = monaco.editor.create(document.getElementById('overrideEditor'), {
+            value: lastEditContent, language: languageForType(currentContentType), automaticLayout: true
+          });
+          formatEditorContent(overrideEditor);
+          wireLiveDiagnostics(overrideEditor);
+          attachOverrideChangeListener();
+          recomputeMerge();
+          editMode = true;
+          clearHistorySelection();
+          document.getElementById('modeEditBtn').className = 'jenkins-button jenkins-button--primary';
+          document.getElementById('compareBanner').style.display = 'none';
+        }
+
+        function selectHistoryRow(version) {
+          if (selectedCompareVersion === version) {
+            switchToEditMode();
+            return;
+          }
+          proxy.compareVersions(JSON.stringify({ version: version }), function (t) {
+            var r = t.responseObject();
+            if (!r.ok) {
+              alert(r.error);
+              return;
+            }
+            enterCompareMode(version, r.content);
+          });
+        }
+
+        function enterCompareMode(version, versionContent) {
+          clearTimeout(debounceHandle);
+          if (overrideEditor) {
+            lastEditContent = overrideEditor.getValue();
+            overrideEditor.dispose();
+            overrideEditor = null;
+          }
+          if (diffEditor) {
+            diffEditor.dispose();
+            diffEditor = null;
+          }
+          var draftModel = monaco.editor.createModel(lastEditContent, languageForType(currentContentType));
+          var versionModel = monaco.editor.createModel(versionContent, languageForType(currentContentType));
+          diffEditor = monaco.editor.createDiffEditor(document.getElementById('overrideEditor'), {
+            readOnly: true,
+            automaticLayout: true,
+            renderSideBySide: true
+          });
+          diffEditor.setModel({ original: draftModel, modified: versionModel });
+          editMode = false;
+          selectedCompareVersion = version;
+          lastComparedVersionContent = versionContent;
+          highlightSelectedHistoryRow(version);
+          document.getElementById('modeEditBtn').className = 'jenkins-button';
+          document.getElementById('compareBannerText').textContent =
+              'Comparing the current (unsaved) draft against v' + version + '.';
+          document.getElementById('compareBanner').style.display = 'block';
+        }
+
+        function loadComparedIntoEditor() {
+          if (!selectedCompareVersion) { return; }
+          lastEditContent = lastComparedVersionContent;
+          switchToEditMode();
+        }
+
+        function highlightSelectedHistoryRow(version) {
+          clearHistoryHighlightOnly();
+          var row = document.getElementById('historyRow-' + version);
+          if (row) { row.className = 'ctsync-history-row ctsync-history-row--selected'; }
+        }
+
+        function clearHistoryHighlightOnly() {
+          var rows = document.querySelectorAll('.ctsync-history-row--selected');
+          for (var i = 0; i &lt; rows.length; i++) {
+            rows[i].className = 'ctsync-history-row';
+          }
+        }
+
+        function clearHistorySelection() {
+          selectedCompareVersion = null;
+          lastComparedVersionContent = '';
+          clearHistoryHighlightOnly();
+        }
+
+        // Bug 3 fix (tech-lead contract, 2026-09-10 — root cause below): every caller of
+        // recomputeMerge (addBaseChainRow/removeBaseChainRow/moveBaseChainRow/the various
+        // on...Change handlers, plus the 300ms debounce in attachOverrideChangeListener) fires an
+        // independent proxy.previewMerge AJAX round trip with no sequencing between them at all.
+        // None of those call sites ever canceled a still-pending debounce before firing an immediate
+        // recompute, so a keystroke's debounced call could still be in flight when e.g. a row was
+        // removed; whichever response's network round trip happened to land LAST silently overwrote
+        // mergedBasesEditor/mergedEditor, regardless of which request was actually issued last. This
+        // is invisible on add/reorder (the before/after merge results usually look similar enough
+        // that a stale overwrite goes unnoticed) but glaring on removal down to zero rows — an
+        // in-flight response from before the removal can land after the correct "{}" response and
+        // make the panel look like it "didn't recompute." mergeRequestSeq is a monotonically
+        // increasing per-recompute token: only the response whose token still matches the CURRENT
+        // token when it lands is applied; any earlier, now-superseded response is silently ignored.
+        var mergeRequestSeq = 0;
+
+        function recomputeMerge() {
+          if (!overrideEditor) { return; }
+          clearTimeout(debounceHandle); // this recompute is happening now — no pending debounce needed
+          document.getElementById('baseChainField').value = JSON.stringify(baseChainRows);
+          var requestToken = ++mergeRequestSeq;
+          // Simpler signature than EnvConfigSetPage's jsPreviewMerge: no explicitlyStandalone
+          // argument at all — an empty baseChainRows array already means "no bases."
+          proxy.previewMerge(overrideEditor.getValue(), JSON.stringify(baseChainRows),
+              currentContentType, function (t) {
+            if (requestToken !== mergeRequestSeq) { return; } // superseded by a newer recompute — ignore
+            var r = t.responseObject();
+            var indicator = document.getElementById('mergedStaleIndicator');
+            if (r.ok) {
+              if (r.contentType &amp;&amp; r.contentType !== currentContentType) {
+                currentContentType = r.contentType;
+                monaco.editor.setModelLanguage(overrideEditor.getModel(), languageForType(currentContentType));
+                monaco.editor.setModelLanguage(mergedEditor.getModel(), languageForType(currentContentType));
+                monaco.editor.setModelLanguage(mergedBasesEditor.getModel(), languageForType(currentContentType));
+              }
+              mergedEditor.setValue(r.merged);
+              mergedBasesEditor.setValue(r.mergedBases);
+              indicator.style.display = 'none';
+              lastPerReference = r.perReference || [];
+              renderBaseChainRows();
+            } else {
+              indicator.style.display = 'block';
+            }
+          });
+        }
+
+        // Native Jenkins toast (owner requirement, 2026-09-14): replaces the old shared #saveBanner
+        // div (SharedBlocks/editorBlock.jelly) with the same window.notificationBar singleton core
+        // uses for the "Apply" toast on /job/&lt;name&gt;/configure and /manage/configure. Already
+        // loaded on every Jenkins page via layout.jelly's unconditional jsbundles/app.js include, so
+        // no adjunct/import is needed — only called from inside the async proxy.save callback below,
+        // never at top-level script-parse time (app.js loads deferred). Mirrors
+        // CommonConfigSetPage/EnvConfigSetPage's identical helper. SUCCESS auto-hides on its own
+        // after ~3s; ERROR is sticky until the user's next successful save naturally replaces it.
+        function showSaveNotification(message, isError) {
+          window.notificationBar.show(message,
+              isError ? window.notificationBar.ERROR : window.notificationBar.SUCCESS);
+        }
+
+        function saveClicked(activate) {
+          var content = (editMode &amp;&amp; overrideEditor) ? overrideEditor.getValue() : lastEditContent;
+          document.getElementById('baseChainField').value = JSON.stringify(baseChainRows);
+          var note = document.getElementById('noteField').value;
+          var payload = {
+            content: content,
+            note: note,
+            activate: activate,
+            baseChainJson: JSON.stringify(baseChainRows),
+            // Only meaningful (and only ever read server-side) on this job's very first save while
+            // the base chain is empty — mirrors EnvConfigSetPage's FR-104 contentType field, minus
+            // the explicitlyStandalone gate.
+            contentType: baseChainRows.length === 0 ? currentContentType : null
+          };
+          document.getElementById('saveBtn').disabled = true;
+          document.getElementById('saveActivateBtn').disabled = true;
+          proxy.save(JSON.stringify(payload), function (t) {
+            document.getElementById('saveBtn').disabled = false;
+            document.getElementById('saveActivateBtn').disabled = false;
+            var r = t.responseObject();
+            if (!r.ok) {
+              showSaveNotification(r.error, true);
+              return;
+            }
+            showSaveNotification(activate ? 'Saved and activated' : 'Version saved', false);
+            renderVersionHistoryRows(r.versions);
+            if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
+            document.getElementById('noteField').value = '';
+            if (r.contentTypeLocked) { applyContentTypeLocked(r.contentTypeValue); }
+            lastSavedOverrideContent = content;
+            lastSavedBaseChainJson = JSON.stringify(baseChainRows);
+            lastSavedContentType = currentContentType;
+          });
+        }
+
+        function discardAllChangesClicked() {
+          if (!window.confirm('Discard all unsaved changes to the base chain and override? '
+              + 'This cannot be undone.')) {
+            return;
+          }
+          baseChainRows = JSON.parse(lastSavedBaseChainJson);
+          baseChainRowExpanded = baseChainRows.map(function () { return false; });
+          updateContentTypeRowVisibility();
+          renderBaseChainRows();
+
+          currentContentType = lastSavedContentType;
+          if (!document.getElementById('contentTypeLockedDisplay')) {
+            var contentTypeRadios = document.getElementsByName('contentTypeRadio');
+            for (var ct = 0; ct &lt; contentTypeRadios.length; ct++) {
+              contentTypeRadios[ct].checked = (contentTypeRadios[ct].value === currentContentType);
+            }
+          }
+
+          lastEditContent = lastSavedOverrideContent;
+          clearTimeout(debounceHandle);
+          if (editMode &amp;&amp; overrideEditor) {
+            overrideEditor.dispose();
+            overrideEditor = null;
+          }
+          editMode = false;
+          switchToEditMode();
+        }
+
+        function renderVersionHistoryRows(versions) {
+          var tbody = document.getElementById('versionHistoryTbody');
+          tbody.innerHTML = '';
+          if (versions.length === 0) {
+            tbody.appendChild(buildEmptyStateRow(7, '${%emptyState.noVersions}'));
+            reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+            document.getElementById('modeEditBtn').style.display = 'none';
+            return;
+          }
+          for (var i = 0; i &lt; versions.length; i++) {
+            tbody.appendChild(buildHistoryRowElement(versions[i]));
+          }
+          reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+          document.getElementById('modeEditBtn').style.display = (versions.length >= 2) ? '' : 'none';
+        }
+
+        function buildHistoryRowElement(v) {
+          var tpl = document.getElementById('historyRowTemplate');
+          var tr = tpl.content.firstElementChild.cloneNode(true);
+          tr.id = 'historyRow-' + v.versionNumber;
+          tr.onclick = function () { selectHistoryRow(v.versionNumber); };
+          tr.onkeydown = function (event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              selectHistoryRow(v.versionNumber);
+            }
+          };
+          tr.querySelector('.js-version').textContent = 'v' + v.versionNumber;
+          tr.querySelector('.js-created').textContent = formatTimestamp(v.timestampEpochMillis);
+          tr.querySelector('.js-createdBy').textContent = v.author;
+          tr.querySelector('.js-note').textContent = v.note;
+
+          var chain = v.baseChain || [];
+          // No explicitlyStandalone concept here — the badge stays permanently hidden, always the
+          // plain "N bases" link.
+          var badge = tr.querySelector('.js-standalone-badge');
+          badge.style.display = 'none';
+          var toggle = tr.querySelector('.js-basechain-toggle');
+          toggle.style.display = 'inline';
+          tr.querySelector('.js-basechain-count').textContent = chain.length;
+          var countLabel = tr.querySelector('.js-basechain-count').nextSibling;
+          if (countLabel) { countLabel.textContent = ' ' + (chain.length === 1 ? 'base' : 'bases'); }
+          var detail = tr.querySelector('.js-basechain-detail');
+          detail.id = 'baseChainDetail-' + v.versionNumber;
+          if (chain.length === 0) {
+            detail.textContent = '(no declared chain — 0 bases)';
+          } else {
+            detail.innerHTML = '';
+            for (var c = 0; c &lt; chain.length; c++) {
+              var ref = chain[c];
+              var line = document.createElement('div');
+              line.textContent = ref.projectKey + ' — ' + ref.pinMode
+                  + (ref.pinMode === 'PINNED' ? ' (v' + ref.pinnedVersionNumber + ')' : '');
+              detail.appendChild(line);
+            }
+          }
+          toggle.onclick = (function (num) {
+            return function (e) { e.stopPropagation(); e.preventDefault(); toggleBaseChainDetail(num); };
+          })(v.versionNumber);
+
+          var activeBadge = tr.querySelector('.js-activeBadge');
+          activeBadge.textContent = v.active ? ('● ' + tpl.dataset.activeLabel) : '';
+          var btn = tr.querySelector('.js-activate-btn');
+          if (v.active) {
+            btn.disabled = true;
+            btn.setAttribute('data-always-disabled', 'true');
+            btn.title = tpl.dataset.alreadyActiveTitle;
+          } else {
+            btn.title = 'Activate version ' + v.versionNumber + ' without changing the editor content';
+            btn.onclick = (function (num) {
+              return function (e) { e.stopPropagation(); activateVersion(num); };
+            })(v.versionNumber);
+          }
+          return tr;
+        }
+
+        function renderSecretsManifestRows(manifest) {
+          var tbody = document.getElementById('secretsManifestTbody');
+          tbody.innerHTML = '';
+          if (manifest.length === 0) {
+            tbody.appendChild(buildEmptyStateRow(3, '${%emptyState.noSecrets}'));
+            reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+            return;
+          }
+          for (var i = 0; i &lt; manifest.length; i++) {
+            tbody.appendChild(buildSecretRowElement(manifest[i]));
+          }
+          reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+        }
+
+        function buildSecretRowElement(entry) {
+          var tpl = document.getElementById('secretRowTemplate');
+          var tr = tpl.content.firstElementChild.cloneNode(true);
+          tr.querySelector('.js-secret-path').textContent = entry.path;
+          tr.querySelector('.js-secret-cred').textContent = entry.credentialId;
+          var btn = tr.querySelector('.ctsync-remove-secret-btn');
+          btn.setAttribute('data-secret-path', entry.path);
+          btn.title = tpl.dataset.removeTitle;
+          btn.onclick = function () { removeSecret(entry.path); };
+          return tr;
+        }
+
+        function showGeneratedTemplateView() {
+          // Owner requirement (2026-09-12): generate from the CURRENT, possibly-unsaved draft —
+          // same content/base-chain/content-type arguments recomputeMerge() already sends to
+          // proxy.previewMerge(...), reusing the exact same "editor content, whether saved or not"
+          // fallback saveClicked() uses (editMode &amp;&amp; overrideEditor ? live value : lastEditContent),
+          // so this works identically whether the override editor is currently live or mid-Compare.
+          var draftContent = (editMode &amp;&amp; overrideEditor) ? overrideEditor.getValue() : lastEditContent;
+          proxy.generateTemplate(draftContent, JSON.stringify(baseChainRows), currentContentType,
+              function (t) {
+            var r = t.responseObject();
+            if (!r.ok) {
+              alert(r.error);
+              return;
+            }
+            lastGeneratedTemplateText = r.template;
+            document.getElementById('mergeLayout').style.display = 'none';
+            document.getElementById('generateBanner').style.display = 'block';
+            document.getElementById('generatedTemplatePanel').style.display = 'block';
+            document.getElementById('generateTemplateBtn').style.display = 'none';
+            document.getElementById('backTo3PanelBtn').style.display = 'inline-block';
+            if (generatedTemplateEditor) {
+              generatedTemplateEditor.setValue(lastGeneratedTemplateText);
+              monaco.editor.setModelLanguage(generatedTemplateEditor.getModel(), languageForType(r.contentType));
+            } else {
+              generatedTemplateEditor = monaco.editor.create(document.getElementById('generatedTemplateEditor'), {
+                value: lastGeneratedTemplateText,
+                language: languageForType(r.contentType),
+                readOnly: true,
+                automaticLayout: true
+              });
+            }
+          });
+        }
+
+        function backTo3PanelView() {
+          document.getElementById('mergeLayout').style.display = '';
+          document.getElementById('generateBanner').style.display = 'none';
+          document.getElementById('generatedTemplatePanel').style.display = 'none';
+          document.getElementById('generateTemplateBtn').style.display = 'inline-block';
+          document.getElementById('backTo3PanelBtn').style.display = 'none';
+        }
+
+        function copyGeneratedTemplate() {
+          navigator.clipboard.writeText(
+              generatedTemplateEditor ? generatedTemplateEditor.getValue() : lastGeneratedTemplateText);
+        }
+
+        function setActivateButtonsDisabled(disabled) {
+          var buttons = document.querySelectorAll('.ctsync-activate-btn');
+          for (var i = 0; i &lt; buttons.length; i++) {
+            if (buttons[i].getAttribute('data-always-disabled') === 'true') { continue; }
+            buttons[i].disabled = disabled;
+          }
+        }
+
+        function activateVersion(v) {
+          setActivateButtonsDisabled(true);
+          proxy.activate(JSON.stringify({ version: v }), function (t) {
+            var r = t.responseObject();
+            if (r.ok) {
+              renderVersionHistoryRows(r.versions);
+              reloadEditorStateFromActivatedVersion(r);
+            } else {
+              setActivateButtonsDisabled(false);
+              alert(r.error);
+            }
+          });
+        }
+
+        // Mirrors EnvConfigSetPage's identical function, minus the explicitlyStandalone field
+        // (r.activatedExplicitlyStandalone is deliberately never sent by this page's server side —
+        // see ConfigTemplatesJobAction#activateImpl).
+        function reloadEditorStateFromActivatedVersion(r) {
+          var activatedChain = r.activatedBaseChain || [];
+          baseChainRows = [];
+          for (var i = 0; i &lt; activatedChain.length; i++) {
+            var ref = activatedChain[i];
+            baseChainRows.push({ projectKey: ref.projectKey, pinMode: ref.pinMode,
+                pinnedVersionNumber: ref.pinnedVersionNumber });
+          }
+          baseChainRowExpanded = baseChainRows.map(function () { return false; });
+          updateContentTypeRowVisibility();
+
+          currentContentType = r.activatedContentType || currentContentType;
+          lastEditContent = r.activatedContent != null ? r.activatedContent : '{}';
+
+          clearTimeout(debounceHandle);
+          if (diffEditor) { diffEditor.dispose(); diffEditor = null; }
+          if (editMode &amp;&amp; overrideEditor) { overrideEditor.dispose(); overrideEditor = null; }
+          editMode = false;
+          switchToEditMode();
+
+          lastSavedOverrideContent = lastEditContent;
+          lastSavedBaseChainJson = JSON.stringify(baseChainRows);
+          lastSavedContentType = currentContentType;
+        }
+
+        function addSecret() {
+          var path = document.getElementById('secretPath').value;
+          var cred = document.getElementById('secretCredentialId').value;
+          proxy.addSecret(JSON.stringify({ path: path, credentialId: cred }), function (t) {
+            var r = t.responseObject();
+            if (r.ok) {
+              renderSecretsManifestRows(r.secretsManifest);
+              document.getElementById('secretPath').value = '';
+            } else {
+              alert(r.error);
+            }
+          });
+        }
+
+        function removeSecret(path) {
+          proxy.removeSecret(JSON.stringify({ path: path }), function (t) {
+            var r = t.responseObject();
+            if (r.ok) { renderSecretsManifestRows(r.secretsManifest); } else { alert(r.error); }
+          });
+        }
+      </script>
 
       </div>
     </l:main-panel>

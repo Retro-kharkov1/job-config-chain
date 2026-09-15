@@ -12,8 +12,11 @@ import java.util.List;
  * The global "Config Templates" admin screen (FR-30), reachable at {@code /configTemplates},
  * modeled on Jenkins' own Manage Jenkins &#8594; Managed Files list/edit interaction shape (see
  * "UI reference groundings" in the requirements spec). Lists every common Config Set and dispatches
- * to a per-project {@link ProjectConfigPage} at {@code /configTemplates/<projectKey>/} via
- * Stapler's {@code getDynamic(String)} catch-all hook.
+ * directly to that project's {@link CommonConfigSetPage} at {@code /configTemplates/<projectKey>/}
+ * via Stapler's {@code getDynamic(String)} catch-all hook — {@code /configTemplates/<projectKey>/}
+ * IS the common Config Set editor directly (owner decision, 2026-09-14, see
+ * {@code admin-ui.md}'s "Config-Key hub page IS the common editor directly" section); there is no
+ * separate near-empty hub page and no {@code /common} URL segment anymore.
  *
  * <p><b>Entry point: {@link ManagementLink}, not {@code RootAction} (owner decision, 2026-09-02):</b>
  * this used to implement {@code hudson.model.RootAction}, which Jenkins core surfaces as a
@@ -134,10 +137,15 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
         return repository.listAllCommon();
     }
 
-    /** Stapler catch-all dispatch: {@code /configTemplates/<projectKey>/...} (FR-30/FR-34 grouping). */
+    /**
+     * Stapler catch-all dispatch: {@code /configTemplates/<projectKey>/...} (FR-30/FR-34 grouping).
+     * Dispatches directly to {@link CommonConfigSetPage} — {@code /configTemplates/<projectKey>/}
+     * IS the common Config Set editor, not a separate landing page one segment up from it (owner
+     * decision, 2026-09-14).
+     */
     public Object getDynamic(String projectKey) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        return new ProjectConfigPage(projectKey, repository);
+        return new CommonConfigSetPage(projectKey, repository);
     }
 
     ConfigSetRepository getRepository() {

@@ -4,6 +4,7 @@ import hudson.AbortException;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
+import hudson.model.Job;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import io.github.retrokharkov1.configtemplatesync.merge.EffectiveConfigResolver;
@@ -11,15 +12,15 @@ import io.github.retrokharkov1.configtemplatesync.merge.TokenExtractor;
 import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeFormats;
 import io.github.retrokharkov1.configtemplatesync.merge.tree.TreeNode;
 import io.github.retrokharkov1.configtemplatesync.merge.tree.TreePaths;
-import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigDeploymentBinding;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
 import io.github.retrokharkov1.configtemplatesync.model.ContentType;
-import io.github.retrokharkov1.configtemplatesync.model.PinMode;
+import io.github.retrokharkov1.configtemplatesync.model.JobConfigTemplateVersion;
 import io.github.retrokharkov1.configtemplatesync.model.ResolvedBaseVersion;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigDeploymentBindingRepository;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
+import io.github.retrokharkov1.configtemplatesync.ui.JobConfigTemplateProperty;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
@@ -36,8 +37,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Pipeline step {@code configTemplateSubstitute(projectKey, environment, file, redeployFromRun,
- * useBase, version)} (FR-21–FR-27, FR-54, FR-79–FR-85, FR-96–FR-103, UF-4/UF-6).
+ * Pipeline step {@code configTemplateSubstitute(file, useBase, configKey, version, redeployFromRun)}
+ * (FR-21–FR-27, FR-54, FR-79–FR-85, FR-96–FR-103, UF-4/UF-6).
+ *
+ * <p>Every call resolves against the CALLING JOB's own attached local config
+ * ({@code JobConfigTemplateProperty}) by construction, unless {@code useBase: true} + {@code
+ * configKey} explicitly redirects to a named global COMMON Config Set — see pipeline-steps.md's
+ * "Pipeline call resolution — the final parameter model" for the full 7-row resolution matrix.
+ * There is no {@code projectKey}/{@code environment} parameter; that calling form was retired in
+ * full (2026-09-14), not deprecated.</p>
  *
  * <p>Per OQ-7, this step re-runs the same flatten-and-compare drift check {@code
  * configTemplateValidate} performs, as a defensive re-check, rather than trusting that validate
@@ -49,50 +57,35 @@ import java.util.Set;
  * supplied, which suppresses the binding lookup/write entirely for that call (FR-98). A narrow,
  * explicitly-supplied {@code redeployFromRun} parameter (FR-100–FR-103) redirects the binding
  * LOOKUP to a different Run's identity, for the deliberate cross-Run rollback/redeploy case
- * (UF-6) that an automatically-derived, single-Run-scoped key cannot serve on its own (FR-99).</p>
+ * (UF-6) that an automatically-derived, single-Run-scoped key cannot serve on its own (FR-99). A
+ * Deployment Binding is now keyed purely by that Run-identity string (2026-09-14) — there is no
+ * longer a separate Config-Key/environment dimension, since every call resolves per-Job by
+ * construction.</p>
  *
- * <p>Per FR-13/FR-21, any dotted path declared secret in the common and/or env Config Set's secrets
- * manifest has its real value resolved <b>exclusively</b> from the Jenkins credential ID declared
- * for that path — via {@link com.cloudbees.plugins.credentials.CredentialsProvider#findCredentialById}
+ * <p>Per FR-13/FR-21, any dotted path declared secret in a resolved base Config Set's and/or the
+ * Job's own secrets manifest has its real value resolved <b>exclusively</b> from the Jenkins
+ * credential ID declared for that path — via {@link com.cloudbees.plugins.credentials.CredentialsProvider#findCredentialById}
  * scoped to this build's {@link Run} — never from an env var the calling Jenkinsfile happens to have
  * set. If the declared credential ID does not resolve, the build fails loudly (NFR-7) naming the
  * missing credential; it never falls back to a placeholder or empty value. Non-secret paths keep the
  * pre-existing behavior: an env var whose name matches the dotted path wins if present, otherwise
  * the flattened effective-config value is used.</p>
  *
- * <p>{@code projectKey}/{@code environment}/{@code file} may be omitted from the call entirely if a
- * prior {@code setupConfigTemplate} call in the same build already supplied them (FR-90–FR-95);
- * explicit call-site values always win per parameter (FR-93).</p>
+ * <p>{@code file}/{@code useBase}/{@code configKey}/{@code version} may be omitted from the call
+ * entirely if a prior {@code setupConfigTemplate} call in the same build already supplied them
+ * (FR-90–FR-95); explicit call-site values always win per parameter (FR-93). Only {@code file}
+ * remains mandatory.</p>
  */
 public class ConfigTemplateSubstituteStep extends Step {
 
-    private String projectKey;
-    private String environment;
     private String file;
     private String redeployFromRun;
     private Boolean useBase;
+    private String configKey;
     private Integer version;
 
     @DataBoundConstructor
     public ConfigTemplateSubstituteStep() {
-    }
-
-    public String getProjectKey() {
-        return projectKey;
-    }
-
-    @DataBoundSetter
-    public void setProjectKey(String projectKey) {
-        this.projectKey = projectKey;
-    }
-
-    public String getEnvironment() {
-        return environment;
-    }
-
-    @DataBoundSetter
-    public void setEnvironment(String environment) {
-        this.environment = environment;
     }
 
     public String getFile() {
@@ -128,6 +121,16 @@ public class ConfigTemplateSubstituteStep extends Step {
         this.useBase = useBase;
     }
 
+    /** Only valid together with {@code useBase: true} (matrix rows 6/7) — see class javadoc. */
+    public String getConfigKey() {
+        return configKey;
+    }
+
+    @DataBoundSetter
+    public void setConfigKey(String configKey) {
+        this.configKey = configKey;
+    }
+
     public Integer getVersion() {
         return version;
     }
@@ -139,28 +142,26 @@ public class ConfigTemplateSubstituteStep extends Step {
 
     @Override
     public StepExecution start(StepContext context) {
-        return new Execution(context, projectKey, environment, file, redeployFromRun, useBase, version);
+        return new Execution(context, file, redeployFromRun, useBase, configKey, version);
     }
 
     static class Execution extends SynchronousNonBlockingStepExecution<Void> {
 
         private static final long serialVersionUID = 1L;
 
-        private final String projectKey;
-        private final String environment;
         private final String file;
         private final String redeployFromRun;
         private final Boolean useBase;
+        private final String configKey;
         private final Integer version;
 
-        Execution(StepContext context, String projectKey, String environment, String file,
-                  String redeployFromRun, Boolean useBase, Integer version) {
+        Execution(StepContext context, String file, String redeployFromRun, Boolean useBase, String configKey,
+                  Integer version) {
             super(context);
-            this.projectKey = projectKey;
-            this.environment = environment;
             this.file = file;
             this.redeployFromRun = redeployFromRun;
             this.useBase = useBase;
+            this.configKey = configKey;
             this.version = version;
         }
 
@@ -170,18 +171,22 @@ public class ConfigTemplateSubstituteStep extends Step {
             FilePath workspace = getContext().get(FilePath.class);
             EnvVars envVars = getContext().get(EnvVars.class);
             Run<?, ?> run = getContext().get(Run.class);
+            Job<?, ?> job = run.getParent(); // Run#getParent() already returns the owning Job — no
+            // getRequiredContext() change needed (tech-lead scoping decision, 2026-09-14,
+            // pipeline-steps.md §2).
 
             StepSupport.EffectiveParams params = StepSupport.mergeWithSetupState(
-                    run, projectKey, environment, file, redeployFromRun, useBase, version);
+                    run, file, redeployFromRun, useBase, configKey, version);
 
             ConfigSetRepository configSetRepository = StepSupport.newRepository();
             ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
+            JobConfigTemplateProperty prop = job.getProperty(JobConfigTemplateProperty.class);
 
             TreeNode effective;
             ContentType effectiveType;
             List<ResolvedBaseVersion> resolvedBaseChain;
             List<ConfigSet> resolvedBaseConfigSets;
-            ConfigSetVersion envVersion = null;
+            int ownConfigVersionNumber;
             boolean pinned = false;
             boolean skipBindingWrite;
 
@@ -189,36 +194,15 @@ public class ConfigTemplateSubstituteStep extends Step {
             boolean hasRedeployFromRun = params.redeployFromRun != null && !params.redeployFromRun.trim().isEmpty();
             String ownIdentity = run.getExternalizableId(); // FR-96
 
-            // FR-81: useBase=true bypasses the env Config Set and its base-chain resolution machinery
-            // ENTIRELY, for every invocation shape — not only when `version` is also supplied. `env`
-            // stays null throughout this method whenever useBase=true (FR-83: no env manifest merge).
-            ConfigSet env = params.useBase ? null : StepSupport.requireEnv(configSetRepository,
-                    params.projectKey, params.environment);
-
             if (hasVersion) {
                 // ── Branch A (FR-79–82, FR-98, FR-101's top precedence) ──────────────────────────
-                if (params.useBase) {
-                    StepSupport.ResolvedEffective resolved =
-                            StepSupport.resolveUseBaseOnly(configSetRepository, params.projectKey, params.version);
-                    effective = resolved.mergedConfig;
-                    effectiveType = resolved.contentType;
-                    resolvedBaseChain = resolved.resolvedBaseChain;
-                    resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
-                } else {
-                    envVersion = env.getVersion(params.version);
-                    if (envVersion == null) {
-                        throw new AbortException("Env Config Set for projectKey '" + params.projectKey
-                                + "', environment '" + params.environment + "' has no version " + params.version
-                                + " to resolve (explicit 'version' parameter)");
-                    }
-                    List<BaseConfigReference> chain = StepSupport.effectiveBaseChain(params.projectKey, envVersion);
-                    StepSupport.ResolvedEffective resolved =
-                            StepSupport.resolveEffective(configSetRepository, chain, envVersion, env);
-                    effective = resolved.mergedConfig;
-                    effectiveType = resolved.contentType;
-                    resolvedBaseChain = resolved.resolvedBaseChain;
-                    resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
-                }
+                StepSupport.ResolvedEffective resolved = StepSupport.resolveJobScoped(
+                        configSetRepository, job, params.useBase, params.configKey, params.version);
+                effective = resolved.mergedConfig;
+                effectiveType = resolved.contentType;
+                resolvedBaseChain = resolved.resolvedBaseChain;
+                resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
+                ownConfigVersionNumber = ownConfigVersionNumber(prop, params);
                 skipBindingWrite = true; // FR-98
                 if (hasRedeployFromRun) {
                     listener.getLogger().println("[configTemplateSync] 'redeployFromRun' ('" + params.redeployFromRun
@@ -228,83 +212,63 @@ public class ConfigTemplateSubstituteStep extends Step {
             } else if (hasRedeployFromRun) {
                 // ── Branch B (FR-100–103, FR-101's middle precedence) ─────────────────────────────
                 String targetIdentity = resolveTargetIdentity(run, params.redeployFromRun);
-                ConfigDeploymentBinding targetBinding =
-                        bindingRepository.find(params.projectKey, params.environment, targetIdentity);
+                ConfigDeploymentBinding targetBinding = bindingRepository.find(targetIdentity);
                 if (targetBinding != null) {
                     FrozenChain frozen = resolveFrozenChain(configSetRepository, targetBinding, targetIdentity);
                     resolvedBaseChain = frozen.resolvedBaseChain;
                     resolvedBaseConfigSets = frozen.resolvedBaseConfigSets;
                     effectiveType = frozen.effectiveType;
-                    envVersion = env == null ? null : env.getVersion(targetBinding.getEnvVersionNumber());
+                    ownConfigVersionNumber = targetBinding.getOwnConfigVersionNumber();
+                    String overlayPatch = overlayPatchForFrozenReplay(prop, params, ownConfigVersionNumber);
                     effective = EffectiveConfigResolver.resolveChain(effectiveType,
-                            baseContentsOf(effectiveType, frozen), envVersion == null ? null : envVersion.getContentJson());
+                            baseContentsOf(effectiveType, frozen), overlayPatch);
                     pinned = true;
                     listener.getLogger().println("[configTemplateSync] redeployFromRun '" + params.redeployFromRun
                             + "' (resolved target '" + targetIdentity + "') is pinned to base chain ["
-                            + joinChain(resolvedBaseChain) + "] / env v" + targetBinding.getEnvVersionNumber());
+                            + joinChain(resolvedBaseChain) + "] / own config v" + ownConfigVersionNumber);
                 } else {
                     // FR-103: fail-loud-but-non-blocking — warn by name, then fall back to live resolution.
                     listener.getLogger().println("[configTemplateSync][WARN] redeployFromRun '"
                             + params.redeployFromRun + "' (resolved target '" + targetIdentity
                             + "') has no deployment binding; falling back to the currently active/pinned "
-                            + "base chain for projectKey '" + params.projectKey + "', environment '"
-                            + params.environment + "'.");
-                    if (params.useBase) {
-                        StepSupport.ResolvedEffective resolved =
-                                StepSupport.resolveUseBaseOnly(configSetRepository, params.projectKey, null);
-                        effective = resolved.mergedConfig;
-                        effectiveType = resolved.contentType;
-                        resolvedBaseChain = resolved.resolvedBaseChain;
-                        resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
-                    } else {
-                        envVersion = env.getActiveVersion();
-                        List<BaseConfigReference> chain = StepSupport.effectiveBaseChain(params.projectKey, envVersion);
-                        StepSupport.ResolvedEffective resolved =
-                                StepSupport.resolveEffective(configSetRepository, chain, envVersion, env);
-                        effective = resolved.mergedConfig;
-                        effectiveType = resolved.contentType;
-                        resolvedBaseChain = resolved.resolvedBaseChain;
-                        resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
-                        logResolvedChain(listener, chain, resolvedBaseChain);
-                    }
+                            + "base chain for Job '" + job.getFullName() + "'.");
+                    StepSupport.ResolvedEffective resolved = StepSupport.resolveJobScoped(
+                            configSetRepository, job, params.useBase, params.configKey, null);
+                    effective = resolved.mergedConfig;
+                    effectiveType = resolved.contentType;
+                    resolvedBaseChain = resolved.resolvedBaseChain;
+                    resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
+                    ownConfigVersionNumber = ownConfigVersionNumber(prop, params);
+                    listener.getLogger().println(
+                            "[configTemplateSync] Live-resolved base chain [" + joinChain(resolvedBaseChain) + "]");
                 }
                 skipBindingWrite = false; // FR-97/FR-102: redeployFromRun never suppresses the own-run write
             } else {
                 // ── Branch C (FR-25/26/27, FR-96/97's ordinary case, FR-101's default) ───────────
-                ConfigDeploymentBinding ownBinding =
-                        bindingRepository.find(params.projectKey, params.environment, ownIdentity);
+                ConfigDeploymentBinding ownBinding = bindingRepository.find(ownIdentity);
                 if (ownBinding != null) {
                     FrozenChain frozen = resolveFrozenChain(configSetRepository, ownBinding, ownIdentity);
                     resolvedBaseChain = frozen.resolvedBaseChain;
                     resolvedBaseConfigSets = frozen.resolvedBaseConfigSets;
                     effectiveType = frozen.effectiveType;
-                    envVersion = env == null ? null : env.getVersion(ownBinding.getEnvVersionNumber());
+                    ownConfigVersionNumber = ownBinding.getOwnConfigVersionNumber();
+                    String overlayPatch = overlayPatchForFrozenReplay(prop, params, ownConfigVersionNumber);
                     effective = EffectiveConfigResolver.resolveChain(effectiveType,
-                            baseContentsOf(effectiveType, frozen), envVersion == null ? null : envVersion.getContentJson());
+                            baseContentsOf(effectiveType, frozen), overlayPatch);
                     pinned = true;
                     listener.getLogger().println(
                             "[configTemplateSync] This run's own prior binding is pinned to base chain ["
-                                    + joinChain(resolvedBaseChain) + "] / env v" + ownBinding.getEnvVersionNumber());
-                } else if (params.useBase) {
-                    // FR-27-equivalent for useBase mode: this Run's very first real substitution —
-                    // expected, no warning. FR-81: resolve directly against COMMON, no env involved.
-                    StepSupport.ResolvedEffective resolved =
-                            StepSupport.resolveUseBaseOnly(configSetRepository, params.projectKey, null);
-                    effective = resolved.mergedConfig;
-                    effectiveType = resolved.contentType;
-                    resolvedBaseChain = resolved.resolvedBaseChain;
-                    resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
+                                    + joinChain(resolvedBaseChain) + "] / own config v" + ownConfigVersionNumber);
                 } else {
                     // FR-27: this Run's very first real substitution under its own identity —
                     // expected, NOT a warned-about fallback.
-                    envVersion = env.getActiveVersion();
-                    List<BaseConfigReference> chain = StepSupport.effectiveBaseChain(params.projectKey, envVersion);
-                    StepSupport.ResolvedEffective resolved =
-                            StepSupport.resolveEffective(configSetRepository, chain, envVersion, env);
+                    StepSupport.ResolvedEffective resolved = StepSupport.resolveJobScoped(
+                            configSetRepository, job, params.useBase, params.configKey, null);
                     effective = resolved.mergedConfig;
                     effectiveType = resolved.contentType;
                     resolvedBaseChain = resolved.resolvedBaseChain;
                     resolvedBaseConfigSets = resolved.resolvedBaseConfigSets;
+                    ownConfigVersionNumber = ownConfigVersionNumber(prop, params);
                 }
                 skipBindingWrite = false; // FR-97: always writes/updates the own-Run binding, default-on
             }
@@ -316,10 +280,26 @@ public class ConfigTemplateSubstituteStep extends Step {
             String originalContent = target.readToString();
 
             // OQ-7: defensive re-check, reusing the exact same drift comparison as validate, rather
-            // than trusting that configTemplateValidate already ran earlier in this pipeline.
-            StepSupport.validateOrThrow(effective, originalContent, listener);
+            // than trusting that configTemplateValidate already ran earlier in this pipeline. When
+            // `pinned` (a frozen Deployment Binding replay, Branches B/C's found-binding paths), the
+            // resolution-mode phrase uses the replayed `ownConfigVersionNumber` — not `params.version`,
+            // which is null on this path — and gets the `(frozen deployment binding replay)` suffix
+            // (pipeline-steps.md §5), so the message never implies an explicit `version` was passed on
+            // this call when it was actually replayed from a prior build's frozen binding.
+            boolean ownConfigConsultedForPhrase = !(params.useBase && params.configKey != null
+                    && !params.configKey.trim().isEmpty());
+            Integer versionForPhrase = (pinned && ownConfigConsultedForPhrase)
+                    ? Integer.valueOf(ownConfigVersionNumber) : params.version;
+            String resolutionMode = StepSupport.describeResolutionMode(
+                    params.useBase, params.configKey, versionForPhrase, pinned);
+            StepSupport.validateOrThrow(effective, originalContent, listener, job.getFullName(), params.file,
+                    resolutionMode);
 
-            Map<String, String> secretsManifest = StepSupport.mergedSecretsManifest(resolvedBaseConfigSets, env);
+            // FR-83: the Job's own secrets manifest is never merged in when useBase=true — mirrors
+            // the pre-2026-09-14 "no env manifest merge" rule exactly, just against the Job's own
+            // (non-versioned) manifest instead of an env Config Set's.
+            Map<String, String> ownManifest = (params.useBase || prop == null) ? null : prop.getSecretsManifest();
+            Map<String, String> secretsManifest = StepSupport.mergedSecretsManifest(resolvedBaseConfigSets, ownManifest);
             String substituted = substitute(effective, originalContent, envVars, secretsManifest, run);
 
             if (TokenExtractor.containsAnyToken(substituted)) {
@@ -330,9 +310,9 @@ public class ConfigTemplateSubstituteStep extends Step {
 
             target.write(substituted, null);
             listener.getLogger().println(
-                    "[configTemplateSync] Substituted " + params.file + " for projectKey '" + params.projectKey
-                            + "', environment '" + params.environment + "' using base chain [" + joinChain(resolvedBaseChain)
-                            + "] / env v" + (envVersion == null ? "(none)" : envVersion.getVersionNumber())
+                    "[configTemplateSync] Substituted " + params.file + " for Job '" + job.getFullName()
+                            + "' using base chain [" + joinChain(resolvedBaseChain)
+                            + "] / own config v" + ownConfigVersionNumber
                             + (pinned ? " (pinned)" : ""));
 
             if (!skipBindingWrite) {
@@ -340,25 +320,45 @@ public class ConfigTemplateSubstituteStep extends Step {
                 // redeployFromRun's target — this is what "forward-chains" a fresh, individually-
                 // replayable binding for THIS run even when its content was pinned from a redeploy
                 // target (Branch B's found-binding case).
-                int envVersionNumber = envVersion == null ? 0 : envVersion.getVersionNumber();
-                bindingRepository.save(params.projectKey, params.environment, ownIdentity,
-                        resolvedBaseChain, envVersionNumber, System.currentTimeMillis());
+                bindingRepository.save(ownIdentity, resolvedBaseChain, ownConfigVersionNumber,
+                        System.currentTimeMillis());
             }
 
             return null;
         }
 
-        /** FR-26/FR-103: per-reference fallback log line naming what each chain entry resolved to. */
-        private static void logResolvedChain(TaskListener listener, List<BaseConfigReference> chain,
-                                              List<ResolvedBaseVersion> resolvedBaseChain) {
-            for (int i = 0; i < chain.size(); i++) {
-                BaseConfigReference ref = chain.get(i);
-                ResolvedBaseVersion rv = resolvedBaseChain.get(i);
-                String how = ref.getPinMode() == PinMode.PINNED ? "PINNED" : "was ACTIVE";
-                listener.getLogger().println(
-                        "[configTemplateSync] projectKey '" + ref.getProjectKey() + "' resolved to v"
-                                + rv.getVersionNumber() + " (" + how + ")");
+        /**
+         * The Job's own resolved config version number, for binding-write purposes — {@code 0} when
+         * the Job's own config was not consulted at all (matrix rows 6/7,
+         * {@code useBase=true}+{@code configKey}), mirroring
+         * {@link StepSupport#resolveJobScoped}'s own resolution rules. Safe to call only AFTER
+         * {@code resolveJobScoped} has already succeeded for the same parameters (so an explicit
+         * {@code version} that doesn't exist has already been rejected there).
+         */
+        private static int ownConfigVersionNumber(JobConfigTemplateProperty prop, StepSupport.EffectiveParams params) {
+            if (params.useBase && params.configKey != null && !params.configKey.trim().isEmpty()) {
+                return 0; // rows 6/7 — Job's own config never consulted.
             }
+            if (prop == null) {
+                return 0; // state 1 — nothing configured.
+            }
+            JobConfigTemplateVersion v = params.version != null ? prop.getVersion(params.version) : prop.getActiveVersion();
+            return v == null ? 0 : v.getVersionNumber();
+        }
+
+        /**
+         * The Job's own version content to re-apply as the overlay patch on a frozen-binding replay
+         * (Branches B/C's found-binding paths) — {@code null} when {@code useBase=true} (overlay
+         * always omitted, matrix rows 4/5/6/7) or when the Job's own config was not consulted at
+         * binding-write time ({@code ownConfigVersionNumber == 0}).
+         */
+        private static String overlayPatchForFrozenReplay(JobConfigTemplateProperty prop,
+                StepSupport.EffectiveParams params, int ownConfigVersionNumber) {
+            if (params.useBase || prop == null || ownConfigVersionNumber == 0) {
+                return null;
+            }
+            JobConfigTemplateVersion v = prop.getVersion(ownConfigVersionNumber);
+            return v == null ? null : v.getContentJson();
         }
 
         /** FR-100: bare integer -> current job's own externalizableId shape; already-"#"-shaped -> used as-is. */
@@ -399,7 +399,8 @@ public class ConfigTemplateSubstituteStep extends Step {
                     throw new AbortException("No common Config Set found for projectKey '"
                             + rv.getProjectKey() + "' (frozen in deployment binding for '" + identityLabel + "')");
                 }
-                ConfigSetVersion baseVersion = baseConfigSet.getVersion(rv.getVersionNumber());
+                ConfigSetVersion baseVersion =
+                        baseConfigSet.getVersion(rv.getVersionNumber());
                 if (baseVersion == null) {
                     throw new AbortException("Common Config Set '" + rv.getProjectKey()
                             + "' has no version " + rv.getVersionNumber()
@@ -416,8 +417,9 @@ public class ConfigTemplateSubstituteStep extends Step {
         private static List<TreeNode> baseContentsOf(ContentType effectiveType, FrozenChain frozen) {
             List<TreeNode> baseContents = new ArrayList<>();
             for (int i = 0; i < frozen.resolvedBaseChain.size(); i++) {
-                ConfigSetVersion baseVersion = frozen.resolvedBaseConfigSets.get(i)
-                        .getVersion(frozen.resolvedBaseChain.get(i).getVersionNumber());
+                ConfigSetVersion baseVersion =
+                        frozen.resolvedBaseConfigSets.get(i)
+                                .getVersion(frozen.resolvedBaseChain.get(i).getVersionNumber());
                 baseContents.add(TreeFormats.forType(effectiveType).parse(baseVersion.getContentJson()));
             }
             return baseContents;
@@ -475,7 +477,7 @@ public class ConfigTemplateSubstituteStep extends Step {
 
         @Override
         public String getDisplayName() {
-            return "Substitute real values into a config template for a Config Project/environment";
+            return "Substitute real values into a config template for the calling Job's own Config Templates";
         }
 
         @Override

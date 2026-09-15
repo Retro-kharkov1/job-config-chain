@@ -29,7 +29,12 @@ public class ConfigSet implements Serializable {
 
     private final ConfigSetRole role;
 
-    /** Required for {@link ConfigSetRole#ENV}, must be {@code null} for {@link ConfigSetRole#COMMON}. */
+    /**
+     * Always {@code null} now that {@code ConfigSetRole#ENV} was removed in full (2026-09-14) — kept
+     * as a field (rather than deleted) only because {@link #getStorageKey()} and other pre-existing
+     * call sites still reference it structurally; see {@code removal-candidates.md}'s "FULL ENTITY
+     * REMOVAL" section.
+     */
     private final String environment;
 
     private String displayName;
@@ -57,14 +62,15 @@ public class ConfigSet implements Serializable {
             throw new IllegalArgumentException("projectKey must not be empty");
         }
         this.role = Objects.requireNonNull(role, "role");
-        if (role == ConfigSetRole.ENV) {
-            if (environment == null || environment.trim().isEmpty()) {
-                throw new IllegalArgumentException("environment is required for an ENV-role ConfigSet");
-            }
-        } else if (environment != null) {
+        if (environment != null) {
             throw new IllegalArgumentException("environment must be null for a COMMON-role ConfigSet");
         }
-        this.environment = environment;
+        // Assign the literal, not the now-provably-always-null `environment` parameter: SpotBugs'
+        // NP_LOAD_OF_KNOWN_NULL_VALUE check (introduced by the 2026-09-14 ConfigSetRole.ENV removal
+        // — see this field's own javadoc, "Always null now that ConfigSetRole#ENV was removed in
+        // full") flags loading a local already proven null by the check above. Semantically
+        // identical; this form just doesn't trip the analyzer.
+        this.environment = null;
         this.displayName = displayName;
         this.contentType = Objects.requireNonNull(contentType, "contentType");
     }
