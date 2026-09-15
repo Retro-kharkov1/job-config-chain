@@ -11,34 +11,29 @@ import java.io.Serializable;
  * {@code configTemplateValidate()}/{@code configTemplateSubstitute()} call can read back whichever
  * parameters it did not itself explicitly supply (FR-91/FR-93). {@code InvisibleAction} — this state
  * is a pipeline-internal implementation detail, never rendered on the build's own UI page.
+ *
+ * <p><b>Parameter shape (2026-09-14):</b> {@code projectKey}/{@code environment} are gone — every
+ * call resolves against the calling Job's own attached local config by construction (see
+ * pipeline-steps.md's "Pipeline call resolution — the final parameter model"). {@code configKey} is
+ * meaningful only together with {@code useBase: true} (matrix rows 6/7).</p>
  */
 final class ConfigTemplateSetupAction extends InvisibleAction implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private final String projectKey;
-    private final String environment;
     private final String file;
     private final String redeployFromRun;
     private final boolean useBase;
+    private final String configKey;
     private final Integer version;
 
-    ConfigTemplateSetupAction(String projectKey, String environment, String file, String redeployFromRun,
-                               boolean useBase, Integer version) {
-        this.projectKey = projectKey;
-        this.environment = environment;
+    ConfigTemplateSetupAction(String file, String redeployFromRun, boolean useBase, String configKey,
+                               Integer version) {
         this.file = file;
         this.redeployFromRun = redeployFromRun;
         this.useBase = useBase;
+        this.configKey = configKey;
         this.version = version;
-    }
-
-    String getProjectKey() {
-        return projectKey;
-    }
-
-    String getEnvironment() {
-        return environment;
     }
 
     String getFile() {
@@ -51,6 +46,10 @@ final class ConfigTemplateSetupAction extends InvisibleAction implements Seriali
 
     boolean isUseBase() {
         return useBase;
+    }
+
+    String getConfigKey() {
+        return configKey;
     }
 
     Integer getVersion() {

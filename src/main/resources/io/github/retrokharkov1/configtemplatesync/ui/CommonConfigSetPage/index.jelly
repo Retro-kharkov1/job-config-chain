@@ -58,7 +58,7 @@
            this page stacks to a single column, and the version-history table degrades from a
            multi-column grid to a compact, labeled, one-value-per-line row per version instead of
            overflowing or requiring horizontal scroll. */
-        @media (max-width: 1100px) {
+        @media (max-width: 768px) {
           .ctsync-page .ctsync-history-table thead { display: none; }
           .ctsync-page .ctsync-history-table,
           .ctsync-page .ctsync-history-table tbody,
@@ -136,7 +136,73 @@
            table's growth so page buttons/sections below it stay reachable, without requiring the
            whole page to scroll. Applied to the wrapper div, never the table element itself —
            overflow on a table element directly has known sticky-header/border quirks. */
-        .ctsync-scroll-table { max-height: 50vh; overflow-y: auto; }
+        /* Contained-scrollbar fix (ux-ui-designer spec, 2026-09-11): the wrapper div — not the
+           table — owns overflow-y:auto and is therefore what the browser paints the native
+           scrollbar against. Previously only the inner table.jenkins-table had a radius, so the
+           scrollbar rendered as a square-edged strip outside the table's rounded frame (confirmed
+           live). Border+radius now live on this wrapper itself; overflow-x:hidden is required
+           alongside overflow-y:auto so the box reliably clips its own scrollbar to the radius in
+           all evergreen browsers, not just Chrome. */
+        .ctsync-scroll-table {
+          max-height: 50vh;
+          overflow-y: auto;
+          overflow-x: hidden;
+          width: fit-content;
+          max-width: 100%;
+          border: 1px solid var(--table-border-color, #ddd);
+          border-radius: var(--form-input-border-radius, 6px);
+          /* Phantom-overflow fix — see ConfigTemplatesRootAction/index.jelly's identical comment. */
+          box-sizing: border-box;
+        }
+        .ctsync-scroll-table table.jenkins-table {
+          border: none;
+          border-radius: 0;
+          margin: 0;
+          border-spacing: 0;
+        }
+        .ctsync-scroll-table {
+          scrollbar-width: thin;
+          scrollbar-color: var(--text-color-secondary, #8c8c8c) transparent;
+        }
+        .ctsync-scroll-table::-webkit-scrollbar { width: 10px; }
+        .ctsync-scroll-table::-webkit-scrollbar-track { background: transparent; }
+        .ctsync-scroll-table::-webkit-scrollbar-thumb {
+          background-color: var(--text-color-secondary, #8c8c8c);
+          border-radius: var(--form-input-border-radius, 6px);
+          border: 2px solid var(--table-background, #fff);
+        }
+        .ctsync-scroll-table::-webkit-scrollbar-thumb:hover {
+          background-color: var(--table-hover-color, #f0f6ff);
+        }
+        /* Sticky-header fix (owner report, 2026-09-10): the scrollbar for a narrower table (e.g.
+           the 60%-wide secrets-manifest table) was pinned to the wrapper's full-width right edge
+           instead of the table's own right edge, since the wrapper div always stretched to its
+           full flex/grid width regardless of the table's own narrower computed width — width:
+           fit-content above makes the wrapper hug the table's actual width instead. Sticky header
+           keeps the column labels visible while only the body rows scroll inside this fixed-height
+           wrapper; position: sticky targets the header cells directly (not the header row/group
+           element) for the most reliable cross-browser support, since this wrapper div is each
+           header cell's own nearest scrolling ancestor. */
+        .ctsync-scroll-table thead th {
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          background-color: var(--table-background, #fff);
+          /* Phantom-scrollbar fix (owner report, 2026-09-11): a border on a position:sticky cell
+             gets double-counted against the scroll container's content height in some browsers,
+             making scrollHeight exceed clientHeight by exactly the border width even when content
+             doesn't overflow. box-shadow paints the identical visual divider line without
+             occupying layout space, so it can't contribute to content-height calculations. */
+          box-shadow: 0 2px 0 0 var(--table-border-color, #ddd);
+        }
+        /* Empty-state row — see ConfigTemplatesRootAction/index.jelly's identical comment. */
+        .ctsync-empty-state-row td {
+          padding: 32px 16px;
+          text-align: center;
+          color: var(--text-color-secondary, #666);
+          font-size: 0.95em;
+          border: none;
+        }
       </style>
 
       <div class="ctsync-page">
@@ -151,24 +217,29 @@
         <p>A path listed here is structurally locked: the JSON editor below may only hold the literal
            <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
            value is supplied only via the Jenkins credential picked below, never typed here.</p>
-        <div class="ctsync-scroll-table">
-          <table class="jenkins-table" style="width:60%">
+        <div id="secretsManifestTableWrap" class="ctsync-scroll-table">
+          <table class="jenkins-table" style="width:100%">
             <thead><tr><th>${%column.dottedPath}</th><th>${%column.credential}</th><th/></tr></thead>
             <tbody id="secretsManifestTbody">
-              <j:if test="${it.exists}">
-                <j:forEach var="entry" items="${it.configSet.secretsManifest.entrySet()}">
-                  <tr>
-                    <td>${entry.key}</td>
-                    <td>${entry.value}</td>
-                    <td>
-                      <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
-                              data-secret-path="${entry.key}"
-                              title="${%removeSecret.title}"
-                              onclick="removeSecret(this.getAttribute('data-secret-path'));">&#128465; ${%removeSecret.label}</button>
-                    </td>
-                  </tr>
-                </j:forEach>
-              </j:if>
+              <j:choose>
+                <j:when test="${it.exists and !it.configSet.secretsManifest.isEmpty()}">
+                  <j:forEach var="entry" items="${it.configSet.secretsManifest.entrySet()}">
+                    <tr>
+                      <td>${entry.key}</td>
+                      <td>${entry.value}</td>
+                      <td>
+                        <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
+                                data-secret-path="${entry.key}"
+                                title="${%removeSecret.title}"
+                                onclick="removeSecret(this.getAttribute('data-secret-path'));">&#128465; ${%removeSecret.label}</button>
+                      </td>
+                    </tr>
+                  </j:forEach>
+                </j:when>
+                <j:otherwise>
+                  <tr class="ctsync-empty-state-row"><td colspan="3">${%emptyState.noSecrets}</td></tr>
+                </j:otherwise>
+              </j:choose>
             </tbody>
           </table>
         </div>
@@ -211,10 +282,13 @@
       <f:section title="${%versionHistory.heading}">
         <p>Click a row to compare it against the editor's current draft (no checkbox required —
            click any row again to return to editing).</p>
-        <div class="ctsync-scroll-table">
+        <div id="versionHistoryTableWrap" class="ctsync-scroll-table">
           <table class="jenkins-table ctsync-history-table" style="width:100%">
             <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th>${%column.active}</th><th>${%column.actions}</th></tr></thead>
             <tbody id="versionHistoryTbody">
+              <j:if test="${it.versions.isEmpty()}">
+                <tr class="ctsync-empty-state-row"><td colspan="6">${%emptyState.noVersions}</td></tr>
+              </j:if>
               <j:forEach var="v" items="${it.versions}">
                 <tr id="historyRow-${v.versionNumber}" class="ctsync-history-row"
                     tabindex="0" role="button"
@@ -273,8 +347,6 @@
 
       <div id="editorDetails">
       <f:section title="${%editor.heading}">
-
-        <div id="saveBanner" class="alert alert-danger" style="display:none"></div>
 
         <!-- Stray duplicate heading removed (found live, 2026-09-04): f:section already renders
              this same editor.heading text as its own title bar above — a second bold heading
@@ -374,8 +446,8 @@
         <div id="generateBanner" class="alert alert-info" style="display:none">
           Common-only template from the ACTIVE version — NOT this box's unsaved edits, if any.
         </div>
-        <div id="monacoEditor" style="height:420px;border:1px solid #ccc"/>
-        <div id="generateCopyRow" style="display:none;margin-top:4px">
+        <div id="monacoEditor" style="height:420px;border:1px solid #ccc;margin-bottom:16px"/>
+        <div id="generateCopyRow" style="display:none;margin-top:4px;margin-bottom:16px">
           <button type="button" id="copyTemplateBtn" class="jenkins-button"
                   title="${%copyTemplate.title}"
                   onclick="copyGeneratedTemplate();">&#128203; ${%copyTemplate.label}</button>
@@ -384,7 +456,10 @@
         <!-- No longer a &lt;form&gt; (2026-09-02 in-place-update pass): Save/Save &amp; Activate now
              call proxy.save(...) directly from saveClicked() below — content comes straight from the
              live Monaco editor, never a hidden textarea; there is no native submit to prepare. The
-             note input and contentType field remain plain elements JS reads by id. -->
+             note input and contentType field remain plain elements JS reads by id.
+             Spacing fix (owner report, 2026-09-11): margin-bottom above (on #monacoEditor and
+             #generateCopyRow, whichever is visible) creates breathing room before this field
+             instead of it sitting flush against the coding block. -->
         <f:entry title="${%changeNote.entryTitle}">
           <input class="setting-input" type="text" id="noteField" required="required"/>
         </f:entry>
@@ -451,6 +526,12 @@
             cells[i].textContent = formatTimestamp(cells[i].getAttribute('data-epoch'));
           }
         })();
+
+        // Initial page load renders versionHistoryTbody/secretsManifestTbody server-side (Jelly
+        // forEach), never through renderVersionHistoryRows/renderSecretsManifestRows — so those two
+        // wraps need their own phantom-scroll reconciliation pass here too.
+        reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+        reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
 
         // FR-63/FR-64: JSON/XML/YAML all dispatch through this one language-mode lookup — no
         // per-format special-casing anywhere else in this script beyond it.
@@ -614,21 +695,16 @@
           setTimeout(attempt, 0);
         }
 
-        // In-place update (2026-09-02): shows/clears the (previously mostly-unused) saveBanner div
-        // for both the success and error outcome of a save — success briefly flashes green then
-        // auto-hides (there is no page navigation anymore to signal "done" the way a redirect used
-        // to); an error is left visible (alert-danger, matching this div's original styling) until
-        // the next save attempt clears or replaces it.
-        function showSaveBanner(message, isError) {
-          var banner = document.getElementById('saveBanner');
-          banner.textContent = message;
-          banner.className = isError ? 'alert alert-danger' : 'alert alert-success';
-          banner.style.display = 'block';
-          if (!isError) {
-            setTimeout(function () {
-              if (banner.textContent === message) { banner.style.display = 'none'; }
-            }, 4000);
-          }
+        // Native Jenkins toast (owner requirement, 2026-09-14): replaces the old inline #saveBanner
+        // div with the same window.notificationBar singleton core uses for the "Apply" toast on
+        // /job/&lt;name&gt;/configure and /manage/configure. It is already loaded on every Jenkins
+        // page via layout.jelly's unconditional jsbundles/app.js include, so no adjunct/import is
+        // needed here — only called from inside the async proxy.save callback below, never at
+        // top-level script-parse time (app.js loads deferred). SUCCESS auto-hides on its own after
+        // ~3s; ERROR is sticky until the user's next successful save naturally replaces it.
+        function showSaveNotification(message, isError) {
+          window.notificationBar.show(message,
+              isError ? window.notificationBar.ERROR : window.notificationBar.SUCCESS);
         }
 
         // FR-59/FR-68 follow-up (2026-09-02): a Common page's very first successful save commits
@@ -666,10 +742,10 @@
             document.getElementById('saveActivateBtn').disabled = false;
             var r = t.responseObject();
             if (!r.ok) {
-              showSaveBanner(r.error, true);
+              showSaveNotification(r.error, true);
               return;
             }
-            showSaveBanner('Saved.', false);
+            showSaveNotification(activate ? 'Saved and activated' : 'Version saved', false);
             renderVersionHistoryRows(r.versions);
             if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
             if (r.contentTypeLocked) { applyContentTypeLocked(r.contentTypeValue); }
@@ -684,8 +760,55 @@
         function renderVersionHistoryRows(versions) {
           var tbody = document.getElementById('versionHistoryTbody');
           tbody.innerHTML = '';
+          if (versions.length === 0) {
+            tbody.appendChild(buildEmptyStateRow(6, '${%emptyState.noVersions}'));
+            reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+            return;
+          }
           for (var i = 0; i &lt; versions.length; i++) {
             tbody.appendChild(buildHistoryRowElement(versions[i]));
+          }
+          reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+        }
+
+        // Shared by every AJAX-rendered table on this page (ux-ui-designer correction,
+        // 2026-09-11): builds the same "single spanning row" empty-state markup the server itself
+        // renders on initial page load, so a table that becomes empty via an in-place update (e.g.
+        // the last secret removed) matches the server-rendered shape exactly instead of hiding the
+        // whole table/header.
+        function buildEmptyStateRow(colspan, message) {
+          var tr = document.createElement('tr');
+          tr.className = 'ctsync-empty-state-row';
+          var td = document.createElement('td');
+          td.colSpan = colspan;
+          td.textContent = message;
+          tr.appendChild(td);
+          return tr;
+        }
+
+        // Phantom-scroll reconciliation (owner report, 2026-09-11): every .ctsync-scroll-table wrap
+        // measures scrollHeight exactly 2px above clientHeight even for a single/near-empty row —
+        // a Chromium measurement artifact, not real overflow (confirmed live: removing border,
+        // overflow-y, padding/margin on the wrap left the 89/87 numbers unchanged). Force
+        // overflow-y:hidden whenever the "overflow" is below a small tolerance so the phantom 2px
+        // never paints a scrollbar; genuine overflow is many tens/hundreds of px once rows exist,
+        // so a 4px tolerance carries no risk of masking it. Shared verbatim across every host file
+        // that owns a .ctsync-scroll-table wrapper.
+        function reconcilePhantomScroll(wrapEl) {
+          if (!wrapEl) { return; }
+          var realOverflow = wrapEl.scrollHeight - wrapEl.clientHeight;
+          wrapEl.style.overflowY = (realOverflow > 4) ? 'auto' : 'hidden';
+        }
+
+        // Belt-and-suspenders re-check shortly after render — web-font loading or async layout can
+        // still nudge row heights a couple px after the initial synchronous measurement.
+        function reconcilePhantomScrollSoon(wrapEl) {
+          reconcilePhantomScroll(wrapEl);
+          // Nashorn-based JS-engine unit tests (ConfigTemplatesUiTest) run this same script without
+          // a setTimeout global — guard it so those tests keep exercising the immediate reconcile
+          // pass without needing a timer shim.
+          if (typeof setTimeout === 'function') {
+            setTimeout(function () { reconcilePhantomScroll(wrapEl); }, 50);
           }
         }
 
@@ -726,9 +849,15 @@
         function renderSecretsManifestRows(manifest) {
           var tbody = document.getElementById('secretsManifestTbody');
           tbody.innerHTML = '';
+          if (manifest.length === 0) {
+            tbody.appendChild(buildEmptyStateRow(3, '${%emptyState.noSecrets}'));
+            reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+            return;
+          }
           for (var i = 0; i &lt; manifest.length; i++) {
             tbody.appendChild(buildSecretRowElement(manifest[i]));
           }
+          reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
         }
 
         function buildSecretRowElement(entry) {

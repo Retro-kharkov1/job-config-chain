@@ -12,15 +12,18 @@
  * named volume. `docker compose down -v` is the documented way to wipe the volume and
  * start over from a clean seed.
  *
- * Seeds (projectKey="test-app", environment="dev" throughout, per NFR-4 — no
- * references to any motivating/originating client project anywhere in this fixture):
+ * Seeds (projectKey="test-app" throughout, per NFR-4 — no references to any
+ * motivating/originating client project anywhere in this fixture):
  *   - a common ConfigSet with 2 versions (v2 active) holding one plain key
  *     (App.Name / App.Version) and one manifest-declared secret key (Database.Password)
- *   - an env ConfigSet (dev) with 1 version (active) overlaying Database.Host
  *   - a StringCredentialsImpl matching the secret manifest entry, with an obviously-fake
  *     local test value
  *   - the "config-template-sync-e2e" Pipeline job, defined from the fixture Jenkinsfile
  *     baked into the image — NOT auto-triggered; the owner clicks "Build Now" themselves
+ *   - the job's OWN Config Templates content (JobConfigTemplateProperty), referencing the
+ *     common ConfigSet above via its baseChain — every pipeline call resolves against this
+ *     Job-scoped content by construction (2026-09-14: ConfigSetRole.ENV/EnvConfigSetPage
+ *     removed in full; there is no more env-Config-Set layer to seed)
  */
 
 import com.cloudbees.plugins.credentials.CredentialsScope
@@ -31,8 +34,9 @@ import io.github.retrokharkov1.configtemplatesync.model.ConfigSet
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole
 import io.github.retrokharkov1.configtemplatesync.model.ContentType
 import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder
+import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository
-import io.github.retrokharkov1.configtemplatesync.ui.ConfigTemplatesJobProperty
+import io.github.retrokharkov1.configtemplatesync.ui.JobConfigTemplateProperty
 import jenkins.model.Jenkins
 import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition
@@ -41,7 +45,6 @@ import org.jenkinsci.plugins.workflow.job.WorkflowJob
 def logger = { msg -> println("[config-template-sync-seed] ${msg}") }
 
 def PROJECT_KEY = 'test-app'
-def ENVIRONMENT = 'dev'
 def SECRET_DOTTED_PATH = 'Database.Password'
 def CREDENTIAL_ID = 'test-app-dev-db-password'
 def CREDENTIAL_FAKE_VALUE = 'S3cr3tDbPass!'
@@ -52,13 +55,14 @@ def jenkins = Jenkins.get()
 def repository = new ConfigSetRepository()
 
 // ---------------------------------------------------------------------------------------
-// 1) Common + env ConfigSets (skip entirely if the common one already exists — both are
-//    always seeded together, so checking one is enough to detect "already seeded").
+// 1) The common ConfigSet (2026-09-14: ConfigSetRole.ENV removed in full — there is no more
+//    env-layer ConfigSet to seed here; the Job's own Config Templates content, seeded in
+//    step 4 below, references this common ConfigSet via its own baseChain instead).
 // ---------------------------------------------------------------------------------------
 if (repository.findCommon(PROJECT_KEY) != null) {
-    logger("ConfigSets for projectKey '${PROJECT_KEY}' already exist — skipping seed.")
+    logger("Common ConfigSet for projectKey '${PROJECT_KEY}' already exists — skipping seed.")
 } else {
-    logger("Seeding common + env ConfigSets for projectKey '${PROJECT_KEY}'...")
+    logger("Seeding common ConfigSet for projectKey '${PROJECT_KEY}'...")
 
     def common = new ConfigSet(PROJECT_KEY, ConfigSetRole.COMMON, null, 'Test App - Common', ContentType.JSON)
     // Declare the secret BEFORE adding any version — addVersion() enforces that every
@@ -80,16 +84,6 @@ if (repository.findCommon(PROJECT_KEY) != null) {
     common.activate(2)
     repository.save(common)
     logger("Saved common ConfigSet '${common.getStorageKey()}' with ${common.getVersions().size()} versions, active=v${common.getActiveVersionNumber()}.")
-
-    def env = new ConfigSet(PROJECT_KEY, ConfigSetRole.ENV, ENVIRONMENT, "Test App - ${ENVIRONMENT}", ContentType.JSON)
-    // Sparse RFC 7396 overlay: only overrides Database.Host for this environment.
-    def envV1Json = """{
-        "Database": { "Host": "db.${ENVIRONMENT}.internal.test" }
-    }"""
-    env.addVersion(envV1Json, "Initial ${ENVIRONMENT} overlay", 'seed-script', System.currentTimeMillis())
-    env.activate(1)
-    repository.save(env)
-    logger("Saved env ConfigSet '${env.getStorageKey()}' with ${env.getVersions().size()} version(s), active=v${env.getActiveVersionNumber()}.")
 }
 
 // ---------------------------------------------------------------------------------------
@@ -105,7 +99,7 @@ if (existingCredential != null) {
     def credential = new StringCredentialsImpl(
             CredentialsScope.GLOBAL,
             CREDENTIAL_ID,
-            "e2e seed: fake DB password for ${PROJECT_KEY}/${ENVIRONMENT} (local test instance only, not a real secret)",
+            "e2e seed: fake DB password for ${PROJECT_KEY} (local test instance only, not a real secret)",
             Secret.fromString(CREDENTIAL_FAKE_VALUE))
     credentialsStore.addCredentials(globalDomain, credential)
     logger("Created credential '${CREDENTIAL_ID}'.")
@@ -124,38 +118,43 @@ if (job != null) {
     job.setDefinition(new CpsFlowDefinition(FIXTURE_JENKINSFILE.text, true))
     job.setDescription(
             "e2e smoke test for the config-template-sync plugin: runs configTemplateValidate then " +
-            "configTemplateSubstitute against projectKey='${PROJECT_KEY}', environment='${ENVIRONMENT}'. " +
-            "Not auto-triggered on startup — click Build Now.")
+            "configTemplateSubstitute against this Job's own Config Templates (useBase: true, " +
+            "configKey='${PROJECT_KEY}'). Not auto-triggered on startup — click Build Now.")
     job.save()
     logger("Created job '${JOB_NAME}' (not triggered).")
 }
 
 // ---------------------------------------------------------------------------------------
-// 4) The job's Config Templates association (ConfigTemplatesJobProperty) — the same thing a
-//    human sets by hand on /job/<name>/configure, applied here so the fixture ships with it.
+// 4) The job's OWN Config Templates content (JobConfigTemplateProperty) — replaces the old
+//    association-to-a-separate-ConfigSet property wholesale (tech-lead design contract,
+//    2026-09-09). A one-version, one-row-base-chain seed (referencing the common ConfigSet
+//    seeded in step 1, ACTIVE) rather than an empty-chain default: this is deliberately a real,
+//    demonstrable exercise of the new job-scoped model — an empty-chain seed would exercise
+//    nothing e2e/manual-testing couldn't already see from an on-the-fly Save — so it earns its
+//    place in this fixture (owner-facing rationale for keeping seeding at all, per the design
+//    contract's "your call" note).
 //
 //    Deliberately OUTSIDE the create-or-skip block above: an already-existing job (a volume
-//    seeded by an older image) must still pick the association up on the next start, instead of
-//    the seed skipping the whole block and leaving the job without it.
-//
-//    Why this matters: ConfigTemplatesJobAction resolves its sidebar link from THIS property. No
-//    property means projectKey is empty, and the action correctly falls back to the generic
-//    /configTemplates/ root list instead of deep-linking to this job's own env page — which is
-//    precisely the behaviour the fixture exists to demonstrate. Previously the association only
-//    ever existed because someone set it through the UI, so it lived solely in the jenkins_home
-//    volume and vanished with the next `docker compose down -v` (owner report, 2026-09-05).
+//    seeded by an older image) must still pick this content up on the next start, instead of the
+//    seed skipping the whole block and leaving the job without it.
 // ---------------------------------------------------------------------------------------
 if (job != null) {
-    def existing = job.getProperty(ConfigTemplatesJobProperty.class)
-    if (existing != null && existing.projectKey == PROJECT_KEY && existing.environment == ENVIRONMENT) {
-        logger("Job '${JOB_NAME}' already associated with ${PROJECT_KEY}/${ENVIRONMENT} — skipping.")
+    def existing = job.getProperty(JobConfigTemplateProperty.class)
+    if (existing != null && !existing.getVersions().isEmpty()) {
+        logger("Job '${JOB_NAME}' already has Config Templates content — skipping.")
     } else {
-        if (existing != null) {
-            job.removeProperty(ConfigTemplatesJobProperty.class)
+        def property = existing != null ? existing : new JobConfigTemplateProperty()
+        def jobBaseChain = [BaseConfigReference.active(PROJECT_KEY)]
+        def jobV1Json = """{ "Job": { "Note": "seeded via JobConfigTemplateProperty" } }"""
+        def v1 = property.addVersion(jobV1Json, 'Initial job-scoped override', 'seed-script',
+                System.currentTimeMillis(), jobBaseChain, 'JSON')
+        property.activate(v1)
+        if (existing == null) {
+            job.addProperty(property)
         }
-        job.addProperty(new ConfigTemplatesJobProperty(PROJECT_KEY, ENVIRONMENT))
         job.save()
-        logger("Associated job '${JOB_NAME}' with ${PROJECT_KEY}/${ENVIRONMENT}.")
+        logger("Seeded job '${JOB_NAME}' with a JobConfigTemplateProperty version referencing " +
+                "'${PROJECT_KEY}' (ACTIVE), active=v${property.getActiveVersionNumber()}.")
     }
 }
 

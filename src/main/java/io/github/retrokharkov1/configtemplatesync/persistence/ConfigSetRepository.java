@@ -46,12 +46,8 @@ public class ConfigSetRepository {
         return load(projectKey + "--common");
     }
 
-    public ConfigSet findEnv(String projectKey, String environment) {
-        return load(projectKey + "--env--" + environment);
-    }
-
     public ConfigSet find(String projectKey, ConfigSetRole role, String environment) {
-        return role == ConfigSetRole.COMMON ? findCommon(projectKey) : findEnv(projectKey, environment);
+        return findCommon(projectKey);
     }
 
     public void save(ConfigSet configSet) {
@@ -79,26 +75,6 @@ public class ConfigSetRepository {
             }
         }
         result.sort(Comparator.comparing(ConfigSet::getProjectKey));
-        return result;
-    }
-
-    /**
-     * Lists every persisted env Config Set for the given project (used by the env-level admin list
-     * view, FR-34).
-     */
-    public List<ConfigSet> listEnv(String projectKey) {
-        String prefix = projectKey + "--env--";
-        List<ConfigSet> result = new ArrayList<>();
-        for (File f : listXmlFiles()) {
-            String name = baseName(f);
-            if (name.startsWith(prefix)) {
-                ConfigSet loaded = load(name);
-                if (loaded != null) {
-                    result.add(loaded);
-                }
-            }
-        }
-        result.sort(Comparator.comparing(ConfigSet::getEnvironment));
         return result;
     }
 

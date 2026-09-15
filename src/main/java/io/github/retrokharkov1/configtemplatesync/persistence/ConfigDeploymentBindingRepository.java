@@ -15,9 +15,12 @@ import java.util.List;
 /**
  * Persists {@link ConfigDeploymentBinding}s as a single append/update-in-place list under
  * {@code $JENKINS_HOME/config-template-sync/deployment-bindings.xml} (NFR-1/NFR-2). One binding
- * exists per (projectKey, environment, buildVersion) tuple; a repeat substitution for the same
- * tuple updates it in place rather than duplicating it (FR-23). No pruning/retention policy is
- * applied (OQ-4, resolved 2026-08-27: no pruning in v1).
+ * exists per {@code buildVersion} (a Run's own automatically-derived identity string, see
+ * pipeline-steps.md's "Build-identity pinning" section); a repeat substitution under the same
+ * identity updates it in place rather than duplicating it (FR-23). Re-keyed to pure Run-identity
+ * (tech-lead scoping decision, 2026-09-14, pipeline-steps.md §1) — no separate Config-Key/environment
+ * dimension is needed, since every call now resolves per-Job by construction. No pruning/retention
+ * policy is applied (OQ-4, resolved 2026-08-27: no pruning in v1).
  */
 public class ConfigDeploymentBindingRepository {
 
@@ -37,32 +40,31 @@ public class ConfigDeploymentBindingRepository {
         this.file = new File(baseDir, FILE_NAME);
     }
 
-    public synchronized ConfigDeploymentBinding find(String projectKey, String environment, String buildVersion) {
+    public synchronized ConfigDeploymentBinding find(String buildVersion) {
         for (ConfigDeploymentBinding binding : loadAll()) {
-            if (binding.matches(projectKey, environment, buildVersion)) {
+            if (binding.matches(buildVersion)) {
                 return binding;
             }
         }
         return null;
     }
 
-    /** Creates or updates (never duplicates) the binding for this (projectKey, environment, buildVersion). */
-    public synchronized void save(String projectKey, String environment, String buildVersion,
-                                   List<ResolvedBaseVersion> resolvedBaseChain, int envVersionNumber,
-                                   long deployedAtUtcEpochMillis) {
+    /** Creates or updates (never duplicates) the binding for this buildVersion (Run-identity). */
+    public synchronized void save(String buildVersion, List<ResolvedBaseVersion> resolvedBaseChain,
+                                   int ownConfigVersionNumber, long deployedAtUtcEpochMillis) {
         List<ConfigDeploymentBinding> all = loadAll();
         ConfigDeploymentBinding existing = null;
         for (ConfigDeploymentBinding binding : all) {
-            if (binding.matches(projectKey, environment, buildVersion)) {
+            if (binding.matches(buildVersion)) {
                 existing = binding;
                 break;
             }
         }
         if (existing != null) {
-            existing.update(resolvedBaseChain, envVersionNumber, deployedAtUtcEpochMillis);
+            existing.update(resolvedBaseChain, ownConfigVersionNumber, deployedAtUtcEpochMillis);
         } else {
-            all.add(new ConfigDeploymentBinding(projectKey, environment, buildVersion,
-                    resolvedBaseChain, envVersionNumber, deployedAtUtcEpochMillis));
+            all.add(new ConfigDeploymentBinding(buildVersion,
+                    resolvedBaseChain, ownConfigVersionNumber, deployedAtUtcEpochMillis));
         }
         writeAll(all);
     }

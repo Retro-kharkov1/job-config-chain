@@ -60,6 +60,80 @@
         .ctsync-content-type-label { font-weight: 600; display: block; margin-bottom: 4px; }
         .ctsync-content-type-hint { color: #666; margin-bottom: 8px; }
         .ctsync-content-type-radios label { margin-right: 12px; }
+        /* Table-scroll behavior (same plan as CommonConfigSetPage/EnvConfigSetPage/SharedBlocks):
+           contain a long table's growth so page buttons/sections below it stay reachable, without
+           requiring the whole page to scroll. Applied to the wrapper div, never the table element
+           itself — overflow on a table element directly has known sticky-header/border quirks. */
+        /* Contained-scrollbar fix (ux-ui-designer spec, 2026-09-11): the wrapper div — not the
+           table — owns overflow-y:auto and is therefore what the browser paints the native
+           scrollbar against. Previously only the inner table.jenkins-table had a radius, so the
+           scrollbar rendered as a square-edged strip outside the table's rounded frame (confirmed
+           live). Border+radius now live on this wrapper itself; overflow-x:hidden is required
+           alongside overflow-y:auto so the box reliably clips its own scrollbar to the radius in
+           all evergreen browsers, not just Chrome. */
+        .ctsync-scroll-table {
+          max-height: 50vh;
+          overflow-y: auto;
+          overflow-x: hidden;
+          width: fit-content;
+          max-width: 100%;
+          border: 1px solid var(--table-border-color, #ddd);
+          border-radius: var(--form-input-border-radius, 6px);
+          /* Phantom-overflow fix (owner report, 2026-09-11): explicit border-box, never relying on
+             inherited box-sizing — the wrapper's own border (added by the Fix-A change above)
+             combined with a content-box ancestor could otherwise make scrollHeight compute a few
+             px larger than clientHeight even for a single-row table, spuriously flirting with
+             overflow:auto's scrollbar for content that doesn't actually overflow. */
+          box-sizing: border-box;
+        }
+        /* The inner table's own border/radius is now redundant (and would visually double up
+           against the wrapper's frame) — stripped here. */
+        .ctsync-scroll-table table.jenkins-table {
+          border: none;
+          border-radius: 0;
+          margin: 0;
+          border-spacing: 0;
+        }
+        .ctsync-scroll-table {
+          scrollbar-width: thin;
+          scrollbar-color: var(--text-color-secondary, #8c8c8c) transparent;
+        }
+        .ctsync-scroll-table::-webkit-scrollbar { width: 10px; }
+        .ctsync-scroll-table::-webkit-scrollbar-track { background: transparent; }
+        .ctsync-scroll-table::-webkit-scrollbar-thumb {
+          background-color: var(--text-color-secondary, #8c8c8c);
+          border-radius: var(--form-input-border-radius, 6px);
+          border: 2px solid var(--table-background, #fff);
+        }
+        .ctsync-scroll-table::-webkit-scrollbar-thumb:hover {
+          background-color: var(--table-hover-color, #f0f6ff);
+        }
+        /* Sticky header keeps the column labels visible while only the body rows scroll inside
+           this fixed-height wrapper; position: sticky targets the header cells directly (not the
+           header row/group element) for the most reliable cross-browser support, since this
+           wrapper div is each header cell's own nearest scrolling ancestor. */
+        .ctsync-scroll-table thead th {
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          background-color: var(--table-background, #fff);
+          /* Phantom-scrollbar fix (owner report, 2026-09-11) — see CommonConfigSetPage's
+             identical comment: box-shadow replaces border-bottom to avoid the sticky-cell
+             border/content-height double-counting quirk. */
+          box-shadow: 0 2px 0 0 var(--table-border-color, #ddd);
+        }
+        /* Empty-state row (ux-ui-designer correction, 2026-09-11): a zero-row table keeps its own
+           header and renders ONE spanning row in its body instead of the whole table being
+           replaced by a separate placeholder div (the original design lost the column header,
+           e.g. "Name | Type | ..." entirely on an empty list — confirmed live). Plain cell
+           styling, no border of its own — it lives inside the already-framed .ctsync-scroll-table. */
+        .ctsync-empty-state-row td {
+          padding: 32px 16px;
+          text-align: center;
+          color: var(--text-color-secondary, #666);
+          font-size: 0.95em;
+          border: none;
+        }
       </style>
       <div class="ctsync-page">
 
@@ -69,40 +143,49 @@
         from that project's page.
       </p>
 
-      <table class="jenkins-table sortable" style="width:100%">
-        <thead>
-          <tr>
-            <th>${%column.name}</th>
-            <th>${%column.type}</th>
-            <th>${%column.activeVersion}</th>
-            <th>${%column.lastModified}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <j:forEach var="cs" items="${it.commonConfigSets}">
+      <div id="commonConfigSetsTableWrap" class="ctsync-scroll-table">
+        <table class="jenkins-table sortable" style="width:100%">
+          <thead>
             <tr>
-              <td>
-                <a href="${rootURL}/${it.urlName}/${cs.projectKey}/common">${cs.projectKey}-common</a>
-              </td>
-              <td>${cs.contentType}</td>
-              <td>
-                <j:choose>
-                  <j:when test="${cs.activeVersion != null}">v${cs.activeVersion.versionNumber}</j:when>
-                  <j:otherwise>${%noActiveVersion}</j:otherwise>
-                </j:choose>
-              </td>
-              <td>
-                <j:choose>
-                  <j:when test="${cs.activeVersion != null}">
-                    ${cs.activeVersion.author}
-                  </j:when>
-                  <j:otherwise>&#8212;</j:otherwise>
-                </j:choose>
-              </td>
+              <th>${%column.name}</th>
+              <th>${%column.type}</th>
+              <th>${%column.activeVersion}</th>
+              <th>${%column.lastModified}</th>
             </tr>
-          </j:forEach>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <j:choose>
+              <j:when test="${it.commonConfigSets.isEmpty()}">
+                <tr class="ctsync-empty-state-row"><td colspan="4">${%emptyState.noConfigSets}</td></tr>
+              </j:when>
+              <j:otherwise>
+                <j:forEach var="cs" items="${it.commonConfigSets}">
+                  <tr>
+                    <td>
+                      <a href="${rootURL}/${it.urlName}/${cs.projectKey}/">${cs.projectKey}</a>
+                    </td>
+                    <td>${cs.contentType}</td>
+                    <td>
+                      <j:choose>
+                        <j:when test="${cs.activeVersion != null}">v${cs.activeVersion.versionNumber}</j:when>
+                        <j:otherwise>${%noActiveVersion}</j:otherwise>
+                      </j:choose>
+                    </td>
+                    <td>
+                      <j:choose>
+                        <j:when test="${cs.activeVersion != null}">
+                          ${cs.activeVersion.author}
+                        </j:when>
+                        <j:otherwise>&#8212;</j:otherwise>
+                      </j:choose>
+                    </td>
+                  </tr>
+                </j:forEach>
+              </j:otherwise>
+            </j:choose>
+          </tbody>
+        </table>
+      </div>
 
       <!-- New Config Set (owner-directed layout redesign, 2026-09-04): heading rendered by
            f:section's own title bar (matching the "heading lives inside the frame" convention
@@ -137,10 +220,32 @@
       <div class="ctsync-btn-row ctsync-btn-row--right">
         <button type="button" id="newConfigSetCreate" class="jenkins-button jenkins-button--primary"
                 title="${%newConfigSet.buttonTitle}"
-                onclick="var k = document.getElementById('newProjectKey').value; var t = document.querySelector('input[name=newContentTypeRadio]:checked').value; window.location.href = '${rootURL}/${it.urlName}/' + encodeURIComponent(k) + '/common/?contentType=' + encodeURIComponent(t);">${%newConfigSet.buttonLabel}</button>
+                onclick="var k = document.getElementById('newProjectKey').value; var t = document.querySelector('input[name=newContentTypeRadio]:checked').value; window.location.href = '${rootURL}/${it.urlName}/' + encodeURIComponent(k) + '/?contentType=' + encodeURIComponent(t);">${%newConfigSet.buttonLabel}</button>
       </div>
 
       </div>
+
+      <script>
+        // Phantom-scroll reconciliation (owner report, 2026-09-11): see CommonConfigSetPage/index.jelly's
+        // identical comment/helper for the full rationale.
+        function reconcilePhantomScroll(wrapEl) {
+          if (!wrapEl) { return; }
+          var realOverflow = wrapEl.scrollHeight - wrapEl.clientHeight;
+          wrapEl.style.overflowY = (realOverflow > 4) ? 'auto' : 'hidden';
+        }
+
+        function reconcilePhantomScrollSoon(wrapEl) {
+          reconcilePhantomScroll(wrapEl);
+          // Nashorn-based JS-engine unit tests (ConfigTemplatesUiTest) run this same script without
+          // a setTimeout global — guard it so those tests keep exercising the immediate reconcile
+          // pass without needing a timer shim.
+          if (typeof setTimeout === 'function') {
+            setTimeout(function () { reconcilePhantomScroll(wrapEl); }, 50);
+          }
+        }
+
+        reconcilePhantomScrollSoon(document.getElementById('commonConfigSetsTableWrap'));
+      </script>
     </l:main-panel>
   </l:layout>
 </j:jelly>
