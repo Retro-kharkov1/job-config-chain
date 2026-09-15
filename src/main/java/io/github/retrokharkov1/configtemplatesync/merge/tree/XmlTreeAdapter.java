@@ -67,6 +67,7 @@ final class XmlTreeAdapter implements TreeFormat {
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             DocumentBuilder builder = factory.newDocumentBuilder();
             Document doc = builder.parse(new InputSource(new StringReader(content == null ? "<root/>" : content)));
+            stripIndentWhitespace(doc.getDocumentElement());
             return new ElementNode(doc.getDocumentElement());
         } catch (Exception e) {
             // ParserConfigurationException / SAXException / IOException — all wrapped unchecked to
@@ -99,6 +100,44 @@ final class XmlTreeAdapter implements TreeFormat {
             return new ElementNode(el);
         } catch (ParserConfigurationException e) {
             throw new IllegalStateException("DocumentBuilderFactory unavailable", e);
+        }
+    }
+
+    /**
+     * Recursively strips whitespace-only {@code Text} node children from any element that has at
+     * least one child ELEMENT node ("object" nodes per {@link ElementNode#isObject()} /
+     * {@link ElementNode#childrenIfObject()} semantics, which already ignore text nodes entirely
+     * for such elements). Without this, a plain non-validating parser treats pre-existing
+     * indentation whitespace between tags as ordinary text content; the indenting {@link
+     * Transformer} used by {@link #serialize} then layers its OWN indentation on top of that
+     * leftover whitespace on every format pass, producing an extra blank line between elements
+     * that compounds on every re-format. Leaf elements (no child elements) are left untouched —
+     * their whitespace-only text content could be genuine user data (e.g. a value that's
+     * intentionally just a space) and {@link ElementNode#leafAsString()} reads it verbatim via
+     * {@code getTextContent()}.
+     */
+    private static void stripIndentWhitespace(Element element) {
+        boolean hasChildElement = false;
+        NodeList kids = element.getChildNodes();
+        for (int i = 0; i < kids.getLength(); i++) {
+            if (kids.item(i).getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
+                hasChildElement = true;
+                break;
+            }
+        }
+        if (hasChildElement) {
+            for (int i = kids.getLength() - 1; i >= 0; i--) {
+                org.w3c.dom.Node n = kids.item(i);
+                if (n.getNodeType() == org.w3c.dom.Node.TEXT_NODE && n.getTextContent().trim().isEmpty()) {
+                    element.removeChild(n);
+                }
+            }
+        }
+        kids = element.getChildNodes();
+        for (int i = 0; i < kids.getLength(); i++) {
+            if (kids.item(i).getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
+                stripIndentWhitespace((Element) kids.item(i));
+            }
         }
     }
 

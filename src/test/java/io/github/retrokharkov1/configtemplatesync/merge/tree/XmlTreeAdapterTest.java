@@ -80,4 +80,50 @@ public class XmlTreeAdapterTest {
         assertEquals("new", database.getChild("host").leafAsString());
         assertEquals("5432", database.getChild("port").leafAsString());
     }
+
+    /**
+     * Regression test for the "Format document" bug: formatting ALREADY-indented XML (as a user
+     * would have after a prior format pass) must not accumulate extra blank lines. Round-tripping
+     * an already-indented document through parse->serialize must be idempotent — a second
+     * parse->serialize pass over the first pass's output must produce byte-identical text.
+     */
+    @Test
+    public void repeatedFormatOfAlreadyIndentedXmlIsIdempotent() {
+        String alreadyIndented =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                        + "<root>\n"
+                        + "  <database>\n"
+                        + "    <host>db.local</host>\n"
+                        + "    <port>5432</port>\n"
+                        + "  </database>\n"
+                        + "  <server>\n"
+                        + "    <name>primary</name>\n"
+                        + "  </server>\n"
+                        + "</root>\n";
+
+        String firstPass = XML.serialize(XML.parse(alreadyIndented));
+        String secondPass = XML.serialize(XML.parse(firstPass));
+
+        assertEquals("second format pass must be a no-op", firstPass, secondPass);
+
+        String[] lines = firstPass.split("\n", -1);
+        // The very last split segment may be an empty string from a trailing newline — that's not
+        // a "blank line between elements", so it's excluded from the check.
+        for (int i = 0; i < lines.length - 1; i++) {
+            assertFalse("no blank/whitespace-only line should appear between elements: " + firstPass,
+                    lines[i].trim().isEmpty());
+        }
+    }
+
+    /**
+     * Guards against the fix overreaching: a leaf element's whitespace-only text content is real
+     * data (e.g. an intentionally blank/space value) and must survive parse->serialize unchanged.
+     */
+    @Test
+    public void leafWithWhitespaceOnlyTextContentIsPreserved() {
+        TreeNode root = XML.parse("<root><value> </value></root>");
+        TreeNode value = root.getChild("value");
+        assertFalse(value.isObject());
+        assertEquals(" ", value.leafAsString());
+    }
 }

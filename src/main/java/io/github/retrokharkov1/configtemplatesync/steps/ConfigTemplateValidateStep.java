@@ -3,14 +3,11 @@ package io.github.retrokharkov1.configtemplatesync.steps;
 import hudson.AbortException;
 import hudson.Extension;
 import hudson.FilePath;
+import hudson.model.Job;
 import hudson.model.Run;
 import hudson.model.TaskListener;
-import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference;
-import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
-import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
 
-import java.util.List;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
@@ -25,46 +22,35 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Pipeline step {@code configTemplateValidate(projectKey, environment, file, useBase, version)}
+ * Pipeline step {@code configTemplateValidate(file, useBase, configKey, version)}
  * (FR-17–FR-20, FR-79–FR-85, UF-3).
  *
- * <p>Resolves the effective (merged common+env) configuration for the given projectKey+environment,
- * flattens it to dotted-path keys, extracts the actual {@code #{...}#} tokens present in
- * {@code file}, and fails the build naming every token with no matching effective-config key
- * ("missing"). A key with no matching token ("orphaned") only produces a non-fatal warning.</p>
+ * <p>Every call resolves against the CALLING JOB's own attached local config
+ * ({@code JobConfigTemplateProperty}) by construction, unless {@code useBase: true} + {@code
+ * configKey} explicitly redirects to a named global COMMON Config Set — see pipeline-steps.md's
+ * "Pipeline call resolution — the final parameter model" for the full 7-row resolution matrix.
+ * There is no {@code projectKey}/{@code environment} parameter; that calling form was retired in
+ * full (2026-09-14), not deprecated.</p>
  *
- * <p>{@code projectKey}/{@code environment}/{@code file} may be omitted from the call entirely if a
- * prior {@code setupConfigTemplate} call in the same build already supplied them (FR-90–FR-95);
- * explicit call-site values always win per parameter (FR-93).</p>
+ * <p>Resolves the effective configuration per the resolution matrix, flattens it to dotted-path
+ * keys, extracts the actual {@code #{...}#} tokens present in {@code file}, and fails the build
+ * naming every token with no matching effective-config key ("missing"). A key with no matching
+ * token ("orphaned") only produces a non-fatal warning.</p>
+ *
+ * <p>{@code file}/{@code useBase}/{@code configKey}/{@code version} may be omitted from the call
+ * entirely if a prior {@code setupConfigTemplate} call in the same build already supplied them
+ * (FR-90–FR-95); explicit call-site values always win per parameter (FR-93). Only {@code file}
+ * remains mandatory.</p>
  */
 public class ConfigTemplateValidateStep extends Step {
 
-    private String projectKey;
-    private String environment;
     private String file;
     private Boolean useBase;
+    private String configKey;
     private Integer version;
 
     @DataBoundConstructor
     public ConfigTemplateValidateStep() {
-    }
-
-    public String getProjectKey() {
-        return projectKey;
-    }
-
-    @DataBoundSetter
-    public void setProjectKey(String projectKey) {
-        this.projectKey = projectKey;
-    }
-
-    public String getEnvironment() {
-        return environment;
-    }
-
-    @DataBoundSetter
-    public void setEnvironment(String environment) {
-        this.environment = environment;
     }
 
     public String getFile() {
@@ -90,6 +76,16 @@ public class ConfigTemplateValidateStep extends Step {
         this.useBase = useBase;
     }
 
+    /** Only valid together with {@code useBase: true} (matrix rows 6/7) — see class javadoc. */
+    public String getConfigKey() {
+        return configKey;
+    }
+
+    @DataBoundSetter
+    public void setConfigKey(String configKey) {
+        this.configKey = configKey;
+    }
+
     public Integer getVersion() {
         return version;
     }
@@ -101,26 +97,23 @@ public class ConfigTemplateValidateStep extends Step {
 
     @Override
     public StepExecution start(StepContext context) {
-        return new Execution(context, projectKey, environment, file, useBase, version);
+        return new Execution(context, file, useBase, configKey, version);
     }
 
     static class Execution extends SynchronousNonBlockingStepExecution<Void> {
 
         private static final long serialVersionUID = 1L;
 
-        private final String projectKey;
-        private final String environment;
         private final String file;
         private final Boolean useBase;
+        private final String configKey;
         private final Integer version;
 
-        Execution(StepContext context, String projectKey, String environment, String file,
-                  Boolean useBase, Integer version) {
+        Execution(StepContext context, String file, Boolean useBase, String configKey, Integer version) {
             super(context);
-            this.projectKey = projectKey;
-            this.environment = environment;
             this.file = file;
             this.useBase = useBase;
+            this.configKey = configKey;
             this.version = version;
         }
 
@@ -129,45 +122,25 @@ public class ConfigTemplateValidateStep extends Step {
             TaskListener listener = getContext().get(TaskListener.class);
             FilePath workspace = getContext().get(FilePath.class);
             Run<?, ?> run = getContext().get(Run.class);
+            Job<?, ?> job = run.getParent(); // Run#getParent() already returns the owning Job — no
+            // getRequiredContext() change needed (tech-lead scoping decision, 2026-09-14,
+            // pipeline-steps.md §2).
 
             StepSupport.EffectiveParams params = StepSupport.mergeWithSetupState(
-                    run, projectKey, environment, file, null, useBase, version);
+                    run, file, null, useBase, configKey, version);
 
             ConfigSetRepository repository = StepSupport.newRepository();
 
-            StepSupport.ResolvedEffective resolved;
-            if (params.useBase) {
-                // FR-81/FR-85: bypass the env Config Set and its base-chain machinery entirely.
-                resolved = StepSupport.resolveUseBaseOnly(repository, params.projectKey, params.version);
-            } else {
-                ConfigSet env = StepSupport.requireEnv(repository, params.projectKey, params.environment);
-                ConfigSetVersion envVersion;
-                if (params.version != null) {
-                    // FR-80: pin the env Config Set to this exact version.
-                    envVersion = env.getVersion(params.version);
-                    if (envVersion == null) {
-                        throw new AbortException("Env Config Set for projectKey '" + params.projectKey
-                                + "', environment '" + params.environment + "' has no version " + params.version
-                                + " to resolve (explicit 'version' parameter)");
-                    }
-                } else {
-                    envVersion = env.getActiveVersion();
-                }
-
-                // Live re-resolution of every reference in the chain (including PINNED ones — pinning
-                // is a property of the version, not of this step). A referenced project/version that
-                // does not exist surfaces as an AbortException from inside resolveEffective itself,
-                // per reference.
-                List<BaseConfigReference> chain = StepSupport.effectiveBaseChain(params.projectKey, envVersion);
-                resolved = StepSupport.resolveEffective(repository, chain, envVersion, env);
-            }
+            StepSupport.ResolvedEffective resolved = StepSupport.resolveJobScoped(
+                    repository, job, params.useBase, params.configKey, params.version);
 
             String targetContent = readTargetFile(workspace, params.file);
 
-            StepSupport.validateOrThrow(resolved.mergedConfig, targetContent, listener);
+            String resolutionMode = StepSupport.describeResolutionMode(params.useBase, params.configKey, params.version);
+            StepSupport.validateOrThrow(resolved.mergedConfig, targetContent, listener,
+                    job.getFullName(), params.file, resolutionMode);
             listener.getLogger().println(
-                    "[configTemplateSync] Validation passed for projectKey '" + params.projectKey
-                            + "', environment '" + params.environment + "'");
+                    "[configTemplateSync] Validation passed for Job '" + job.getFullName() + "'");
             return null;
         }
 
@@ -190,7 +163,7 @@ public class ConfigTemplateValidateStep extends Step {
 
         @Override
         public String getDisplayName() {
-            return "Validate config template drift against a Config Project/environment";
+            return "Validate config template drift for the calling Job's own Config Templates";
         }
 
         @Override

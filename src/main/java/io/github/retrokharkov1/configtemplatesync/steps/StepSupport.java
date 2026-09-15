@@ -2,6 +2,7 @@ package io.github.retrokharkov1.configtemplatesync.steps;
 
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import hudson.AbortException;
+import hudson.model.Job;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import io.github.retrokharkov1.configtemplatesync.merge.BaseChainResolver;
@@ -15,9 +16,11 @@ import io.github.retrokharkov1.configtemplatesync.model.ConfigSet;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole;
 import io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion;
 import io.github.retrokharkov1.configtemplatesync.model.ContentType;
+import io.github.retrokharkov1.configtemplatesync.model.JobConfigTemplateVersion;
 import io.github.retrokharkov1.configtemplatesync.model.PinMode;
 import io.github.retrokharkov1.configtemplatesync.model.ResolvedBaseVersion;
 import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository;
+import io.github.retrokharkov1.configtemplatesync.ui.JobConfigTemplateProperty;
 import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 
 import java.util.ArrayList;
@@ -38,24 +41,19 @@ final class StepSupport {
     private StepSupport() {
     }
 
-    /** Resolves the common ConfigSet, throwing a clear, fail-loud message if it does not exist (NFR-7). */
-    static ConfigSet requireCommon(ConfigSetRepository repository, String projectKey) throws AbortException {
-        ConfigSet common = repository.findCommon(projectKey);
+    /**
+     * Resolves the global COMMON Config Set named {@code configKey}, throwing a clear, fail-loud
+     * message if it does not exist (NFR-7). Wording matches the tech-lead scoping decision
+     * (2026-09-14, pipeline-steps.md §3(b)): named in {@code configKey} vocabulary, not the retired
+     * {@code projectKey}-centric phrasing (the underlying field is the same string).
+     */
+    static ConfigSet requireCommon(ConfigSetRepository repository, String configKey) throws AbortException {
+        ConfigSet common = repository.findCommon(configKey);
         if (common == null) {
-            throw new AbortException("No common Config Set found for projectKey '" + projectKey + "'");
+            throw new AbortException(
+                    "[configTemplateSync] No global COMMON Config Set found for configKey '" + configKey + "'.");
         }
         return common;
-    }
-
-    /** Resolves the env ConfigSet, throwing a clear, fail-loud message if it does not exist (NFR-7). */
-    static ConfigSet requireEnv(ConfigSetRepository repository, String projectKey, String environment)
-            throws AbortException {
-        ConfigSet env = repository.findEnv(projectKey, environment);
-        if (env == null) {
-            throw new AbortException(
-                    "No env Config Set found for projectKey '" + projectKey + "', environment '" + environment + "'");
-        }
-        return env;
     }
 
     /**
@@ -90,6 +88,82 @@ final class StepSupport {
      */
     static ResolvedEffective resolveEffective(ConfigSetRepository repository, List<BaseConfigReference> baseChain,
                                                ConfigSetVersion envVersion, ConfigSet env) throws AbortException {
+        String envPatch = envVersion == null ? null : envVersion.getContentJson();
+        // FR-87 gap fix: an empty resolved chain can legitimately occur (an explicitlyStandalone env
+        // version has zero bases to fold) — fall back to the env Config Set's own already-stored
+        // contentType, not a hardcoded ContentType.JSON, which would silently mis-type every
+        // standalone env Config Set's effective content. `env` staying null is only ever a
+        // theoretical case in this codebase (kept null-tolerant for symmetry with
+        // mergedSecretsManifest's own null-tolerant `env` parameter).
+        ContentType fallbackContentType = env != null ? env.getContentType() : ContentType.JSON;
+        return resolveChainCore(repository, baseChain, envPatch, fallbackContentType);
+    }
+
+    /**
+     * Job-scoped resolution entry point (tech-lead scoping decision, 2026-09-14,
+     * pipeline-steps.md §2): implements matrix rows 1, 2, 4, 5, 6, 7 of the "Pipeline call
+     * resolution" table. Row 3 ({@code configKey} without {@code useBase: true}) is a param-shape
+     * error checked earlier, before this method is ever called — see {@link #mergeWithSetupState}.
+     *
+     * <p>{@code job.getProperty(JobConfigTemplateProperty.class) == null}, or a property with zero
+     * saved versions, is a valid, non-error resolution target on every row that resolves against the
+     * Job's own config: the effective configuration is simply empty (job-scoped-config.md's "state
+     * 1"), never an error.</p>
+     */
+    static ResolvedEffective resolveJobScoped(ConfigSetRepository repository, Job<?, ?> job,
+            boolean useBase, String configKey, Integer version) throws AbortException {
+        if (useBase && configKey != null && !configKey.trim().isEmpty()) {
+            // Rows 6/7: direct global COMMON lookup by name — the Job's own config is never
+            // consulted here; ownConfigVersionNumber for the eventual binding write is 0, mirroring
+            // today's exact useBase=true behavior.
+            return resolveUseBaseOnly(repository, configKey, version);
+        }
+
+        JobConfigTemplateProperty prop = job.getProperty(JobConfigTemplateProperty.class);
+        if (prop == null) {
+            // State 1 (job-scoped-config.md): nothing configured yet, not an error.
+            return emptyResolvedEffective(ContentType.JSON);
+        }
+
+        JobConfigTemplateVersion jobVersion = version != null ? prop.getVersion(version) : prop.getActiveVersion();
+        if (version != null && jobVersion == null) {
+            throw new AbortException("[configTemplateSync] No version " + version
+                    + " found on this Job's own config (Job='" + job.getFullName() + "')");
+        }
+        if (jobVersion == null) {
+            // No active version yet (property exists but zero saved versions) — still state 1.
+            ContentType type = prop.getContentType() != null ? prop.getContentType() : ContentType.JSON;
+            return emptyResolvedEffective(type);
+        }
+
+        // Rows 1/2/4/5: the version's OWN recorded baseChain, folded as-is — NO synthesized
+        // FR-52-style default. This is the load-bearing difference from resolveEffective/
+        // effectiveBaseChain's ConfigSet/env-specific back-compat behavior, which does not apply to
+        // JobConfigTemplateVersion (see job-scoped-config.md).
+        List<BaseConfigReference> baseChain = jobVersion.getBaseChain();
+        // Rows 1/2 fold in this version's own content as the overlay patch; rows 4/5 (useBase=true)
+        // omit it entirely — the sole behavioral difference between the two row pairs.
+        String overlayPatch = useBase ? null : jobVersion.getContentJson();
+        ContentType fallbackContentType = prop.getContentType() != null ? prop.getContentType() : ContentType.JSON;
+        return resolveChainCore(repository, baseChain, overlayPatch, fallbackContentType);
+    }
+
+    private static ResolvedEffective emptyResolvedEffective(ContentType type) {
+        return new ResolvedEffective(TreeFormats.forType(type).emptyObject(), type,
+                Collections.emptyList(), Collections.emptyList());
+    }
+
+    /**
+     * Shared chain-folding core (tech-lead refactor recommendation, 2026-09-14,
+     * pipeline-steps.md §2): resolves {@code baseChain} against the repository, enforces the
+     * cross-chain content-type-consistency invariant (FR-61/FR-62), folds every resolved base
+     * left-to-right, and applies {@code overlayPatchOrNull} as the final RFC 7396 merge patch. Used
+     * by both {@link #resolveEffective} (ConfigSet/env-based) and {@link #resolveJobScoped}
+     * (Job-based) so neither duplicates the type-consistency-check/fold logic.
+     */
+    private static ResolvedEffective resolveChainCore(ConfigSetRepository repository,
+            List<BaseConfigReference> baseChain, String overlayPatchOrNull, ContentType fallbackContentType)
+            throws AbortException {
         List<BaseChainResolver.ResolvedReference> resolved = BaseChainResolver.resolve(repository, baseChain);
         List<ResolvedBaseVersion> resolvedBaseChain = new ArrayList<>();
         List<ConfigSet> resolvedBaseConfigSets = new ArrayList<>();
@@ -116,21 +190,12 @@ final class StepSupport {
             throw new AbortException("[configTemplateSync] Mismatched content types in base chain — "
                     + String.join(", ", typeReport) + " must all share one content type.");
         }
-        // FR-87 gap fix: distinctTypes can now legitimately be empty (an explicitlyStandalone env
-        // version has zero bases to fold) — fall back to the env Config Set's own already-stored
-        // contentType, not a hardcoded ContentType.JSON, which would silently mis-type every
-        // standalone env Config Set's effective content. `env` staying null is only ever a
-        // theoretical case in this codebase (kept null-tolerant for symmetry with
-        // mergedSecretsManifest's own null-tolerant `env` parameter).
-        ContentType resolvedType = distinctTypes.isEmpty()
-                ? (env != null ? env.getContentType() : ContentType.JSON)
-                : distinctTypes.iterator().next();
+        ContentType resolvedType = distinctTypes.isEmpty() ? fallbackContentType : distinctTypes.iterator().next();
         List<TreeNode> baseContents = new ArrayList<>();
         for (BaseChainResolver.ResolvedReference r : resolved) {
             baseContents.add(TreeFormats.forType(resolvedType).parse(r.version.getContentJson()));
         }
-        String envPatch = envVersion == null ? null : envVersion.getContentJson();
-        TreeNode merged = EffectiveConfigResolver.resolveChain(resolvedType, baseContents, envPatch);
+        TreeNode merged = EffectiveConfigResolver.resolveChain(resolvedType, baseContents, overlayPatchOrNull);
         return new ResolvedEffective(merged, resolvedType, Collections.unmodifiableList(resolvedBaseChain),
                 Collections.unmodifiableList(resolvedBaseConfigSets));
     }
@@ -160,46 +225,93 @@ final class StepSupport {
     }
 
     /**
-     * FR-81: resolves directly against {@code projectKey}'s own COMMON Config Set only, completely
-     * bypassing the env Config Set and its base-chain resolution machinery entirely. A supplied
-     * {@code version} pins this SAME COMMON Config Set to that exact version.
+     * FR-81: resolves directly against {@code configKey}'s own global COMMON Config Set only,
+     * completely bypassing any Job-scoped resolution machinery entirely (matrix rows 6/7). A
+     * supplied {@code version} pins this SAME COMMON Config Set to that exact version.
      */
-    static ResolvedEffective resolveUseBaseOnly(ConfigSetRepository repository, String projectKey, Integer version)
+    static ResolvedEffective resolveUseBaseOnly(ConfigSetRepository repository, String configKey, Integer version)
             throws AbortException {
-        ConfigSet common = requireCommon(repository, projectKey);
+        ConfigSet common = requireCommon(repository, configKey);
         ConfigSetVersion resolved = version != null ? common.getVersion(version) : common.getActiveVersion();
         if (resolved == null) {
             String what = version != null ? "version " + version : "an active version";
-            throw new AbortException("Common Config Set for projectKey '" + projectKey + "' has no " + what
-                    + " to resolve" + (version != null ? " (explicit 'version' parameter, useBase=true)" : ""));
+            throw new AbortException("[configTemplateSync] Global COMMON Config Set for configKey '" + configKey
+                    + "' has no " + what + " to resolve"
+                    + (version != null ? " (explicit 'version' parameter, useBase=true)" : ""));
         }
         TreeNode content = TreeFormats.forType(common.getContentType()).parse(resolved.getContentJson());
         List<ResolvedBaseVersion> chain = Collections.singletonList(
-                new ResolvedBaseVersion(projectKey, resolved.getVersionNumber()));
+                new ResolvedBaseVersion(configKey, resolved.getVersionNumber()));
         List<ConfigSet> configSets = Collections.singletonList(common);
         return new ResolvedEffective(content, common.getContentType(), chain, configSets);
     }
 
     /**
+     * Resolution-mode phrase for the missing/orphaned-keys messages (tech-lead scoping decision,
+     * 2026-09-14, pipeline-steps.md §5): describes which matrix row (1/2/4/5/6/7) resolved this
+     * call, so the message is self-sufficient in a build log with no other context.
+     */
+    static String describeResolutionMode(boolean useBase, String configKey, Integer version) {
+        return describeResolutionMode(useBase, configKey, version, false);
+    }
+
+    /**
+     * Overload adding the {@code (frozen deployment binding replay)} suffix
+     * (pipeline-steps.md §5, "the belt-and-suspenders internal re-check ... needs ... one
+     * refinement beyond the plain matrix-row phrase") — used at {@code
+     * configTemplateSubstitute}'s defensive re-check call site when a frozen Deployment Binding
+     * replay is active ({@code pinned == true}), so the message never misleadingly implies an
+     * explicit {@code version} was passed on this call when it was actually replayed.
+     */
+    static String describeResolutionMode(boolean useBase, String configKey, Integer version, boolean pinned) {
+        String base;
+        if (useBase && configKey != null && !configKey.trim().isEmpty()) {
+            base = version != null
+                    ? "global Config Set '" + configKey + "', version " + version
+                    : "global Config Set '" + configKey + "', active version";
+        } else if (useBase) {
+            base = version != null
+                    ? "this Job's own local config's base chain only, version " + version
+                    : "this Job's own local config's base chain only, active version";
+        } else {
+            base = version != null
+                    ? "this Job's own local config, version " + version
+                    : "this Job's own local config, active version";
+        }
+        return pinned ? base + " (frozen deployment binding replay)" : base;
+    }
+
+    /**
      * Runs the flatten-and-compare drift check (FR-17) and fails the build (FR-18) if any token in
      * the target file has no matching key in the effective configuration. Orphaned keys are only
-     * warned about, never fatal (FR-19).
+     * warned about, never fatal (FR-19). {@code resolutionMode} (see {@link
+     * #describeResolutionMode}) is spliced into both messages so each is self-sufficient in a build
+     * log with no other context (pipeline-steps.md §5).
      */
-    static void validateOrThrow(TreeNode effectiveConfig, String targetFileContent, TaskListener listener)
-            throws AbortException {
+    static void validateOrThrow(TreeNode effectiveConfig, String targetFileContent, TaskListener listener,
+            String jobFullName, String file, String resolutionMode) throws AbortException {
         DriftResult result = DriftChecker.diff(effectiveConfig, targetFileContent);
         if (result.hasOrphanedKeys()) {
             List<String> orphaned = new ArrayList<>(result.getOrphanedKeys());
+            String plural = orphaned.size() == 1 ? "key" : "keys";
             listener.getLogger().println(
-                    "[configTemplateSync][WARN] Orphaned config keys (no matching token in target file): "
-                            + orphaned);
+                    "[configTemplateSync][WARN] Orphaned config keys — Job='" + jobFullName
+                            + "', resolved via " + resolutionMode + ": the effective configuration has "
+                            + orphaned.size() + " " + plural + " with no matching token in target file '" + file
+                            + "': " + orphaned + ". This is not a failure, but likely means either the key is "
+                            + "genuinely unused or the token was removed from the file without removing the key.");
         }
         if (result.hasMissingKeys()) {
             List<String> missing = new ArrayList<>(result.getMissingKeys());
-            String message = "[configTemplateSync] Missing config keys (token present in target file, "
-                    + "no matching key in effective configuration): " + missing;
+            String plural = missing.size() == 1 ? "token" : "tokens";
+            String message = "Missing config keys — target file '" + file + "' (Job='" + jobFullName
+                    + "', resolved via " + resolutionMode + ") references " + missing.size() + " " + plural
+                    + " with no matching key in the effective configuration: " + missing
+                    + ". Check for a typo in the token's dotted path, or add this key to the resolved source "
+                    + "(this Job's own Config Templates, or the global COMMON Config Set referenced via "
+                    + "useBase/configKey).";
             listener.getLogger().println("[configTemplateSync][ERROR] " + message);
-            throw new AbortException(message);
+            throw new AbortException("[configTemplateSync] " + message);
         }
     }
 
@@ -208,24 +320,26 @@ final class StepSupport {
     }
 
     /**
-     * Merges the resolved base chain's and (optional) env Config Set's secrets manifests (dotted
+     * Merges the resolved base chain's and (optional) calling target's own secrets manifests (dotted
      * path -> Jenkins credential ID) into one lookup table for substitution (FR-13/FR-21). Later
      * entries in {@code resolvedBaseConfigSets} take precedence over earlier ones on a conflicting
      * path, matching the same later-wins fold {@link EffectiveConfigResolver#resolveChain} already
      * applies to content — the manifest is metadata about the same content tree the chain folds, so
      * the precedence rule for "which base determines this path" is identical whether asking about the
-     * value or the secret-ness at that path. The env Config Set's own manifest still wins over every
-     * base.
+     * value or the secret-ness at that path. {@code ownManifestOrNull} (the Job's own
+     * {@code JobConfigTemplateProperty#getSecretsManifest()}, or {@code null} when the Job's own
+     * config was not consulted — matrix rows 6/7) still wins over every base.
      */
-    static Map<String, String> mergedSecretsManifest(List<ConfigSet> resolvedBaseConfigSets, ConfigSet env) {
+    static Map<String, String> mergedSecretsManifest(List<ConfigSet> resolvedBaseConfigSets,
+            Map<String, String> ownManifestOrNull) {
         Map<String, String> merged = new LinkedHashMap<>();
         for (ConfigSet base : resolvedBaseConfigSets) {
             if (base != null) {
                 merged.putAll(base.getSecretsManifest());
             }
         }
-        if (env != null) {
-            merged.putAll(env.getSecretsManifest());
+        if (ownManifestOrNull != null) {
+            merged.putAll(ownManifestOrNull);
         }
         return merged;
     }
@@ -254,44 +368,42 @@ final class StepSupport {
      * Also implements FR-94 (fail-loud on insufficient parameters) as this method's single exit-check.
      */
     static final class EffectiveParams {
-        final String projectKey;
-        final String environment;
         final String file;
         final String redeployFromRun;
         final boolean useBase;
+        final String configKey;
         final Integer version;
 
-        EffectiveParams(String projectKey, String environment, String file, String redeployFromRun,
-                         boolean useBase, Integer version) {
-            this.projectKey = projectKey;
-            this.environment = environment;
+        EffectiveParams(String file, String redeployFromRun, boolean useBase, String configKey, Integer version) {
             this.file = file;
             this.redeployFromRun = redeployFromRun;
             this.useBase = useBase;
+            this.configKey = configKey;
             this.version = version;
         }
     }
 
-    static EffectiveParams mergeWithSetupState(Run<?, ?> run, String callProjectKey, String callEnvironment,
-            String callFile, String callRedeployFromRun, Boolean callUseBase, Integer callVersion)
-            throws AbortException {
+    static EffectiveParams mergeWithSetupState(Run<?, ?> run, String callFile, String callRedeployFromRun,
+            Boolean callUseBase, String callConfigKey, Integer callVersion) throws AbortException {
         ConfigTemplateSetupAction setup = run == null ? null : run.getAction(ConfigTemplateSetupAction.class);
 
-        String projectKey = callProjectKey != null ? callProjectKey : (setup == null ? null : setup.getProjectKey());
-        String environment = callEnvironment != null ? callEnvironment : (setup == null ? null : setup.getEnvironment());
         String file = callFile != null ? callFile : (setup == null ? null : setup.getFile());
         String redeployFromRun = callRedeployFromRun != null
                 ? callRedeployFromRun : (setup == null ? null : setup.getRedeployFromRun());
         boolean useBase = callUseBase != null ? callUseBase : (setup != null && setup.isUseBase());
+        String configKey = callConfigKey != null ? callConfigKey : (setup == null ? null : setup.getConfigKey());
         Integer version = callVersion != null ? callVersion : (setup == null ? null : setup.getVersion());
 
+        // Matrix row 3 (tech-lead scoping decision, 2026-09-14, pipeline-steps.md §3(a)): checked
+        // FIRST, before any repository lookup/I-O — mirrors the missing-'file' check's own
+        // fail-before-I/O placement below.
+        if (!isBlank(configKey) && !useBase) {
+            throw new AbortException("[configTemplateSync] 'configKey' ('" + configKey
+                    + "') is only valid together with useBase: true — remove 'configKey', or add "
+                    + "'useBase: true' to this call.");
+        }
+
         List<String> missing = new ArrayList<>();
-        if (isBlank(projectKey)) {
-            missing.add("projectKey");
-        }
-        if (isBlank(environment)) {
-            missing.add("environment");
-        }
         if (isBlank(file)) {
             missing.add("file");
         }
@@ -301,7 +413,7 @@ final class StepSupport {
                     + " — not supplied explicitly on this call, and no prior setupConfigTemplate() call in this "
                     + "build provided them.");
         }
-        return new EffectiveParams(projectKey, environment, file, redeployFromRun, useBase, version);
+        return new EffectiveParams(file, redeployFromRun, useBase, configKey, version);
     }
 
     private static boolean isBlank(String s) {

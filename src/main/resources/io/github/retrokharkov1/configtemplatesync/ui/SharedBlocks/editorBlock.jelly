@@ -1,0 +1,175 @@
+<?jelly escape-by-default='true'?>
+<!--
+  Block 4 of 4: Merged bases / Own override / Merged result. Shared between
+  EnvConfigSetPage/index.jelly and ConfigTemplatesJobAction/index.jelly (tech-lead design contract,
+  2026-09-09). Relies on ${it} exposing: templateAvailable, contentTypeLocked, contentTypeValue,
+  ownScopeLabel (Bug 6.2 fix, 2026-09-10 — "job" on ConfigTemplatesJobAction, "layer" on
+  EnvConfigSetPage; see each host's own getter javadoc).
+  Every id/function referenced here (overrideEditor, mergedEditor, mergedBasesEditor,
+  generatedTemplateEditor, showGeneratedTemplateView, backTo3PanelView, copyGeneratedTemplate,
+  switchToEditMode, onContentTypeChange, saveClicked, discardAllChangesClicked,
+  loadComparedIntoEditor) must be defined by BOTH hosts' own page-level <script> — the Monaco
+  wiring and the doComputeMerge/jsPreviewMerge call shape genuinely differ between the two hosts
+  (EnvConfigSetPage's FR-86/87 explicitlyStandalone branch vs. ConfigTemplatesJobAction's simpler
+  empty-chain-resolves-to-{} contract), so the script itself is NOT shared, only this markup shell.
+-->
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form">
+  <div id="editorDetails">
+  <!-- Header row (owner report, 2026-09-14): f:section's own title markup (lib/form/section.jelly,
+       Jenkins core) renders the title as its own sibling <div class="jenkins-section__title">,
+       separate from this block's body, so a section title and a body-level button row could never
+       land on the same horizontal line through f:section alone. Replaced f:section here with its
+       exact underlying markup (<section class="jenkins-section"> + a title div) reproduced by hand,
+       so the title text and the Generate-Template/Back buttons can share ONE flex row
+       (space-between: title left edge, buttons right edge) while every other visual contract
+       f:section provided (the "jenkins-section"/"jenkins-section__title" CSS classes, hence spacing/
+       typography) is preserved unchanged. f:rowSet (also inside f:section) is a documented no-op
+       here since no @name/@ref is passed, so dropping it changes nothing. -->
+  <section class="jenkins-section">
+    <div class="jenkins-section__title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>${%editor.heading}</span>
+      <!-- Always enabled (owner requirement, 2026-09-12): "Generate Template" now generates from the
+           caller's CURRENT, possibly-unsaved override/base-chain draft (see showGeneratedTemplateView()
+           in each host's own <script>), so there is no "nothing to template yet" state that would
+           justify disabling this button — even a brand-new, never-saved page has SOME draft to
+           template (an empty override against an empty/default base chain). The old
+           ${it.templateAvailable}-gated disabled branch is removed; templateAvailable is kept on both
+           hosts purely so this button's Jelly-visible contract stays mirrored across
+           ConfigTemplatesJobAction/EnvConfigSetPage. -->
+      <div class="ctsync-btn-row" style="margin:0">
+        <button type="button" id="generateTemplateBtn" class="jenkins-button"
+               title="${%generateTemplate.title(it.ownScopeLabel)}"
+               onclick="showGeneratedTemplateView();">&#128203; ${%generateTemplate.label}</button>
+        <button type="button" id="backTo3PanelBtn" class="jenkins-button" style="display:none"
+               title="${%backTo3Panel.title}"
+               onclick="backTo3PanelView();">&#8592; ${%backTo3Panel.label}</button>
+      </div>
+    </div>
+
+    <div id="generateBanner" class="alert alert-info" style="display:none">
+      Effective template from the current base chain &#8853; this ${it.ownScopeLabel}'s own override
+      draft — reflects whatever is currently in the editor below, whether saved or not.
+    </div>
+
+    <div id="generatedTemplatePanel" style="display:none;margin-bottom:16px">
+      <h3>Generated template (read-only)</h3>
+      <div id="generatedTemplateEditor" style="height:420px;border:1px solid #ccc"/>
+      <div style="margin-top:4px">
+        <button type="button" id="copyTemplateBtn" class="jenkins-button"
+                title="${%copyTemplate.title}"
+                onclick="copyGeneratedTemplate();">&#128203; ${%copyTemplate.label}</button>
+      </div>
+    </div>
+
+    <!-- Spacing fix (owner report, 2026-09-11): the "Change note (required)" field sat flush
+         against the coding block above it with no breathing room — margin-bottom on the editor
+         grid itself (rather than margin-top on the f:entry, which f:entry doesn't expose a hook
+         for) reliably creates the gap regardless of which layout (table-row vs. div-based) this
+         Jenkins baseline renders f:entry as. -->
+    <div id="mergeLayout" class="ctsync-merge-grid" style="margin-bottom:16px">
+      <!-- Compare-mode banner must render OUTSIDE/ABOVE .ctsync-merge-top (full width, sibling of
+           the grid, not nested inside #envOverridePane) — same convention as #generateBanner above.
+           Nesting it inside one column only pushed that column's title down and unbalanced the
+           two-column layout relative to "Merged bases" (business-rules/base-chains.md, "Merge-panel
+           header alignment & compare-mode banner placement", 2026-09-11). -->
+      <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
+        <span id="compareBannerText"/>
+        <span>
+          <button type="button" id="loadComparedBtn" class="jenkins-button jenkins-button--primary"
+                 title="${%loadIntoEditor.title}"
+                 onclick="loadComparedIntoEditor();">${%loadIntoEditor.label}</button>
+          <button type="button" id="backToEditingBtn" class="jenkins-button"
+                 title="${%backToEditing.title}"
+                 onclick="switchToEditMode();">${%backToEditing.label}</button>
+        </span>
+      </div>
+
+      <!-- Content-type picker row (BUG-14 regression fix, 2026-09-12): must render OUTSIDE/ABOVE
+           .ctsync-merge-top (full width, sibling of the grid, same convention as #compareBanner and
+           #generateBanner above) — NOT nested inside #envOverridePane. Nesting it inside one column
+           only pushed that column's editor down relative to "Merged bases"'s editor, unbalancing the
+           two-column layout on any Config Set whose content type isn't locked yet (fresh/unsaved env
+           or job override). Visible ONLY while there is no chain-resolved type to follow
+           (EnvConfigSetPage: explicitlyStandalone with zero rows, FR-104; ConfigTemplatesJobAction:
+           simply an empty base chain — no checkbox concept there). Each host's own script drives
+           this row's visibility by id ("contentTypeRow"); moving its DOM position does not affect
+           that lookup. The locked/unlocked markup itself (${it.contentTypeLocked}) is identical on
+           both hosts. -->
+      <div class="ctsync-btn-row" id="contentTypeRow" style="display:none">
+        <label style="font-weight:600;margin-right:8px">${%contentType.label}</label>
+        <j:choose>
+          <j:when test="${it.contentTypeLocked}">
+            <span id="contentTypeLockedDisplay">${it.contentTypeValue}&#160;&#128274; (locked — set at first Save, immutable)</span>
+          </j:when>
+          <j:otherwise>
+            <span id="contentTypeUnlockedGroup">
+              <span style="color:#666;display:block;margin-bottom:4px">&#9432; choose once — locked forever after the first Save</span>
+              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="JSON" checked="checked" onclick="onContentTypeChange('JSON');"/> JSON</label>
+              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="XML" onclick="onContentTypeChange('XML');"/> XML</label>
+              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="YAML" onclick="onContentTypeChange('YAML');"/> YAML</label>
+            </span>
+          </j:otherwise>
+        </j:choose>
+      </div>
+
+      <div class="ctsync-merge-top">
+        <div class="ctsync-merge-pane" id="mergedBasesPane">
+          <h3>${%mergedBases.heading}</h3>
+          <div id="mergedBasesEditor" style="height:380px;border:1px solid #ccc"/>
+        </div>
+        <div class="ctsync-merge-pane" id="envOverridePane">
+          <h3>${%envOverride.heading}</h3>
+
+          <!-- Save-result feedback (owner requirement, 2026-09-14): no longer an inline banner div
+               here — both hosts' own saveClicked() now call window.notificationBar.show(...), the
+               same native Jenkins toast used by "Apply" on /job/&lt;name&gt;/configure. -->
+          <div id="overrideEditor" style="height:380px;border:1px solid #ccc"/>
+
+          <!-- Moved out of the header row (owner report, 2026-09-11): the header row must be a
+               bare, title-only h3 identical in structure to "Merged bases"'s own header, so both
+               editors start at the same Y offset within their columns — this control row is a new
+               sibling below the editor instead, same position id/onclick, DOM position only changed
+               (ID-based event wiring in each host's own <script> is unaffected). -->
+          <div class="ctsync-editor-toolbar-row">
+            <!-- Hidden with fewer than 2 versions (owner requirement, 2026-09-14): this button's only
+                 purpose is exiting compare-mode (returning from comparing the draft against a
+                 historical version back to normal editing) — with 0 or 1 version there is nothing to
+                 meaningfully compare against, so the button would be pointless clutter. Initial SSR
+                 render reuses the SAME ${it.versions} getter the Version-history table itself renders
+                 from (SharedBlocks/versionHistoryBlock.jelly); the AJAX-refreshed case is handled by
+                 each host's own renderVersionHistoryRows(versions) toggling this same id by the
+                 versions.length passed to it (no new data source added). -->
+            <button type="button" id="modeEditBtn"
+                   class="jenkins-button jenkins-button--primary" title="${%modeEdit.title}"
+                   style="${it.versions.size() &lt; 2 ? 'display:none' : ''}"
+                   onclick="switchToEditMode();">&#9998; ${%modeEdit.label}</button>
+            <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
+          </div>
+        </div>
+      </div>
+      <div class="ctsync-merge-pane ctsync-merge-full" id="mergedResultPane">
+        <h3>${%mergedResult.heading}</h3>
+        <div id="mergedEditor" style="height:380px;border:1px solid #ccc"/>
+        <div id="mergedStaleIndicator" style="display:none;color:#a33">
+          showing last valid merge — override content is currently invalid
+        </div>
+      </div>
+    </div>
+
+    <f:entry title="${%changeNote.entryTitle}">
+      <input class="setting-input" type="text" id="noteField" required="required"/>
+    </f:entry>
+    <input type="hidden" id="baseChainField" value=""/>
+
+    <div class="ctsync-btn-row">
+      <button type="button" id="saveBtn" class="jenkins-button jenkins-button--primary"
+              title="${%save.title}" onclick="saveClicked(false);">${%save.label}</button>
+      <button type="button" id="saveActivateBtn"
+              class="jenkins-button"
+              title="${%saveActivate.title}" onclick="saveClicked(true);">${%saveActivate.label}</button>
+      <button type="button" id="discardAllBtn" class="jenkins-button jenkins-button--destructive"
+              title="${%discardAll.title}" onclick="discardAllChangesClicked();">${%discardAll.label}</button>
+    </div>
+  </section>
+  </div>
+</j:jelly>

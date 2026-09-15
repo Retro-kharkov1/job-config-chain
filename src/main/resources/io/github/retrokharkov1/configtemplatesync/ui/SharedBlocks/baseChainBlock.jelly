@@ -1,0 +1,62 @@
+<?jelly escape-by-default='true'?>
+<!--
+  Block 3 of 4: base-chain editor. Shared between EnvConfigSetPage/index.jelly and
+  ConfigTemplatesJobAction/index.jelly (tech-lead design contract, 2026-09-09). Relies on ${it}
+  exposing: explicitlyStandaloneSupported, ownScopeLabel (Bug 6.2 fix, 2026-09-10 — "job" on
+  ConfigTemplatesJobAction, "layer" on EnvConfigSetPage; see each host's own getter javadoc). The
+  row bodies (#baseChainRowsBody) are entirely
+  JS-built (buildBaseChainRowElement) rather than server-rendered — including the per-row ↗
+  open-in-new-tab link next to each row's Config Key name and the resolved-content diff view keyed
+  off cumulativeJson — see BOTH hosts' own page-level <script> for that logic; this fragment is
+  only the static table shell + the explicitlyStandalone checkbox (guarded, EnvConfigSetPage only).
+-->
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form">
+  <f:section title="${%baseChain.heading}">
+    <div id="baseChainEditor">
+      <p>Ordered list of base Config Sets folded left-to-right before this ${it.ownScopeLabel}'s own
+         override is applied — later rows win on overlapping keys. Each row either always tracks its project's
+         currently-ACTIVE version, or pins to one specific historical version. Drag a row by its
+         &#8942;&#8942; handle (or use the &#9650;/&#9660; buttons) to reorder. Click a row's chevron button
+         to expand its resolved (read-only) content, or click &#8599; to open that base project's own
+         admin page in a new tab.</p>
+      <!-- FR-89 (EnvConfigSetPage only): mutually exclusive with having any base-chain rows —
+           checking this clears the chain, greys out (never hides) the row table below, and
+           disables Add base. Never rendered for a host where explicitlyStandaloneSupported is
+           false (e.g. ConfigTemplatesJobAction) — an empty chain there is already unambiguous. -->
+      <j:if test="${it.explicitlyStandaloneSupported}">
+        <div class="ctsync-standalone-row">
+          <label>
+            <input type="checkbox" id="explicitlyStandaloneCheckbox"
+                   onchange="onExplicitlyStandaloneChange(this.checked);"/>
+            ${%explicitlyStandalone.label}
+          </label>
+        </div>
+      </j:if>
+      <!-- Empty-state row (ux-ui-designer correction, 2026-09-11): a genuinely-empty chain renders
+           as ONE spanning row inside the table body rather than swapping out the whole table —
+           the header stays visible either way. renderBaseChainRows() (both hosts' own script)
+           inserts/removes this row directly instead of toggling a separate placeholder div; see
+           its own comment for the FR-89 explicitlyStandalone nuance. Table-scroll containment
+           (owner report, 2026-09-11): this table previously had no cap at all and grew
+           unboundedly with many rows — now wrapped the same way as every other table in this
+           plugin (.ctsync-scroll-table, defined in both host files' own &lt;style&gt; block).
+           Full-width override (owner report, 2026-09-11): unlike the narrow Secrets manifest /
+           Version history tables, this table's expanded row hosts a two-pane Monaco resolved
+           content diff that needs the full available width rather than hugging fit-content, so
+           an extra full-width modifier class (defined in both host files' own &lt;style&gt; block,
+           right after the shared .ctsync-scroll-table rule) overrides width back to 100% for
+           this table only, leaving every other .ctsync-scroll-table usage unaffected. -->
+      <div class="ctsync-scroll-table ctsync-scroll-table--full-width" id="baseChainRowsTableWrap">
+        <table class="jenkins-table ctsync-basechain-table" id="baseChainRowsTable">
+          <thead><tr><th/><th/><th>#</th><th>${%column.configKey}</th><th>Mode</th><th>Pinned version</th><th/></tr></thead>
+          <tbody id="baseChainRowsBody"/>
+        </table>
+      </div>
+      <div class="ctsync-btn-row">
+        <button type="button" id="addBaseChainRowBtn" class="jenkins-button"
+                title="${%addBase.title}"
+                onclick="addBaseChainRow();">&#10133; ${%addBase.label}</button>
+      </div>
+    </div>
+  </f:section>
+</j:jelly>

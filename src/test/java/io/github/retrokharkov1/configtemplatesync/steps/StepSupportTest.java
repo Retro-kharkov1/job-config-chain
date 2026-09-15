@@ -157,8 +157,12 @@ public class StepSupportTest {
     public void resolveEffectiveWithEmptyChainFallsBackToEnvsOwnContentType() throws Exception {
         // FR-87/§2b gap fix: an explicitlyStandalone version's empty chain must not silently
         // mis-type as ContentType.JSON — it must fall back to the env Config Set's own contentType.
+        // Rewritten (2026-09-14 full removal of ConfigSetRole.ENV): resolveEffective's `env`
+        // parameter is role-agnostic (it only ever reads getContentType(), never getRole()/
+        // getEnvironment()) — a COMMON-role Config Set exercises the exact same fallback-content-type
+        // code path the old ENV-role fixture did.
         ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
-        ConfigSet env = new ConfigSet("proj", ConfigSetRole.ENV, "dev", "Env", ContentType.XML);
+        ConfigSet env = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Env", ContentType.XML);
         ConfigSetVersion standalone = new ConfigSetVersion(1, "<root><a>1</a></root>", "standalone", "test", 1L,
                 Collections.emptyList(), true);
 
@@ -209,4 +213,24 @@ public class StepSupportTest {
         assertTrue(ex.getMessage().contains("proj"));
         assertTrue(ex.getMessage().contains("99"));
     }
+
+    @Test
+    public void resolveUseBaseOnlyThrowsAbortExceptionForUnknownConfigKey() throws Exception {
+        // Matrix rows 6/7 miss (tech-lead scoping decision, 2026-09-14, pipeline-steps.md §3(b)):
+        // configKey names a Config Set that does not exist as a global COMMON Config Set at all.
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+
+        AbortException ex = assertThrows(AbortException.class,
+                () -> StepSupport.resolveUseBaseOnly(repository, "no-such-key", null));
+        assertEquals("[configTemplateSync] No global COMMON Config Set found for configKey 'no-such-key'.",
+                ex.getMessage());
+    }
+
+    // NOTE: StepSupport#resolveJobScoped (the new Job-scoped entry point implementing matrix rows
+    // 1/2/4/5/6/7) and StepSupport#mergeWithSetupState's row-3 fail-loud check both require a real
+    // hudson.model.Job (JenkinsRule), which this fast, JenkinsRule-free unit-test class deliberately
+    // does not carry. Their coverage lives in ConfigTemplateSubstituteStepTest/
+    // ConfigTemplateValidateStepTest instead, exercised end to end through real pipeline runs against
+    // real Jobs — see those classes' row1/row2/row4/row5/row6/row7 and configKey-without-useBase
+    // tests.
 }
