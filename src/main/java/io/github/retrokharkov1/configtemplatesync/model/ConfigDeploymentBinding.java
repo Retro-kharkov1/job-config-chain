@@ -8,17 +8,17 @@ import java.util.Objects;
 
 /**
  * Records exactly which base chain (frozen as concrete {@link ResolvedBaseVersion} entries) and
- * env-version-number were used the last time a given (projectKey, environment, buildVersion) tuple
- * was substituted for real (FR-23, FR-25). Pinning is opt-in — a binding is only ever consulted when
- * a caller explicitly passes {@code buildVersion} to the substitute step (OQ-3, resolved 2026-08-27:
- * opt-in stays for v1).
+ * own-config-version-number were used the last time a given Run substituted for real (FR-23,
+ * FR-25). Re-keyed to a pure Run-identity string (tech-lead scoping decision, 2026-09-14,
+ * pipeline-steps.md §1) once every pipeline call started resolving per-Job by construction — a
+ * binding is inherently per-Job already (the Run that wrote it belongs to exactly one Job), so no
+ * separate Config-Key/environment field is needed to disambiguate it. Default-on write, not opt-in
+ * (see pipeline-steps.md's "Build-identity pinning" section).
  */
 public class ConfigDeploymentBinding implements Serializable {
 
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 3L;
 
-    private final String projectKey;
-    private final String environment;
     private final String buildVersion;
 
     /**
@@ -28,23 +28,21 @@ public class ConfigDeploymentBinding implements Serializable {
      * populate {@link #resolvedBaseChain} instead). Read exactly once, by {@link #readResolve()}, to
      * synthesize a one-element chain for a pre-migration record; not read anywhere else in this
      * codebase. Do not remove this field without first confirming no surviving pre-2026-09
-     * {@code deployment-bindings.xml} needs to load.
+     * {@code deployment-bindings.xml} needs to load. Unrelated to, and untouched by, the 2026-09-14
+     * projectKey/environment re-key — see that field's own removal note below.
      */
     @Deprecated
     private int commonVersionNumber;
 
     private List<ResolvedBaseVersion> resolvedBaseChain;
-    private int envVersionNumber;
+    private int ownConfigVersionNumber;
     private long deployedAtUtcEpochMillis;
 
-    public ConfigDeploymentBinding(String projectKey, String environment, String buildVersion,
-                                    List<ResolvedBaseVersion> resolvedBaseChain, int envVersionNumber,
-                                    long deployedAtUtcEpochMillis) {
-        this.projectKey = Objects.requireNonNull(projectKey, "projectKey");
-        this.environment = Objects.requireNonNull(environment, "environment");
+    public ConfigDeploymentBinding(String buildVersion, List<ResolvedBaseVersion> resolvedBaseChain,
+                                    int ownConfigVersionNumber, long deployedAtUtcEpochMillis) {
         this.buildVersion = Objects.requireNonNull(buildVersion, "buildVersion");
         this.resolvedBaseChain = copyOf(resolvedBaseChain);
-        this.envVersionNumber = envVersionNumber;
+        this.ownConfigVersionNumber = ownConfigVersionNumber;
         this.deployedAtUtcEpochMillis = deployedAtUtcEpochMillis;
     }
 
@@ -53,19 +51,11 @@ public class ConfigDeploymentBinding implements Serializable {
                 new ArrayList<>(Objects.requireNonNull(source, "resolvedBaseChain")));
     }
 
-    public String getProjectKey() {
-        return projectKey;
-    }
-
-    public String getEnvironment() {
-        return environment;
-    }
-
     public String getBuildVersion() {
         return buildVersion;
     }
 
-    /** Never null. Order-significant, mirrors the env version's resolved baseChain at substitution time. */
+    /** Never null. Order-significant, mirrors the resolved baseChain at substitution time. */
     public List<ResolvedBaseVersion> getResolvedBaseChain() {
         return resolvedBaseChain;
     }
@@ -83,27 +73,31 @@ public class ConfigDeploymentBinding implements Serializable {
         return resolvedBaseChain.isEmpty() ? 0 : resolvedBaseChain.get(0).getVersionNumber();
     }
 
-    public int getEnvVersionNumber() {
-        return envVersionNumber;
+    /**
+     * The calling Job's own resolved config version number used for this binding, or {@code 0} when
+     * the Job's own config was not consulted at all (matrix rows 6/7 — direct global COMMON lookup
+     * via {@code useBase`+`configKey`). Renamed from {@code getEnvVersionNumber()} (2026-09-14) — same
+     * "0 means not applicable" convention, not a new one.
+     */
+    public int getOwnConfigVersionNumber() {
+        return ownConfigVersionNumber;
     }
 
     public long getDeployedAtUtcEpochMillis() {
         return deployedAtUtcEpochMillis;
     }
 
-    /** Updates this binding's frozen chain/env version/timestamp in place (used-not-duplicated on repeat). */
-    public void update(List<ResolvedBaseVersion> resolvedBaseChain, int envVersionNumber,
+    /** Updates this binding's frozen chain/own-config version/timestamp in place (used-not-duplicated on repeat). */
+    public void update(List<ResolvedBaseVersion> resolvedBaseChain, int ownConfigVersionNumber,
                         long deployedAtUtcEpochMillis) {
         this.resolvedBaseChain = copyOf(resolvedBaseChain);
-        this.envVersionNumber = envVersionNumber;
+        this.ownConfigVersionNumber = ownConfigVersionNumber;
         this.deployedAtUtcEpochMillis = deployedAtUtcEpochMillis;
     }
 
-    /** True if this binding matches the given (projectKey, environment, buildVersion) tuple. */
-    public boolean matches(String projectKey, String environment, String buildVersion) {
-        return this.projectKey.equals(projectKey)
-                && this.environment.equals(environment)
-                && this.buildVersion.equals(buildVersion);
+    /** True if this binding matches the given buildVersion (a Run's own identity string). */
+    public boolean matches(String buildVersion) {
+        return this.buildVersion.equals(buildVersion);
     }
 
     /**
@@ -116,11 +110,20 @@ public class ConfigDeploymentBinding implements Serializable {
      */
     private Object readResolve() {
         if (resolvedBaseChain == null) {
+            // commonVersionNumber's own projectKey namesake no longer exists as a field on this class
+            // (removed with the 2026-09-14 re-key) — this pre-migration synthesis only ever needed
+            // commonVersionNumber itself, never projectKey, so the removal does not affect this
+            // branch's INTENT. It does affect the literal value, though: ResolvedBaseVersion's
+            // constructor has always required a non-null projectKey (an invariant this plan never
+            // touched), so passing the no-longer-available real value is not an option. A fixed
+            // placeholder is safe here — this synthesized single-entry chain exists purely for the
+            // deprecated getCommonVersionNumber()/getResolvedBaseChain() API-compat readers, which
+            // only ever read the versionNumber back out, never this placeholder projectKey string.
             List<ResolvedBaseVersion> migrated = commonVersionNumber > 0
-                    ? Collections.singletonList(new ResolvedBaseVersion(projectKey, commonVersionNumber))
+                    ? Collections.singletonList(new ResolvedBaseVersion("legacy", commonVersionNumber))
                     : Collections.emptyList();
-            return new ConfigDeploymentBinding(projectKey, environment, buildVersion, migrated,
-                    envVersionNumber, deployedAtUtcEpochMillis);
+            return new ConfigDeploymentBinding(buildVersion, migrated,
+                    ownConfigVersionNumber, deployedAtUtcEpochMillis);
         }
         return this;
     }

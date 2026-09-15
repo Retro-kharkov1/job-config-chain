@@ -17,41 +17,27 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Pipeline step {@code setupConfigTemplate(projectKey:, environment:, file:, redeployFromRun:,
- * useBase:, version:)} (FR-90). Stores its parameters scoped to the current build ({@link Run}) so a
- * subsequent same-build, zero/partial-argument {@code configTemplateValidate()}/
- * {@code configTemplateSubstitute()} call can read them back (FR-91/FR-93) — purely additive
- * convenience (FR-92): a Jenkinsfile that never calls this step behaves with zero change.
+ * Pipeline step {@code setupConfigTemplate(file:, useBase:, configKey:, version:, redeployFromRun:)}
+ * (FR-90). Stores its parameters scoped to the current build ({@link Run}) so a subsequent
+ * same-build, zero/partial-argument {@code configTemplateValidate()}/{@code configTemplateSubstitute()}
+ * call can read them back (FR-91/FR-93) — purely additive convenience (FR-92): a Jenkinsfile that
+ * never calls this step behaves with zero change.
+ *
+ * <p><b>Parameter shape (2026-09-14):</b> no {@code projectKey}/{@code environment} parameter exists
+ * here either, for the same reason there is none on the two steps this configures — see
+ * pipeline-steps.md's "Pipeline call resolution — the final parameter model". {@code configKey} is
+ * only meaningful together with {@code useBase: true}.</p>
  */
 public class SetupConfigTemplateStep extends Step {
 
-    private String projectKey;
-    private String environment;
     private String file;
     private String redeployFromRun;
     private Boolean useBase;
+    private String configKey;
     private Integer version;
 
     @DataBoundConstructor
     public SetupConfigTemplateStep() {
-    }
-
-    public String getProjectKey() {
-        return projectKey;
-    }
-
-    @DataBoundSetter
-    public void setProjectKey(String projectKey) {
-        this.projectKey = projectKey;
-    }
-
-    public String getEnvironment() {
-        return environment;
-    }
-
-    @DataBoundSetter
-    public void setEnvironment(String environment) {
-        this.environment = environment;
     }
 
     public String getFile() {
@@ -81,6 +67,19 @@ public class SetupConfigTemplateStep extends Step {
         this.useBase = useBase;
     }
 
+    public String getConfigKey() {
+        return configKey;
+    }
+
+    @DataBoundSetter
+    public void setConfigKey(String configKey) {
+        this.configKey = configKey;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
     @DataBoundSetter
     public void setVersion(int version) {
         this.version = version;
@@ -88,8 +87,7 @@ public class SetupConfigTemplateStep extends Step {
 
     @Override
     public StepExecution start(StepContext context) {
-        return new Execution(context, projectKey, environment, file, redeployFromRun,
-                useBase != null && useBase, version);
+        return new Execution(context, file, redeployFromRun, useBase != null && useBase, configKey, version);
     }
 
     static class Execution extends SynchronousStepExecution<Void> {
@@ -101,21 +99,19 @@ public class SetupConfigTemplateStep extends Step {
 
         private static final long serialVersionUID = 1L;
 
-        private final String projectKey;
-        private final String environment;
         private final String file;
         private final String redeployFromRun;
         private final boolean useBase;
+        private final String configKey;
         private final Integer version;
 
-        Execution(StepContext context, String projectKey, String environment, String file,
-                  String redeployFromRun, boolean useBase, Integer version) {
+        Execution(StepContext context, String file, String redeployFromRun, boolean useBase, String configKey,
+                  Integer version) {
             super(context);
-            this.projectKey = projectKey;
-            this.environment = environment;
             this.file = file;
             this.redeployFromRun = redeployFromRun;
             this.useBase = useBase;
+            this.configKey = configKey;
             this.version = version;
         }
 
@@ -133,12 +129,12 @@ public class SetupConfigTemplateStep extends Step {
             }
             Run<?, ?> run = getContext().get(Run.class);
             // addOrReplaceAction, not addAction: a build MAY legitimately call setupConfigTemplate()
-            // more than once (e.g. re-pointing to a different environment partway through a
+            // more than once (e.g. re-pointing to a different configKey partway through a
             // Jenkinsfile) — a second call must REPLACE the stored state, not leave two
             // ConfigTemplateSetupAction instances on the Run where run.getAction(Class) resolution
             // order would be an unspecified surprise.
-            run.addOrReplaceAction(new ConfigTemplateSetupAction(projectKey, environment, file,
-                    redeployFromRun, useBase, version));
+            run.addOrReplaceAction(new ConfigTemplateSetupAction(file, redeployFromRun, useBase, configKey,
+                    version));
             return null;
         }
     }

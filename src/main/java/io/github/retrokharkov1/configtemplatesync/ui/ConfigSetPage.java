@@ -67,9 +67,10 @@ import java.util.stream.Collectors;
  * and converts them into a structured {@code SaveOutcome}; {@link #doSubmitSave} re-throws that as a
  * {@link Failure} (Stapler renders it as a plain, clear error page — the classic path's only
  * consumer today is this class's own tests), while {@link #jsSave} surfaces it as an
- * {@code {ok:false, error:...}} response rendered into the {@code saveBanner} div (the client-side
- * inline marker + banner in the wireframe is the primary UX for catching this before submit; the
- * server-side path here is the non-bypassable backstop).</p>
+ * {@code {ok:false, error:...}} response surfaced via {@code window.notificationBar} (Jenkins core's
+ * native toast, replacing the earlier inline {@code #saveBanner} div, 2026-09-14) as a sticky error
+ * notification (the client-side inline marker + toast is the primary UX for catching this before
+ * submit; the server-side path here is the non-bypassable backstop).</p>
  */
 // NOTE: this class MUST be public. Jelly/JEXL's bean-property reflection (${it.exists},
 // ${it.versions}, etc.) invokes these public methods via plain java.lang.reflect.Method#invoke
@@ -114,6 +115,17 @@ public abstract class ConfigSetPage {
     public io.github.retrokharkov1.configtemplatesync.model.ConfigSetVersion getActiveVersion() {
         ConfigSet cs = getConfigSet();
         return cs == null ? null : cs.getActiveVersion();
+    }
+
+    /**
+     * The current secrets manifest, or an empty map for a Config Set that does not exist yet —
+     * identically-named counterpart to {@link ConfigTemplatesJobAction#getSecretsManifestForDisplay()}
+     * so {@code _shared/secretsManifestBlock.jelly} never needs to reach through a host-specific
+     * {@code configSet}/{@code property} accessor to read it.
+     */
+    public Map<String, String> getSecretsManifestForDisplay() {
+        ConfigSet cs = getConfigSet();
+        return cs == null ? Collections.emptyMap() : cs.getSecretsManifest();
     }
 
     /** Empty-content seed for a brand-new Config Set's editor (FR-1). */
@@ -262,17 +274,6 @@ public abstract class ConfigSetPage {
             }
 
             List<BaseConfigReference> baseChain = parseBaseChainOrFail(baseChainJson);
-
-            // FR-61: cross-chain type-consistency, UI path — ENV role only (a COMMON-role Config Set
-            // never has a baseChain per FR-53, so this check is structurally a no-op there; guarding
-            // on role keeps the intent explicit rather than relying on baseChain always being empty
-            // for COMMON).
-            if (getRole() == ConfigSetRole.ENV) {
-                List<BaseConfigReference> resolvedChain = baseChain.isEmpty()
-                        ? Collections.singletonList(BaseConfigReference.active(projectKey))
-                        : baseChain;
-                checkChainTypeConsistencyOrFail(resolvedChain);
-            }
 
             validateSyntaxOrFail(content, resolvedContentType);
 
@@ -506,7 +507,7 @@ public abstract class ConfigSetPage {
 
     /**
      * Non-throwing sibling of {@link #parseBaseChainOrFail} for endpoints that must never throw and
-     * instead report a structured {@code ok:false} (e.g. {@link EnvConfigSetPage}'s live merge
+     * instead report a structured {@code ok:false} (e.g. EnvConfigSetPage's live merge
      * preview) — reuses the single parsing implementation above rather than duplicating the
      * JSON-array-walk logic, catching the {@link Failure} it throws on malformed input.
      *
@@ -563,7 +564,7 @@ public abstract class ConfigSetPage {
      * renamed so their {@code do}-prefix-derived URL segment no longer collides with any
      * {@code @JavaScriptMethod} name on the same object ({@code doActivate} →
      * {@link #doActivateVersion(int)}, URL {@code activateVersion}; see the sibling methods below
-     * for the equivalent renames, and {@link EnvConfigSetPage#doComputeMerge(String)} for
+     * for the equivalent renames, and EnvConfigSetPage#doComputeMerge(String) for
      * {@code previewMerge}'s).</li>
      * </ol>
      */
@@ -576,7 +577,7 @@ public abstract class ConfigSetPage {
      * JS-proxy-facing sibling of {@link #doActivateVersion(int)} — see that method's javadoc for the
      * full root-cause chain. Exposed as {@code proxy.activate(...)}; takes a single JSON-string
      * payload ({@code {"version": N}}) rather than a plain {@code int} parameter, matching the one
-     * argument shape ({@link EnvConfigSetPage#jsPreviewMerge}) proven to bind reliably through this
+     * argument shape (EnvConfigSetPage#jsPreviewMerge) proven to bind reliably through this
      * Jenkins/Stapler version's JS-proxy dispatcher.
      */
     @JavaScriptMethod(name = "activate")
@@ -889,91 +890,19 @@ public abstract class ConfigSetPage {
     }
 
     /**
-     * AJAX (Stapler JS-proxy): generates a copy-paste-ready JSON template (FR-15, FR-40/41, FR-44)
-     * from the CURRENTLY ACTIVE version(s) of the relevant Config Set(s) — never an unsaved/
-     * in-progress editor buffer (FR-16). Shared, non-abstract on this base class (both scopes share
-     * identical permission-check/envelope/no-active-version-guard boilerplate); delegates the
-     * scope-specific computation to the abstract {@link #computeTemplate()} hook, implemented
-     * differently by {@link CommonConfigSetPage} (FR-15a) and {@link EnvConfigSetPage} (FR-15b) —
-     * mirroring the existing pattern where {@code getCommonConfigSet}/{@code previewMerge} live only
-     * on {@link EnvConfigSetPage}, not this shared base, because the two scopes genuinely compute
-     * differently.
-     *
-     * <p>Named {@code doRenderTemplate} (URL segment {@code renderTemplate}), deliberately NOT
-     * {@code doGenerateTemplate}, to avoid colliding with the
-     * {@code @JavaScriptMethod(name = "generateTemplate")} sibling below — see
-     * {@link #doActivateVersion(int)}'s javadoc for the full root-cause chain behind why that
-     * collision matters. {@code renderTemplate} and {@code generateTemplate} share no substring
-     * beyond "template," matching the deliberate word-choice divergence already used for the other
-     * three pairs (FR-44).</p>
-     *
-     * <p><b>{@code @StaplerDispatchable} required:</b> unlike its siblings ({@code
-     * doActivateVersion}, {@code doDiffVersions}, {@code doRegisterSecret}), this method has no
-     * {@code @QueryParameter}/{@code StaplerRequest} parameter to serve as Stapler's post-2.138.4/
-     * 2.154 "intended for routing" signal (see
-     * https://www.jenkins.io/doc/developer/handling-requests/actions/) — its zero-argument
-     * signature is a deliberate FR-16 guarantee (see {@link #jsGenerateTemplate()}'s javadoc), not
-     * an oversight, so the explicit {@code @StaplerDispatchable} opt-in is required instead of
-     * relying on an incidental parameter annotation.</p>
+     * Template-generation ({@code doRenderTemplate}/{@code jsGenerateTemplate}/
+     * {@code isTemplateAvailable}) is DELIBERATELY NOT shared on this base class anymore (owner
+     * requirement, 2026-09-12): {@link CommonConfigSetPage} keeps the original FR-15/FR-16
+     * "ACTIVE-version(s)-only, never a draft" contract (its own copy, unchanged behavior), while
+     * EnvConfigSetPage now generates from the CALLER'S current, possibly-unsaved
+     * override/base-chain draft — the same client-supplied inputs EnvConfigSetPage#doComputeMerge
+     * already accepts — so the "Generate Template" button can render unconditionally enabled even
+     * before any version has ever been saved. The two scopes' template-generation contracts are now
+     * genuinely different (one draft-aware, one not), so forcing them through one shared
+     * zero-argument method signature is no longer possible; each subclass owns its own
+     * doRenderTemplate/jsGenerateTemplate/isTemplateAvailable trio instead, mirroring how
+     * {@code getCommonConfigSet}/{@code previewMerge} already live only on EnvConfigSetPage.
      */
-    @jenkins.security.stapler.StaplerDispatchable
-    public JSONObject doRenderTemplate() {
-        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        return renderTemplateImpl();
-    }
-
-    /**
-     * JS-proxy-facing sibling of {@link #doRenderTemplate()}; exposed as
-     * {@code proxy.generateTemplate(...)}. See {@link #doActivateVersion(int)} javadoc for the
-     * naming-collision root cause this pair avoids.
-     *
-     * <p><b>Deliberately takes NO parameters</b> — the single strongest guarantee against
-     * accidentally reading a draft/unsaved buffer (FR-16): contrast directly with
-     * {@link EnvConfigSetPage#jsPreviewMerge}, whose entire purpose is to accept the caller's
-     * current, possibly-unsaved {@code overlayJson} text. There is no argument through which a
-     * draft could reach this method even by a future accidental edit — the method body has no such
-     * parameter to read from in the first place.</p>
-     */
-    @JavaScriptMethod(name = "generateTemplate")
-    public JSONObject jsGenerateTemplate() {
-        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        return renderTemplateImpl();
-    }
-
-    private JSONObject renderTemplateImpl() {
-        JSONObject result = new JSONObject();
-        if (getActiveVersionForTemplate() == null) {
-            // FR-40/41's "no active version" guard, re-asserted server-side (defense in depth —
-            // never trust the client-side disabled-button state alone).
-            result.put("ok", false);
-            result.put("error", "No active version yet — nothing to template.");
-            return result;
-        }
-        ContentType type = getTemplateContentType();
-        TreeNode template = computeTemplate();
-        result.put("ok", true);
-        result.put("contentType", type.name()); // NEW field — client picks Monaco's language mode
-        result.put("template", TreeFormats.forType(type).serialize(template)); // serialized text now, not a nested object
-        return result;
-    }
-
-    /** FR-15a on {@link CommonConfigSetPage} / FR-15b on {@link EnvConfigSetPage} — see each override's javadoc. */
-    abstract TreeNode computeTemplate();
-
-    /** The {@link ContentType} to serialize {@link #computeTemplate()}'s result in. */
-    abstract ContentType getTemplateContentType();
-
-    /** The version whose absence blocks generation (FR-40/41's disabled-button guard). */
-    abstract ConfigSetVersion getActiveVersionForTemplate();
-
-    /**
-     * Jelly-visible (must be public, see the class-level visibility note above): whether the
-     * "Generate Template" action should render enabled (FR-40/41 — disabled with a "no active
-     * version yet" label when there is nothing to template).
-     */
-    public final boolean isTemplateAvailable() {
-        return getActiveVersionForTemplate() != null;
-    }
 
     /**
      * Credential IDs available for the secrets-manifest picker (OQ-1): a real, existing Jenkins

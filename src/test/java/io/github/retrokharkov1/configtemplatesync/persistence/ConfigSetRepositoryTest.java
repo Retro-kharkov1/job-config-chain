@@ -21,33 +21,36 @@ public class ConfigSetRepositoryTest {
     public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Test
-    public void savesAndLoadsByProjectKeyAndRole() throws Exception {
+    public void savesAndLoadsByProjectKey() throws Exception {
+        // Rewritten (2026-09-14 full removal of ConfigSetRole.ENV): findEnv/listEnv no longer exist
+        // on ConfigSetRepository — only findCommon survives. The multi-Config-Set-per-projectKey
+        // shape this test proved (repository never confuses two persisted documents) is preserved by
+        // saving two DIFFERENT common Config Sets and confirming each loads independently instead.
         ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
 
         ConfigSet common = new ConfigSet("sample-app", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         common.addVersion("{\"a\":1}", "initial", "alice", 1L);
         repository.save(common);
 
-        ConfigSet env = new ConfigSet("sample-app", ConfigSetRole.ENV, "dev", "Dev", ContentType.JSON);
-        env.addVersion("{\"a\":2}", "dev override", "bob", 2L);
-        repository.save(env);
+        ConfigSet other = new ConfigSet("sample-app-other", ConfigSetRole.COMMON, null, "Other Common", ContentType.JSON);
+        other.addVersion("{\"a\":2}", "other seed", "bob", 2L);
+        repository.save(other);
 
         ConfigSet loadedCommon = repository.findCommon("sample-app");
-        ConfigSet loadedEnv = repository.findEnv("sample-app", "dev");
+        ConfigSet loadedOther = repository.findCommon("sample-app-other");
 
         assertNotNull(loadedCommon);
         assertEquals("sample-app", loadedCommon.getProjectKey());
         assertEquals(1, loadedCommon.getVersions().size());
 
-        assertNotNull(loadedEnv);
-        assertEquals("dev", loadedEnv.getEnvironment());
+        assertNotNull(loadedOther);
+        assertEquals("sample-app-other", loadedOther.getProjectKey());
     }
 
     @Test
     public void findReturnsNullWhenNoSuchConfigSetPersisted() throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
         assertNull(repository.findCommon("does-not-exist"));
-        assertNull(repository.findEnv("does-not-exist", "dev"));
     }
 
     @Test
