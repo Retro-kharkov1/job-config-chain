@@ -1,60 +1,49 @@
 # Config Template Sync
 
-A Jenkins plugin that keeps a nested, structured config-token store (split into one **common**
-layer and per-environment **env** overlays) structurally in sync with `#{Dotted.Path}#`
-placeholder tokens in a target application config file (e.g. `appsettings.json`,
-`application.yml`). It validates drift between the store and the file before a deploy, and
-substitutes real values into the file at deploy time — without an external database and without a
-git-backed store; everything is persisted natively under `$JENKINS_HOME`.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=github-sponsors)](https://github.com/sponsors/Retro-kharkov1)
 
-## Domain model
+A Jenkins plugin for **job-scoped configuration management** with **base-chain composition**,
+**secrets binding**, and **build-identity pinning** for safe rollback. It keeps a nested,
+structured config-token store (a shared **common** layer plus per-Job overrides) structurally in
+sync with `#{Dotted.Path}#` placeholder tokens in a target application config file (e.g.
+`appsettings.json`, `application.yml`). It validates drift between the store and the file before a
+deploy, and substitutes real values into the file at deploy time — without an external database
+and without a git-backed store; everything is persisted natively under `$JENKINS_HOME`.
 
-- **Config Set** — a named, versioned collection of configuration, either `common` (full nested
-  baseline) or `env` (a sparse overlay for one environment). A common Config Set and its env Config
-  Sets are tied together structurally by a shared `projectKey`, never by free-text name matching.
-- **Config Set Version** — an immutable, append-only snapshot (content, author, timestamp, a
-  mandatory non-empty change note). Version numbers are monotonically increasing and never reused.
-  Exactly one version per Config Set is "active" at a time; activating a version is a pure metadata
-  flip and never triggers a live deploy by itself.
-- **Effective Configuration** — the env layer's active/pinned content applied as an
-  [RFC 7396 JSON Merge Patch](https://www.rfc-editor.org/rfc/rfc7396) on top of the common layer's
-  active/pinned content. Always computed on demand, never persisted as a separate copy.
-- **Deployment Binding** — records exactly which common/env version numbers were used the last time
-  a given build/version identifier was substituted for real, so a later rollback of the application
-  build can replay the same config it originally shipped with. Pinning via a Deployment Binding is
-  opt-in: it only applies when the caller explicitly passes `buildVersion` to the substitute step.
+## ☕ Support this project
 
-## Known limitation: arrays are replaced wholesale, never merged element-by-element
+If this plugin saves you time, consider supporting its development:
 
-RFC 7396 JSON Merge Patch has a well-known limitation with JSON arrays: a patch always replaces an
-array value wholesale, it never merges array elements one-by-one. This plugin inherits that
-limitation as-is and does not attempt to work around it in this version — if an env-layer overlay
-sets a path whose value is an array, that array entirely replaces whatever array (or other value)
-was at that path in the common layer's content. There is no per-element override mechanism. Model
-array-valued settings accordingly (e.g. prefer an object keyed by a stable identifier over an array
-of objects, if you need per-environment element-level overrides).
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=github-sponsors)](https://github.com/sponsors/Retro-kharkov1)
 
-## Pipeline steps
+- **Buy Me a Coffee:** <!-- TODO: add handle once created -->
+- **USDT (crypto donation):** <!-- TODO: add wallet address once created -->
 
-- `configTemplateValidate(projectKey, environment, file)` — fails the build, naming every
-  placeholder token in `file` that has no matching key in the effective configuration ("missing").
-  A key in the effective configuration with no matching token in `file` ("orphaned") only produces
-  a warning, it never fails the build.
-- `configTemplateSubstitute(projectKey, environment, file, buildVersion)` — `buildVersion` is
-  optional. Re-runs the same drift check as `configTemplateValidate` as a defensive re-check, then
-  resolves the effective configuration (pinned to a prior Deployment Binding if `buildVersion`
-  matches one, otherwise the currently active versions — with an explicit log line if a
-  `buildVersion` was given but no binding was found), substitutes every `#{Dotted.Path}#` token in
-  `file`, and fails if any token-shaped text remains afterward. Any dotted path declared secret in
-  the common and/or env Config Set's secrets manifest has its real value resolved **exclusively**
-  from the Jenkins credential ID declared for that path — via `CredentialsProvider.findCredentialById`
-  scoped to the running build — never from an env var or the stored placeholder text; if the
-  declared credential does not resolve (missing, or this build isn't permitted to use it) the build
-  fails loudly naming the credential ID, it never substitutes a placeholder or empty value. Non-secret
-  paths keep the simpler behavior: an env var whose name matches the dotted path wins if present,
-  otherwise the flattened effective-config value is used.
+## Screenshots
 
-## Building and versioning
+![Global Config Sets list](docs/screenshots/01-global-config-sets-list.png)
+*Global admin list of Config Sets — every Common Config Set registered on this Jenkins instance.*
+
+![Common Config Set editor](docs/screenshots/02-common-config-editor.png)
+*Editing a Common Config Set's nested content, version history, and secrets manifest.*
+
+![Job-scoped Config Templates editor](docs/screenshots/03-job-scoped-editor.png)
+*A Job's own `/configTemplates` page — its base chain plus its own override content, side by side.*
+
+![Expanded base-chain row](docs/screenshots/04-base-chain-expanded-row.png)
+*A base-chain entry expanded to show the resolved content of the referenced Common Config Set.*
+
+![Live merge preview](docs/screenshots/05-merge-preview.png)
+*The debounced three-panel RFC 7396 merge preview — merged bases, own override, merged result.*
+
+![Build console showing resolution-mode wording](docs/screenshots/06-build-console-resolution-mode.png)
+*A build console log naming exactly which resolution-matrix row a pipeline call hit.*
+
+![Native save toast notification](docs/screenshots/07-native-toast-notification.png)
+*A native Jenkins toast confirming a successful save.*
+
+## Install / build
 
 Build with the bundled Maven Wrapper — no separate script or CI platform required:
 
@@ -67,15 +56,8 @@ The wrapper computes the plugin's version from git history via the
 [GitVersion](https://gitversion.net/) CLI (`dotnet-gitversion`, config in `GitVersion.yml`) before
 delegating to Maven, and passes it as `-Drevision=<computed SemVer>` (Maven's
 [CI Friendly Versions](https://maven.apache.org/maven-ci-friendly.html) mechanism — see `pom.xml`).
-This only affects the version of the artifact produced by a **local** build; it has no dependency on
-any CI platform and does not decide where or when the plugin gets deployed. If `dotnet-gitversion` is
-not installed, the build still succeeds and falls back to the default `revision` in `pom.xml`
-(`0.0.0-SNAPSHOT`).
-
-Invoking the raw `mvn` binary directly (bypassing the wrapper) also works, but without automatic
-version computation — Maven resolves `${revision}` while building the reactor's project model, before
-any plugin execution runs, so it cannot be set from inside the build itself; only the wrapper (or an
-explicit `-Drevision=...` flag) can supply it in time.
+If `dotnet-gitversion` is not installed, the build still succeeds and falls back to the default
+`revision` in `pom.xml` (`0.0.0-SNAPSHOT`).
 
 ### Zero-host-tooling option: Docker build
 
@@ -87,176 +69,481 @@ If you don't want to install Java, Maven, or the GitVersion CLI on your machine 
 docker-build.cmd       # Windows cmd.exe
 ```
 
-This runs the exact same two logical steps as `mvnw`/`mvnw.cmd`, just inside containers instead of on
-the host:
+This runs the exact same two logical steps as `mvnw`/`mvnw.cmd`, just inside containers instead of
+on the host: [`gittools/gitversion`](https://gitversion.net/docs/usage/docker) computes the SemVer,
+then the official `maven` image (`eclipse-temurin-11`) runs `mvn -Drevision=<computed SemVer> clean
+verify`. `target/config-template-sync.hpi` lands on the **host** filesystem at the same path either
+way, since the repo directory is bind-mounted (not copied) into both containers.
 
-1. [`gittools/gitversion`](https://gitversion.net/docs/usage/docker) (the official GitVersion Docker
-   image) computes the SemVer from this repo's git history, mounted read/write at `/repo`.
-2. The official `maven` image (`eclipse-temurin-11` variant, matching this project's
-   `<java.level>11</java.level>` in `pom.xml`) runs `mvn -Drevision=<computed SemVer> clean verify`
-   against the same mounted repo.
+### Installing the built `.hpi`
 
-Both steps run as **two sequential `docker run` commands**, not a single `docker-compose.yml` —
-compose services have no built-in way to capture one service's stdout and inject it as a `-D`
-argument into a second service's command, and `${revision}` must be known before Maven starts (see
-the note above), so a plain script that captures GitVersion's output into a shell variable and passes
-it to the Maven container is the reliable mechanism.
+Manual upload: Manage Jenkins → Plugins → Advanced settings → Deploy Plugin → select
+`target/config-template-sync.hpi`.
 
-`target/config-template-sync.hpi` lands on the **host** filesystem at the same path the `mvnw`/
-`mvnw.cmd` path already produces it at (the repo directory is bind-mounted into both containers, not
-copied in/out) — so anything downstream that expects it there (e.g. Docker-Jenkins e2e testing of
-this plugin) keeps working unchanged.
+A self-hosted private Update Center (search-and-install like an official plugin) is also supported
+— see the update-center scripts under `distribution/` if you want that flow instead of manual
+upload.
 
-## Installing through Jenkins' normal Update Center / Plugin Manager flow
+## Quick start
 
-Beyond manual `.hpi` upload (Manage Jenkins → Plugins → Advanced settings → Deploy Plugin), this
-plugin can be installed the same way official plugins are — search-and-install from "Available
-plugins" — by pointing a Jenkins instance at a **self-hosted private Update Center** instead of
-(or in addition to) the default `updates.jenkins.io`.
+1. **Create a Config Key (Common Config Set).** On the global `/configTemplates` page, add a new
+   Common Config Set (e.g. `sample-app`), give it its nested baseline content (e.g.
+   `{"Database":{"Host":"db.internal"}}`), mark any secret leaves and bind them to a Jenkins
+   credential ID, then save a version and activate it.
+2. **Attach the Job's own Config Templates page.** On the target Job, open
+   `/job/<name>/configTemplates`. Add a base-chain entry referencing the Config Key you just
+   created (`ACTIVE`, or pinned to a specific version), optionally add this Job's own override
+   content (e.g. `{"Own":{"Override":"own-value"}}`), and save a version.
+3. **Write a minimal Jenkinsfile** calling the pipeline steps:
 
-### How the official public Update Center actually works (for later reference — not done in this
-### pass)
+   ```groovy
+   pipeline {
+     agent any
+     stages {
+       stage('Prepare config') {
+         steps {
+           configTemplateValidate(file: 'app.json')
+           configTemplateSubstitute(file: 'app.json')
+         }
+       }
+     }
+   }
+   ```
 
-Grounded in the official Jenkins developer docs:
-[Source Code Hosting](https://www.jenkins.io/doc/developer/publishing/source-code-hosting/),
-[Guide to Plugin Hosting](https://www.jenkins.io/doc/developer/publishing/requesting-hosting/),
-[Setting up plugin releases through GitHub](https://www.jenkins.io/doc/developer/publishing/releasing-cd/).
+   `configTemplateValidate` fails the build if `app.json` references a `#{Path}#` token with no
+   matching key in the effective (merged) configuration. `configTemplateSubstitute` then resolves
+   secrets from their bound Jenkins credentials and substitutes every token in place.
 
-`updates.jenkins.io` is generated from artifacts released to Jenkins' own Artifactory
-(`repo.jenkins-ci.org`), which in turn requires:
+## Pipeline step reference
 
-1. **A public GitHub repository** — the Jenkins project only hosts free/open-source plugins under
-   an OSI-approved license; the repo must already be public before requesting hosting.
-2. **A hosting request** — a GitHub issue filed in `jenkins-infra/repository-permissions-updater`
-   using its hosting-request template, reviewed by the Jenkins Hosting team (turnaround: days,
-   with a back-and-forth if changes are requested).
-3. **A fork into the `jenkinsci` GitHub org** — once approved, the repo is forked into `jenkinsci`
-   (maintainer keeps admin access there), and the original repo is expected to be deleted (a
-   `jenkinsci`-owned fork can later be re-forked back out to keep one canonical location).
-4. **Release permissions on Jenkins' Artifactory** — usually granted automatically by the hosting
-   PR; otherwise requested separately via the `repository-permissions-updater` repo.
-5. **A release mechanism** — the current recommended approach is the GitHub Actions **CD
-   (Continuous Delivery)** workflow: any successful `ci.jenkins.io` build of the default branch can
-   cut a new release automatically (using Maven CI-friendly incremental versions like
-   `123.vabcdef456789`, not `maven-release-plugin`), triggered by labeled, merged PRs — no manual
-   `mvn release:prepare/perform` or local credentials needed. This requires re-adding a CI platform
-   (GitHub Actions) to the repo, which this project deliberately removed for local, CI-independent
-   builds (see "Building and versioning" above) — a real, explicit trade-off to make consciously
-   before pursuing this path, not something to slip in silently.
+### Parameters
 
-None of this is executed in this pass — this plugin is personal and currently private, which is
-incompatible with step 1 above. This is documented here purely as the known "what it would take
-later" checklist once/if the plugin is made public and mature enough to seek official hosting.
+`configTemplateValidate` / `configTemplateSubstitute` take:
 
-### The self-hosted private Update Center (set up in this pass)
+| Parameter | Type | Meaning |
+|---|---|---|
+| `file` | String, **always required** | Path to the target config file to validate/substitute. |
+| `useBase` | boolean, default `false` | When `true`, resolves the base chain only (own override ignored), or redirects to a named global Config Set when `configKey` is also given. |
+| `configKey` | String, optional | Only valid together with `useBase: true`. Names a global COMMON Config Set to resolve directly, independent of the calling Job's own base chain. |
+| `version` | int, optional | Pins a specific version instead of the currently ACTIVE one. Meaning depends on the other parameters — see the matrix below. |
+| `redeployFromRun` | int or `<jobFullName>#<buildNumber>`, optional (`configTemplateSubstitute` only) | Replays a different Run's frozen Deployment Binding byte-identically, for rollback. |
 
-Any Jenkins instance can point at **any** update site URL, not just the official one (Manage
-Jenkins → Plugins → Advanced settings → **Update Site**), as long as that URL serves a correctly
-shaped `update-center.json`. Grounded against `jenkinsci/jenkins` core source
-(`hudson/model/UpdateSite.java`, `hudson/model/DownloadService.java` — no single jenkins.io page
-documents the exact JSON field shapes precisely, so this was verified directly against the
-parsing code, including two real bugs hit and worked around below) and the
-[site layout reference](https://github.com/jenkins-infra/update-center2/blob/master/site/LAYOUT.md):
+There is no `environment` parameter — every call resolves, by construction, against the **calling
+Job's own attached local config**, unless `useBase: true` + `configKey` explicitly redirects to a
+named global Config Set.
 
-- `sha1`/`sha256` in a plugin entry must be the **Base64-encoded** binary digest (not hex).
-- Every object in a plugin's `dependencies` array **must include an explicit `"optional"` field**
-  as the literal string `"true"` or `"false"` — omitting it crashes `UpdateSite.getData()` with an
-  uncaught `NullPointerException` the moment Jenkins tries to read the site
-  (`UpdateSite.Plugin`'s constructor calls `get(depObj, "optional").equals("false")` with no null
-  guard). This was hit and fixed while building this site — see
-  `distribution/generate_update_center.py`.
-- The file can be **plain JSON** (`DownloadService#loadJSON` slices between the first `{` and last
-  `}`, so a legacy `updateCenter.post(...)` JSONP wrapper is optional, not required).
-- By default Jenkins **verifies a cryptographic signature** on every update site's JSON
-  (`hudson.model.DownloadService.signatureCheck`, source: `DownloadService.java`). This site is
-  served as plain unsigned JSON (no RSA/X.509 signing pipeline for a single personal plugin), so
-  any Jenkins instance consuming it must start with
-  `-Dhudson.model.DownloadService.noSignatureCheck=true` on the JVM. This disables signature
-  checking for **every** configured update site on that instance, including the default one — an
-  acceptable trade-off for a personal/internal instance, but call it out explicitly before applying
-  it to a shared production master.
+### Resolution matrix
 
-**Regenerating the site after a build:**
+| `useBase` | `configKey` | `version` | Resolves to |
+|---|---|---|---|
+| `false` | — | — | Job's own local config, ACTIVE version, full effective content (own override + its folded base chain) |
+| `false` | — | `N` | Job's own local config, version `N`, full effective content of that version |
+| `false` | given | any | **fail-loud** — `configKey` only valid together with `useBase: true` |
+| `true` | — | — | Job's own local config, ACTIVE version's folded base chain only (own override content ignored) |
+| `true` | — | `N` | Job's own local config, version `N`'s own recorded base chain folded (that version's own override ignored) — unambiguous regardless of chain length |
+| `true` | `X` | — | Global COMMON Config Set named `X`, its ACTIVE version — direct global lookup by name, NOT required to be present in the Job's own base chain |
+| `true` | `X` | `N` | Global COMMON Config Set named `X`, pinned to version `N` |
 
+### Isolation rule
+
+A call can **never** reach another Job's own attached local config, by any parameter, under any
+composition — full stop. The only things any call can ever reach are (a) the calling Job's own
+local config, and (b) any global COMMON-role Config Set, named directly via `configKey` or
+referenced in the Job's own base chain. There is no parameter that names a target Job, so this
+isolation is structural, not a runtime check that could be bypassed.
+
+### Jenkinsfile Map-parameter convention
+
+A single Map built once and passed as the step's sole argument — `file` lives in the same map, not
+appended separately:
+
+```groovy
+def cfg = [
+    file: 'app.json',
+    useBase: true,
+    version: 5
+    // configKey: 'shared-database',   // optional, only meaningful together with useBase: true
+]
+configTemplateValidate(cfg)
+configTemplateSubstitute(cfg)
 ```
-mvnw.cmd clean package -DskipTests            # or ./mvnw for a full `verify` once tests are green
-python3 distribution/generate_update_center.py \
-  --hpi target/config-template-sync.hpi \
-  --base-url "https://github.com/Retro-kharkov1/config-template-sync/releases/download/vVERSION" \
-  --out distribution/site/update-center.json
+
+`setupConfigTemplate(file:, useBase:, configKey:, version:, redeployFromRun:)` is a build-scoped
+convenience alternative: call it once, and any later zero-argument (or partial) call to
+`configTemplateValidate()`/`configTemplateSubstitute()` in the same build reads whichever parameter
+it wasn't itself given from the stored state. Explicit call-site parameters always override stored
+setup state, per parameter. `setupConfigTemplate` is rejected inside a `parallel {}` block (its
+build-scoped state would be ambiguous across concurrently-running branches); the two other steps
+remain fully safe inside `parallel {}` when called with their own full explicit parameters.
+
+### Fail-loud paths
+
+- **`configKey` without `useBase: true`:**
+  `[configTemplateSync] 'configKey' ('<value>') is only valid together with useBase: true — remove
+  'configKey', or add 'useBase: true' to this call.`
+- **`configKey` names a Config Set that doesn't exist:**
+  `[configTemplateSync] No global COMMON Config Set found for configKey '<value>'.`
+- **`file` missing from both the call site and any prior `setupConfigTemplate` call:** an
+  `AbortException` naming `file` as the missing required parameter.
+- **Missing-key drift (fatal, `configTemplateValidate`):** `Missing config keys — target file
+  '<file>' (Job='<jobFullName>', resolved via <resolution mode>) references <N> token(s) with no
+  matching key in the effective configuration: <list>. Check for a typo in the token's dotted
+  path, or add this key to the resolved source described above.`
+- **Orphaned-key drift (non-fatal, warning only):** `Orphaned config keys — Job='<jobFullName>',
+  resolved via <resolution mode>: the effective configuration has <N> key(s) with no matching token
+  in target file '<file>': <list>. This is not a failure, but likely means either the key is
+  genuinely unused or the token was removed from the file without removing the key.`
+- **Unresolved token remains after substitution:** the substitute step fails loudly rather than
+  leaving `#{...}#`-shaped text in the output file.
+- **Missing secret credential:** the build fails loudly naming the credential ID; it never
+  substitutes a placeholder or empty value.
+
+### Build-pinning and reproducibility
+
+On every successful real substitution, the plugin creates or updates a **Deployment Binding**,
+keyed purely by the current Run's own identity (`run.getExternalizableId()`) — default-on, no
+opt-in flag. The binding freezes the exact resolved base-chain version numbers and own-config
+version used.
+
+- **Same-Run replay:** a second (or later) real-substitution call within the *same* Run reuses that
+  Run's already-written binding instead of re-resolving `ACTIVE`/`PINNED` references live —
+  guaranteeing every call within one build sees the identical effective configuration, even if a
+  base Config Set's active version changes mid-build.
+- **`redeployFromRun` cross-Run replay:** `configTemplateSubstitute(..., redeployFromRun:
+  <build-number-or-jobFullName#buildNumber>)` looks up the Deployment Binding of the **target**
+  Run (not the current one) and substitutes using its frozen chain — byte-identical to the target
+  Run's original output, even if a referenced base Config Set's active version has since changed.
+  The current Run also gets its own fresh binding written, so a future rollback can chain forward
+  and target it too. If no binding exists for the resolved target, the step falls back to the
+  current Job's own live base chain and says so loudly in the build log, naming the unresolved
+  value — it never aborts nor silently substitutes the target's current live-active config.
+- An explicit `version` parameter always suppresses binding lookup/write for that call — a
+  deliberate one-off version override must never corrupt a Run's own natural binding history.
+
+## Use cases
+
+The full use-case catalog below (`UF-1`–`UF-23`) enumerates every distinct scenario a pipeline
+author or operator can hit. Screenshots referenced inline point back to the
+[Screenshots](#screenshots) section above.
+
+### UF-1 — DevOps engineer adds a new config key
+
+A DevOps engineer edits a Config Set's content (common or Job-scoped), adds a new key at the
+correct nested path, marks it secret/non-secret (supplying a Jenkins credential ID if secret —
+never a real value), and saves a new version with a mandatory change note.
+
+*Example:* open a Common Config Set → add `Feature.NewFlag: true` → save with change note "Add new
+feature flag" → optionally activate immediately. Screenshot: [Common Config Set
+editor](docs/screenshots/02-common-config-editor.png).
+
+*Outcome:* a new, versioned snapshot exists; "Generate template" returns the same key rendered as
+`#{Feature.NewFlag}#`, ready to paste into the app's config file.
+
+### UF-2 — Application developer needs the exact template to paste into their app's config file
+
+The developer (or the DevOps engineer on their behalf) requests the generated template for the
+relevant scope and pastes the returned block verbatim into the target config file.
+
+*Example:* "Generate template" on a Common Config Set returns
+`{"Database":{"Host":"#{Database.Host}#"}}`, pasted directly into `appsettings.Production.json`.
+
+*Outcome:* zero hand-typed tokens — the token text is copy-pasted from the system's own output,
+eliminating typo drift.
+
+### UF-3 — Deploy pipeline validates config drift before deploying
+
+The pipeline calls `configTemplateValidate(file: 'app.json')` before any real substitution.
+
+*Example:*
+```groovy
+configTemplateValidate(file: 'app.json')
 ```
+If `app.json` contains `#{doesNotExist}#` with no matching key, the build fails naming
+`doesNotExist`. If the effective configuration has an unused key, the build succeeds with a
+`[WARN]` naming it. See [UF-23](#uf-23--missing-key-drift-fails-the-build-naming-the-token-orphaned-key-drift-warns-without-failing)
+for the exact wording of both outcomes, and the console screenshot:
+[build console](docs/screenshots/06-build-console-resolution-mode.png).
 
-The script reads the plugin name/version/required-core/dependencies straight out of the built
-`.hpi`'s own `META-INF/MANIFEST.MF` (so the JSON can never drift from the artifact it describes)
-and computes the Base64 sha1/sha256 itself.
+*Outcome:* the pipeline proceeds only when no token is left unresolvable.
 
-**Where the `.hpi` + `update-center.json` are actually served from:** GitHub Release assets on
-this repo (`https://github.com/Retro-kharkov1/config-template-sync/releases`) — chosen over GitHub
-Pages because Release assets give a stable, directly-fetchable URL per version with zero extra
-hosting/build step, whereas Pages would need a publishing job to keep a served directory in sync.
-To cut a release: tag the commit (e.g. `git tag v0.1.0 && git push origin v0.1.0`), build, run the
-generator with `--base-url` pointing at that tag's release-download path, then create a GitHub
-Release for that tag in the UI and attach `target/config-template-sync.hpi` and
-`distribution/site/update-center.json` as release assets.
+### UF-4 — Deploy pipeline substitutes real values at deploy time
 
-**Point a Jenkins instance at it:** Manage Jenkins → Plugins → Advanced settings → Update Site →
-add
-`https://github.com/Retro-kharkov1/config-template-sync/releases/latest/download/update-center.json`
-(GitHub's `.../releases/latest/download/<asset>` alias always resolves to the most recent
-release's matching asset, so this URL never needs to change between versions) → Submit → Check now.
-The plugin then appears in **Available plugins** and installs through the normal
-search-and-install flow, the same as any plugin from the official Update Center.
+After validation passes, the pipeline calls `configTemplateSubstitute(file: 'app.json')`.
 
-#### ⚠️ Private-repo blocker (real, not glossed over)
+*Example:*
+```groovy
+configTemplateSubstitute(file: 'app.json')
+```
+*Outcome:* every `#{Path}#` token in `app.json` is replaced with its real value (secrets resolved
+from their bound Jenkins credential, never from a stored placeholder), a Deployment Binding is
+written recording exactly which versions were used, and the pipeline proceeds to deploy the
+substituted file.
 
-This repository is currently **private**. GitHub Release assets and raw file URLs on a private
-repo return `404`/`401` to an unauthenticated request — confirmed directly
-(`curl -s https://api.github.com/repos/Retro-kharkov1/config-template-sync` → `404 Not Found` with
-no credentials). Stock Jenkins' Update Center fetcher makes a plain unauthenticated HTTP `GET`; it
-has no mechanism to attach a GitHub token to that request. **Practically, this means the update
-site above only works for the owner's own authenticated tooling/local testing today — it does not
-work for any other Jenkins instance until this repository is made public.** The project's earlier
-stated plan was to go public "once the MVP is proven" — whether that bar is met is the owner's
-call, not something flipped automatically here; this update-center setup is real and tested (see
-below) but only becomes broadly useful once the repo's visibility changes.
+### UF-5 — Operator rolls back a bad config change
 
-#### Verified end-to-end, locally
+The operator opens the relevant Config Set's version history and clicks "Activate" on a prior
+version.
 
-Using `distribution/docker-compose.update-center-test.yml` (a disposable static file server
-serving `distribution/site/` + a throwaway `jenkins/jenkins:lts-jdk17` container, standing in for
-the not-yet-reachable GitHub Release URLs), this was actually run against a real Jenkins instance:
+*Example:* on a Common Config Set's edit page, select version 3 in the history table → Activate.
+The active pointer flips from version 4 back to version 3; no content is duplicated.
 
-1. Registered the custom update site pointed at the local static server.
-2. Confirmed `config-template-sync` appeared in `Available plugins`
-   (`/updateCenter/api/json` `availables` list) with the correct version, checksum-bearing entry,
-   and dependencies.
-3. Triggered install through `pluginManager/installNecessaryPlugins` (the same endpoint the
-   "Install" button in the UI calls) — Jenkins auto-resolved `workflow-step-api` and `credentials`
-   from the default `updates.jenkins.io` site and installed `config-template-sync` from this site,
-   with **no manual `.hpi` upload**.
-4. Confirmed the plugin was `active: true`, `enabled: true` via `pluginManager/api/json`.
-5. Also verified the negative case: pointing the site at the (currently 404) real GitHub Release
-   URL produces exactly the `Failed to download from https://...` install failure predicted by the
-   private-repo blocker above — i.e. the blocker isn't theoretical, it reproduces.
+*Outcome:* the system confirms which version is now active and shows a diff versus what was active
+a moment ago. Activation never triggers a live deploy by itself — the operator must separately
+trigger a new deploy for the rollback to reach the running server.
 
-Run it yourself: `docker compose -f distribution/docker-compose.update-center-test.yml up -d`, then
-Jenkins is at `http://localhost:8080` (no login — setup wizard is skipped for this disposable
-container) and the static site at `http://localhost:8090/update-center.json`.
+### UF-6 — Operator rolls back a server to an older build and needs the matching old config to come back automatically
 
-## Admin UI
+The operator redeploys (or reactivates) an older build/version identifier through the normal
+deploy pipeline, using `redeployFromRun`.
 
-A full Stapler/Jelly admin UI is implemented (not out of scope): `/configTemplates` lists Config
-Projects; each project has a common edit page and one edit page per environment. Both edit pages
-share the same Monaco-based JSON editor (with an in-place Compare/diff mode against any two prior
-versions), version-history table with per-version Activate/rollback, and a "Secrets manifest"
-section for binding a dotted path to a real, currently-registered Jenkins credential (picked from a
-`<select>`, never typed free-text). The env-level page additionally shows a read-only preview of the
-paired common Config Set's active content and a live, debounced three-panel RFC 7396 merge preview.
+*Example:*
+```groovy
+configTemplateSubstitute(file: 'app.json', redeployFromRun: 42)
+```
+*Outcome:* if a Deployment Binding exists for build #42, substitution uses that binding's pinned
+versions — not whatever is currently "active." If no binding exists, the system falls back to
+currently-active and says so explicitly in the log.
 
-## Explicitly out of scope for this milestone
+### UF-7 — Default call resolves the calling Job's own active config (matrix row 1)
 
-No version-history retention/pruning policy (history is kept indefinitely by design — see the
-project's requirements documentation for the reasoning), and no template-generation entry point
-(FR-15/FR-16) yet. The private Update Center above is now in place; making the repository public
-(required for it to work beyond local/owner testing) and pursuing official `jenkinsci`-org hosting
-remain explicit follow-ups for the owner to decide on.
+*Trigger:* only `file` is supplied — no `useBase`, `configKey`, or `version`.
+
+*Example:* a Job's own config has one base-chain entry (`matrixdemo-base-db`@ACTIVE) plus its own
+override `{"Own":{"Override":"own-v2-override-value"}}`:
+```groovy
+configTemplateSubstitute(file: 'app.json')
+```
+*Outcome:* both `Own.Override` (from the Job's own content) and `Database.Host` (from the folded
+base) land in the substituted file. Demonstrated live by `config-template-sync-matrix-demo`, build
+#1 ("ROW1-DEFAULT"). Screenshot: [job-scoped editor](docs/screenshots/03-job-scoped-editor.png).
+
+### UF-8 — Version-pinned own-config call (matrix row 2)
+
+*Trigger:* `version: N` supplied, `useBase` omitted/`false`, `configKey` omitted.
+
+*Example:*
+```groovy
+configTemplateSubstitute(file: 'app.json', version: 1)
+```
+*Outcome:* resolves version 1's own content and its own recorded base chain exactly as saved,
+regardless of whichever version is active today. Demonstrated live by
+`config-template-sync-matrix-demo`, build #2 ("ROW2-VERSION-PIN").
+
+### UF-9 — `useBase`-only call resolves the Job's own active chain, override ignored (matrix row 4)
+
+*Trigger:* `useBase: true`, `configKey` and `version` both omitted.
+
+*Example:*
+```groovy
+configTemplateSubstitute(file: 'app.json', useBase: true)
+```
+*Outcome:* resolves `Database.Host` from the base chain but leaves `Own.Override` absent — visibly
+different from UF-7's output for the identical Job/version. Demonstrated live by
+`config-template-sync-matrix-demo`, build #3 ("ROW4-USEBASE").
+
+### UF-10 — `useBase` + `version`, no `configKey`: pinned own-version's own chain, any length (matrix row 5)
+
+*Trigger:* `useBase: true` and `version: N` supplied together, `configKey` omitted.
+
+*Example:*
+```groovy
+configTemplateSubstitute(file: 'app.json', useBase: true, version: 1)
+```
+*Outcome:* folds version 1's own 2-entry chain (`matrixdemo-base-db`, `matrixdemo-base-logging`),
+producing both `Database.Host` and `Logging.Level` — proving a multi-entry chain pins cleanly.
+Demonstrated live by `config-template-sync-matrix-demo`, build #4
+("ROW5-USEBASE-VERSION-PIN"). Screenshot: [expanded base-chain
+row](docs/screenshots/04-base-chain-expanded-row.png).
+
+### UF-11 — `useBase` + `configKey`: direct global lookup by name, ACTIVE (matrix row 6)
+
+*Trigger:* `useBase: true`, `configKey: 'X'` supplied, `version` omitted.
+
+*Example:* `unrelated-shared-config` is never referenced by the calling Job's own chain at all:
+```groovy
+configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'unrelated-shared-config')
+```
+*Outcome:* still resolves it directly, returning its ACTIVE content — chain membership is not
+required. Demonstrated live by `config-template-sync-matrix-demo`, build #5
+("ROW6-USEBASE-CONFIGKEY").
+
+### UF-12 — `useBase` + `configKey` + `version`: direct global lookup, pinned (matrix row 7)
+
+*Trigger:* `useBase: true`, `configKey: 'X'`, and `version: N` all supplied.
+
+*Example:*
+```groovy
+configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'unrelated-shared-config', version: 1)
+```
+*Outcome:* resolves `Shared.Value` from version 1 — visibly different from UF-11's ACTIVE (v2)
+output for the identical `configKey`. Demonstrated live by `config-template-sync-matrix-demo`,
+build #6 ("ROW7-USEBASE-CONFIGKEY-VERSION-PIN").
+
+### UF-13 — `configKey` supplied without `useBase: true` fails loud (matrix row 3)
+
+*Trigger:* called with `configKey` set but `useBase` omitted or `false`.
+
+*Example:*
+```groovy
+configTemplateSubstitute(file: 'app.json', configKey: 'unrelated-shared-config')
+```
+*Outcome:* aborts with `[configTemplateSync] 'configKey' ('unrelated-shared-config') is only valid
+together with useBase: true — remove 'configKey', or add 'useBase: true' to this call.`
+Demonstrated live by `config-template-sync-matrix-demo`, build #7 ("ROW3-FAILLOUD").
+
+### UF-14 — `configKey` names a Config Set that doesn't exist as a global COMMON Config Set
+
+*Trigger:* `useBase: true, configKey: 'X'` where no global COMMON Config Set named `X` exists.
+
+*Example:*
+```groovy
+configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'typo-name')
+```
+*Outcome:* aborts with `[configTemplateSync] No global COMMON Config Set found for configKey
+'typo-name'.`
+
+### UF-15 — A call can never reach another Job's own attached config
+
+*Trigger:* any attempt, under any parameter combination, to resolve against a Job other than the
+one actually running the step.
+
+*Example:* there is no parameter on any of the three pipeline steps that names a target Job.
+
+*Outcome:* isolation is structural, not a bypassable runtime check — no code path accepts another
+Job's identifier. Global COMMON Config Sets remain reachable by any Job via `useBase`+`configKey`
+regardless of chain membership (see UF-11) — that is not an isolation violation, since a global
+Config Set belongs to no single Job.
+
+### UF-16 — Job has no attached config at all: valid, silent no-op (state 1)
+
+*Trigger:* a resolution-matrix row targeting the Job's own config (rows 1/2/4/5) is called against
+a Job with no config property at all, or zero saved versions.
+
+*Example:*
+```groovy
+configTemplateValidate(file: 'app.json')  // on a brand-new Job with nothing configured yet
+```
+*Outcome:* the effective configuration is simply empty — a valid, non-error state. If `app.json`
+has zero tokens, this is a silent no-op; if it has one or more tokens, the existing missing-keys
+fail-loud path fires naming every such token.
+
+### UF-17 — Same-Run repeat call replays the frozen chain instead of re-resolving live
+
+*Trigger:* a second (or later) real-substitution call within the same Run, after an earlier call in
+that Run already wrote a Deployment Binding.
+
+*Example:* a Jenkinsfile restarting from a stage, or calling `configTemplateSubstitute` twice in
+one build.
+
+*Outcome:* the second call reuses the first call's frozen, already-concrete resolved chain instead
+of re-resolving `ACTIVE`/`PINNED` references live — guaranteeing identical effective configuration
+across every call in one build, even if a base Config Set's active version changes mid-build.
+
+### UF-18 — `redeployFromRun` replays an earlier Run's frozen chain byte-identically, even after the source changed
+
+*Trigger:* `configTemplateSubstitute(..., redeployFromRun: <build-number-or-jobFullName#buildNumber>)`
+called from a different Run than the one that originally substituted.
+
+*Example (from `config-template-sync-rebuild-demo`):* build #1 seeds Configuration A (v1); build
+#2 (no `redeployFromRun`, after Configuration B/v2 is activated) live-resolves to Configuration B;
+build #3:
+```groovy
+configTemplateSubstitute(file: 'app.json', redeployFromRun: '1')
+```
+*Outcome:* build #3 replays build #1's original `x=configuration-A-value` output byte-identically,
+despite Configuration B being active by then. The current Run also gets its own fresh Deployment
+Binding written, so a future rollback can chain forward and target it too.
+
+### UF-19 — One `setupConfigTemplate` call configures every later zero-argument call in the same build
+
+*Trigger:* `setupConfigTemplate(...)` called once; later in the same build,
+`configTemplateValidate()`/`configTemplateSubstitute()` is called with no arguments (or a partial
+subset).
+
+*Example:*
+```groovy
+setupConfigTemplate(file: 'app.json', useBase: true, configKey: 'sample-app')
+configTemplateValidate()
+configTemplateSubstitute()
+```
+*Outcome:* both later calls read `file`/`useBase`/`configKey` from the stored setup state exactly
+as if passed directly.
+
+### UF-20 — Explicit call-site parameters override stored setup state, per parameter
+
+*Trigger:* a call supplies its own explicit value for one or more parameters, in a build where an
+active `setupConfigTemplate` state also exists.
+
+*Example:*
+```groovy
+setupConfigTemplate(file: 'app.json', useBase: true, configKey: 'sample-app')
+configTemplateSubstitute(file: 'override.json')  // useBase/configKey still come from setup
+```
+*Outcome:* precedence is evaluated per parameter, not all-or-nothing — the explicit `file` is used
+together with the stored `useBase`/`configKey`.
+
+### UF-21 — `setupConfigTemplate` is rejected inside a `parallel {}` block
+
+*Trigger:* `setupConfigTemplate(...)` called from code executing inside a `parallel {}` block.
+
+*Example:*
+```groovy
+parallel(
+  dev: { setupConfigTemplate(file: 'app.json') }  // rejected
+)
+```
+*Outcome:* an `AbortException` naming the branch it was called from. Calls to
+`configTemplateValidate`/`configTemplateSubstitute` with their own full explicit parameters remain
+fully supported and safe inside `parallel {}`.
+
+### UF-22 — Calling `configTemplateValidate`/`configTemplateSubstitute` with no `file` from any source fails loud
+
+*Trigger:* `file` is available from neither the explicit call-site arguments nor a prior
+`setupConfigTemplate` call in the same build.
+
+*Example:*
+```groovy
+configTemplateValidate()  // no prior setupConfigTemplate, no file argument
+```
+*Outcome:* an `AbortException` naming `file` as the missing required parameter — it never silently
+proceeds with a null/empty/default file path.
+
+### UF-23 — Missing-key drift fails the build, naming the token; orphaned-key drift warns without failing
+
+*Trigger:* the validate step's flattened expected-keys set is compared against the actual
+`#{...}#` tokens found in the target file.
+
+*Example (missing key, fatal):* template references `#{doesNotExist}#`, which has no matching key
+in the Job's own active config (`{"a":1}`):
+```groovy
+configTemplateValidate(file: 'app.json')
+```
+Build fails, console names `doesNotExist`. Demonstrated live by
+`config-template-sync-validation-demo`, build #1.
+
+*Example (orphaned key, non-fatal):* the Job's own config is `{"a":1,"unused":2}` while the
+template only references `#{a}#`. Build succeeds, console warns naming `unused` as orphaned.
+Demonstrated live by `config-template-sync-validation-demo`, build #2. Screenshot: [build console
+showing resolution-mode wording](docs/screenshots/06-build-console-resolution-mode.png), [native
+save toast](docs/screenshots/07-native-toast-notification.png).
+
+## Publishing
+
+Not yet on the official Jenkins Update Center — see [HOSTING.md](HOSTING.md) for the current
+hosting-request prerequisites and process.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Contributing
+
+Issues and pull requests are welcome. Please:
+
+1. Open an issue describing the bug/feature before starting significant work.
+2. Keep changes focused — one logical change per PR.
+3. Run `./mvnw clean verify` (or `./docker-build.sh`) locally before submitting, and make sure
+   existing tests still pass.
+4. Follow the existing code style and, where relevant, the domain-model vocabulary used throughout
+   this README and the plugin's own error messages (`Config Key`, `Config Set`, `base chain`,
+   `effective configuration`, etc.).
