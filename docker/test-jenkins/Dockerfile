@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Disposable, fully-seeded Jenkins for e2e-testing the config-template-sync plugin.
+# Disposable, fully-seeded Jenkins for e2e-testing the job-config-chain plugin.
 # Build context MUST be the repo root (see docker-compose.yml: `context: ..`, `dockerfile:
 # docker/test-jenkins/Dockerfile`) so stage 1 can see pom.xml/src.
 #
@@ -10,14 +10,14 @@
 
 ########################################################################
 # Stage 1: build the plugin's .hpi from source, so `docker compose up --build` never
-# depends on a pre-existing host build (target/config-template-sync.hpi).
+# depends on a pre-existing host build (target/job-config-chain.hpi).
 #
 # Plain `mvn` (no mvnw wrapper, no GitVersion CLI) — mirrors docker-build.sh's approach
 # for the exact same reason: `-Drevision=...` can't be supplied without a SemVer already
 # computed, and the plugin's own README documents that a bare `mvn` invocation still
 # succeeds, falling back to pom.xml's default `revision` (0.0.0-SNAPSHOT). The Jenkins
 # plugin parent POM (org.jenkins-ci.plugins:plugin) pins <finalName> to the bare
-# artifactId, so the output path is always target/config-template-sync.hpi regardless of
+# artifactId, so the output path is always target/job-config-chain.hpi regardless of
 # version — matching what stage 2 below expects.
 #
 # JDK/Maven image pinned to eclipse-temurin-11 to match this project's
@@ -51,7 +51,7 @@ ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
 COPY --chown=jenkins:jenkins docker/test-jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
-COPY --from=plugin-builder --chown=jenkins:jenkins /build/target/config-template-sync.hpi /usr/share/jenkins/ref/plugins/config-template-sync.hpi
+COPY --from=plugin-builder --chown=jenkins:jenkins /build/target/job-config-chain.hpi /usr/share/jenkins/ref/plugins/job-config-chain.hpi
 
 # Copied into $JENKINS_HOME on first boot only (the official image's ref-copy mechanism
 # never overwrites a file that's already present in the JENKINS_HOME volume) — see
@@ -63,4 +63,4 @@ COPY --chown=jenkins:jenkins docker/test-jenkins/init.groovy.d/ /usr/share/jenki
 # Kept OUTSIDE $JENKINS_HOME/ref-copy semantics on purpose (this is not one of the
 # directories the ref-copy mechanism is documented for) — the seed script reads its
 # fixture Jenkinsfile straight off the image filesystem at startup instead.
-COPY --chown=jenkins:jenkins docker/test-jenkins/fixtures/ /opt/config-template-sync-e2e/
+COPY --chown=jenkins:jenkins docker/test-jenkins/fixtures/ /opt/job-config-chain-e2e/

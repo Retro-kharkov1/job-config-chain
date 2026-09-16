@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-rem config-template-sync: zero-host-tooling Docker build (native cmd.exe variant of
+rem job-config-chain: zero-host-tooling Docker build (native cmd.exe variant of
 rem docker-build.sh, for machines without Git Bash/WSL). See docker-build.sh for the
 rem full rationale (why two sequential `docker run` calls, not docker-compose; image
 rem choices) -- this script does the exact same two steps.
@@ -9,7 +9,7 @@ rem
 rem Usage:
 rem   docker-build.cmd
 rem
-rem Result: target\config-template-sync.hpi lands on the HOST filesystem at the same
+rem Result: target\job-config-chain.hpi lands on the HOST filesystem at the same
 rem path mvnw.cmd already produces it at.
 
 set "GITVERSION_IMAGE=gittools/gitversion:6.8.2-alpine.3.23-9.0"
@@ -35,4 +35,4 @@ rem See https://maven.apache.org/plugins/maven-clean-plugin/clean-mojo.html#fail
 docker run --rm -v "%REPO_DIR%:/repo" -w /repo %MAVEN_IMAGE% mvn -Drevision=%SEMVER% -Dmaven.clean.failOnError=false clean verify
 if errorlevel 1 exit /b 1
 
-echo ==^> Done. Artifact: target\config-template-sync.hpi (Plugin-Version: %SEMVER%)
+echo ==^> Done. Artifact: target\job-config-chain.hpi (Plugin-Version: %SEMVER%)

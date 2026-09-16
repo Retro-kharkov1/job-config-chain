@@ -1,0 +1,124 @@
+<?jelly escape-by-default='true'?>
+<!--
+  Block 1 of 4: version history. Shared between EnvConfigSetPage/index.jelly and
+  ConfigTemplatesJobAction/index.jelly (tech-lead design contract, 2026-09-09) — rendered via
+  <st:include page="_shared/versionHistoryBlock.jelly" it="${it}"/>. Relies on ${it} exposing the
+  SAME getter names on both hosts: exists, versions (versionNumber/timestampEpochMillis/author/note/
+  baseChain[projectKey/pinMode/pinnedVersionNumber]), activeVersion, explicitlyStandaloneSupported.
+  Every id/function referenced here (versionHistoryTbody, historyRow-<n>, selectHistoryRow,
+  toggleBaseChainDetail, activateVersion, formatTimestamp) must be defined by BOTH hosts' own
+  page-level <script> — see each host's index.jelly for its own copy of that wiring.
+-->
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form">
+  <div id="versionHistoryDetails">
+  <f:section title="${%versionHistory.heading}">
+    <p>Click a row to compare it against the editor's current draft (no checkbox required — click
+       any row again to return to editing).</p>
+    <!-- Empty-state row (ux-ui-designer correction, 2026-09-11): a version-less Config Set renders
+         as ONE spanning row inside the table body — the column header row stays visible either
+         way. renderVersionHistoryRows (both hosts' own script) inserts/removes this row directly
+         instead of toggling a separate placeholder div. -->
+    <div id="versionHistoryTableWrap" class="ctsync-scroll-table">
+      <table class="jenkins-table ctsync-history-table" style="width:100%">
+        <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th>${%column.baseChain}</th><th>${%column.active}</th><th>${%column.actions}</th></tr></thead>
+        <tbody id="versionHistoryTbody">
+          <j:if test="${it.versions.isEmpty()}">
+            <tr class="ctsync-empty-state-row"><td colspan="7">${%emptyState.noVersions}</td></tr>
+          </j:if>
+          <j:forEach var="v" items="${it.versions}">
+            <tr id="historyRow-${v.versionNumber}" class="ctsync-history-row"
+                tabindex="0" role="button"
+                onclick="selectHistoryRow(${v.versionNumber});"
+                onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectHistoryRow(${v.versionNumber}); }">
+              <td data-th="${%column.version}">v${v.versionNumber}</td>
+              <td data-th="${%column.created}" class="ctsync-created-cell" data-epoch="${v.timestampEpochMillis}">${v.timestampEpochMillis}</td>
+              <td data-th="${%column.createdBy}">${v.author}</td>
+              <td data-th="${%column.note}">${v.note}</td>
+              <td data-th="${%column.baseChain}">
+                <!-- Requirement history, EnvConfigSetPage only (see base-chains.md's "Standalone env
+                     Config Sets" section): a version saved as explicitlyStandalone renders a
+                     badge INSTEAD OF the N-bases link. Never reached for a host where
+                     explicitlyStandaloneSupported is false (e.g. ConfigTemplatesJobAction) — guarded
+                     by an outer j:if rather than relying on JEXL short-circuiting, since
+                     v.explicitlyStandalone does not exist at all on a JobConfigTemplateVersion. -->
+                <j:choose>
+                  <j:when test="${it.explicitlyStandaloneSupported and v.explicitlyStandalone}">
+                    <span class="ctsync-standalone-badge" title="Declared zero base configs on purpose (see base-chains.md's Standalone env Config Sets section)">
+                      &#9873; Standalone
+                    </span>
+                  </j:when>
+                  <j:otherwise>
+                    <a href="#" class="ctsync-basechain-toggle"
+                       onclick="event.stopPropagation(); event.preventDefault(); toggleBaseChainDetail(${v.versionNumber});">
+                      &#9656; ${v.baseChain.size()} <j:choose>
+                        <j:when test="${v.baseChain.size() == 1}">base</j:when>
+                        <j:otherwise>bases</j:otherwise>
+                      </j:choose>
+                    </a>
+                    <div id="baseChainDetail-${v.versionNumber}" class="ctsync-basechain-history-detail" style="display:none">
+                      <j:choose>
+                        <j:when test="${v.baseChain.isEmpty()}">
+                          <div>(no declared chain — 0 bases)</div>
+                        </j:when>
+                        <j:otherwise>
+                          <j:forEach var="ref" items="${v.baseChain}">
+                            <div>
+                              ${ref.projectKey} &#8212; ${ref.pinMode}
+                              <j:if test="${ref.pinMode == 'PINNED'}">(v${ref.pinnedVersionNumber})</j:if>
+                            </div>
+                          </j:forEach>
+                        </j:otherwise>
+                      </j:choose>
+                    </div>
+                  </j:otherwise>
+                </j:choose>
+              </td>
+              <td data-th="${%column.active}">
+                <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
+                  &#9679; ${%activeStatus}
+                </j:if>
+              </td>
+              <td data-th="${%column.actions}">
+                <j:choose>
+                  <j:when test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
+                    <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
+                            disabled="disabled" data-always-disabled="true"
+                            title="${%activate.alreadyActiveTitle}">${%activate.label}</button>
+                  </j:when>
+                  <j:otherwise>
+                    <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
+                            title="Activate version ${v.versionNumber} without changing the editor content"
+                            onclick="event.stopPropagation(); activateVersion(${v.versionNumber});">${%activate.label}</button>
+                  </j:otherwise>
+                </j:choose>
+              </td>
+            </tr>
+          </j:forEach>
+        </tbody>
+      </table>
+    </div>
+    <template id="historyRowTemplate"
+              data-active-label="${%activeStatus}"
+              data-already-active-title="${%activate.alreadyActiveTitle}">
+      <tr class="ctsync-history-row" tabindex="0" role="button">
+        <td data-th="${%column.version}" class="js-version"/>
+        <td data-th="${%column.created}" class="js-created"/>
+        <td data-th="${%column.createdBy}" class="js-createdBy"/>
+        <td data-th="${%column.note}" class="js-note"/>
+        <td data-th="${%column.baseChain}">
+          <span class="ctsync-standalone-badge js-standalone-badge" style="display:none"
+                title="Declared zero base configs on purpose (see base-chains.md's Standalone env Config Sets section)">&#9873; Standalone</span>
+          <a href="#" class="ctsync-basechain-toggle js-basechain-toggle">
+            &#9656; <span class="js-basechain-count"/> bases</a>
+          <div class="ctsync-basechain-history-detail js-basechain-detail" style="display:none"/>
+        </td>
+        <td data-th="${%column.active}" class="js-activeBadge"/>
+        <td data-th="${%column.actions}">
+          <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn js-activate-btn">
+            ${%activate.label}</button>
+        </td>
+      </tr>
+    </template>
+  </f:section>
+  </div>
+</j:jelly>
