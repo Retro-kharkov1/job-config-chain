@@ -22,8 +22,15 @@ set -euo pipefail
 #
 # Images used (pinned, not `:latest`, for reproducible builds):
 #   - gittools/gitversion   — official GitVersion image: https://gitversion.net/docs/usage/docker
-#   - maven:*-eclipse-temurin-11 — official Maven image, JDK 11 to match this project's
-#     <java.level>11</java.level> / <maven.compiler.source>11</maven.compiler.source> in pom.xml.
+#   - maven:*-eclipse-temurin-21 — official Maven image, JDK 21. Real build-time requirement
+#     discovered 2026-09-16 while bumping the org.jenkins-ci.plugins:plugin parent POM to
+#     6.2236.v12dd4c483242: that parent's managed maven-hpi-plugin version fails its own
+#     `validate` goal with "Java 21 or later is necessary to build this plugin" on JDK 17 —
+#     confirmed by an actual failing build, not assumed. This is independent of pom.xml's
+#     <maven.compiler.release>17</maven.compiler.release> (the *target* bytecode/API level,
+#     kept at 17 for broad Jenkins-core compatibility per the parent's own baseline) — JDK 21
+#     can still compile `--release 17` output; JDK 21 is only required to *run* Maven/the
+#     hpi-plugin's tooling itself.
 #
 # Usage:
 #   ./docker-build.sh
@@ -33,7 +40,7 @@ set -euo pipefail
 # testing of this plugin) already expects.
 
 GITVERSION_IMAGE="gittools/gitversion:6.8.2-alpine.3.23-9.0"
-MAVEN_IMAGE="maven:3.9-eclipse-temurin-11"
+MAVEN_IMAGE="maven:3.9-eclipse-temurin-21"
 
 # Resolve this script's directory as a Windows-style path when running under Git
 # Bash/MSYS (pwd -W), otherwise fall back to the plain POSIX path (Linux/macOS/native

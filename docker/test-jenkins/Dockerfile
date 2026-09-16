@@ -20,12 +20,16 @@
 # artifactId, so the output path is always target/job-config-chain.hpi regardless of
 # version — matching what stage 2 below expects.
 #
-# JDK/Maven image pinned to eclipse-temurin-11 to match this project's
-# <java.level>11</java.level> (see pom.xml and docker-build.sh) — NOT JDK 21, even though
-# the Jenkins controller image in stage 2 is jdk21 (that JDK only runs the Jenkins
-# controller itself; it has no bearing on the plugin's own compiler target).
+# JDK/Maven image pinned to eclipse-temurin-21 — a real build-time requirement (not just a
+# target-bytecode choice): the org.jenkins-ci.plugins:plugin parent POM bump to
+# 6.2236.v12dd4c483242 (2026-09-16) pulls in a maven-hpi-plugin version whose own `validate`
+# goal fails with "Java 21 or later is necessary to build this plugin" on JDK 17, confirmed by
+# an actual failing build. pom.xml's <maven.compiler.release>17</maven.compiler.release> (the
+# *target* bytecode/API level, kept at 17 for Jenkins-core compatibility) is unaffected — JDK
+# 21 still compiles `--release 17` output; it's only required to *run* Maven/hpi-plugin here.
+# Now matches the Jenkins controller image in stage 2 (jdk21) exactly, by coincidence.
 ########################################################################
-FROM maven:3.9-eclipse-temurin-11 AS plugin-builder
+FROM maven:3.9-eclipse-temurin-21 AS plugin-builder
 WORKDIR /build
 COPY pom.xml ./
 COPY src ./src
