@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# config-template-sync: zero-host-tooling Docker build.
+# job-config-chain: zero-host-tooling Docker build.
 #
 # Mirrors what mvnw/mvnw.cmd already do for a local build (dotnet-gitversion computes a
 # real SemVer from git history, then `-Drevision=<SemVer>` is forwarded into Maven), but
 # runs both steps inside containers, so a machine with NO host-installed Java, Maven, or
-# GitVersion CLI can still produce a correctly versioned target/config-template-sync.hpi.
+# GitVersion CLI can still produce a correctly versioned target/job-config-chain.hpi.
 # This is an ADDITIONAL option alongside mvnw/mvnw.cmd, not a replacement for them.
 #
 # Why two sequential `docker run` calls instead of a docker-compose.yml:
@@ -28,7 +28,7 @@ set -euo pipefail
 # Usage:
 #   ./docker-build.sh
 #
-# Result: target/config-template-sync.hpi lands on the HOST filesystem (bind-mounted, not
+# Result: target/job-config-chain.hpi lands on the HOST filesystem (bind-mounted, not
 # copied out of a container), at the same path other tooling (e.g. Docker-Jenkins e2e
 # testing of this plugin) already expects.
 
@@ -57,10 +57,10 @@ echo "==> [2/2] Building with Maven (${MAVEN_IMAGE}), -Drevision=${SEMVER}"
 # `false` makes a leftover-file clean warning non-fatal instead of aborting an otherwise
 # healthy build; it does not skip cleaning, it only stops one locked leftover from failing
 # the whole run.
-# Named volume `config-template-sync-m2` persists the local Maven repo across separate
+# Named volume `job-config-chain-m2` persists the local Maven repo across separate
 # `docker-build.sh` invocations (a plain `docker run --rm` has no state of its own between runs) —
 # without it, every invocation re-downloads the full dependency tree from scratch.
-docker run --rm -v "${SCRIPT_DIR}:/repo" -v "config-template-sync-m2:/root/.m2" -w /repo "${MAVEN_IMAGE}" \
+docker run --rm -v "${SCRIPT_DIR}:/repo" -v "job-config-chain-m2:/root/.m2" -w /repo "${MAVEN_IMAGE}" \
   mvn -Drevision="${SEMVER}" -Dmaven.clean.failOnError=false clean verify
 
-echo "==> Done. Artifact: target/config-template-sync.hpi (Plugin-Version: ${SEMVER})"
+echo "==> Done. Artifact: target/job-config-chain.hpi (Plugin-Version: ${SEMVER})"

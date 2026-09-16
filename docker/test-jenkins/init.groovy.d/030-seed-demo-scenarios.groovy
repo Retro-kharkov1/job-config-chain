@@ -43,12 +43,12 @@
  * same NFR-4 constraint 020-... follows.
  */
 
-import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference
-import io.github.retrokharkov1.configtemplatesync.model.ConfigSet
-import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole
-import io.github.retrokharkov1.configtemplatesync.model.ContentType
-import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository
-import io.github.retrokharkov1.configtemplatesync.ui.JobConfigTemplateProperty
+import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference
+import io.jenkins.plugins.jobconfigchain.model.ConfigSet
+import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole
+import io.jenkins.plugins.jobconfigchain.model.ContentType
+import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository
+import io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty
 import jenkins.model.Jenkins
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition
 import org.jenkinsci.plugins.workflow.job.WorkflowJob
