@@ -1,11 +1,14 @@
 # Requesting official Jenkins hosting
 
-> **TODO (owner action):** the GitHub repository itself still needs a manual rename to
-> `job-config-chain` (Settings → Repository name). Once done, update every
-> `github.com/Retro-kharkov1/config-template-sync` URL in this file to the new repository name.
+> **Note:** the plugin source now lives at `github.com/Retro-kharkov1/job-config-chain` — a new
+> repository the owner created and pushed the full history to (not a rename of the old one). Every
+> `github.com/Retro-kharkov1/config-template-sync` reference below has been updated to the new URL.
+> Lower-priority, non-blocking: the OLD `Retro-kharkov1/config-template-sync` repository still
+> exists separately on GitHub and is no longer canonical — the owner may want to archive it or add
+> a redirect notice at some point, but this does not block filing the hosting request.
 
 This plugin is not yet hosted in the `jenkinsci` GitHub organization or distributed via the
-official Jenkins Update Center — it currently lives at `Retro-kharkov1/config-template-sync` and
+official Jenkins Update Center — it currently lives at `Retro-kharkov1/job-config-chain` and
 is installed by manual `.hpi` upload (or a self-hosted private Update Center; see the README's
 "Install / build" section).
 
@@ -26,7 +29,7 @@ Sources verified current as of 2026-09 (fetched directly, not from training-data
 
 ### Already satisfied (per the 2026-09 repo audit)
 
-- [x] Public GitHub repository with the plugin source (`Retro-kharkov1/config-template-sync`).
+- [x] Public GitHub repository with the plugin source (`Retro-kharkov1/job-config-chain`).
 - [x] License declared in both places Jenkins requires: `pom.xml` (`<license>`) and a `LICENSE`
       file at the repo root — this repo uses MIT, an OSI-approved license, which is acceptable.
 - [x] User documentation exists (`README.md`, with a full use-case catalog and screenshots).
@@ -42,16 +45,29 @@ Sources verified current as of 2026-09 (fetched directly, not from training-data
 
 ### Still open — owner decision/action required before filing
 
-1. **Parent POM version.** `pom.xml` still pins `org.jenkins-ci.plugins:plugin` at `4.88`; current
-   parent POMs use a newer `6.xxxx.vHASH`-style version. The hosting docs referenced above do not
-   themselves gate submission on a specific parent POM version, but bumping it is good practice
-   before requesting hosting since the Hosting team's review and the post-hosting CI build
-   (`ci.jenkins.io`, see step 4 below) are far more likely to just work on a current parent. This
-   needs an actual build/compatibility pass — not a blind version bump.
-2. **No `Jenkinsfile` yet.** Not required to file the hosting request itself, but required before
-   the post-hosting CI step (`ci.jenkins.io` builds only start once the repo has been transferred
-   into the `jenkinsci` org — see step 4). Can be prepared in advance or added right after the
-   transfer.
+1. ~~**Parent POM version.**~~ **Closed 2026-09-16.** `pom.xml` now pins `org.jenkins-ci.plugins:plugin`
+   at `6.2236.v12dd4c483242` (verified current as of 2026-09-16 via
+   `https://repo.jenkins-ci.org/artifactory/api/search/latestVersion?g=org.jenkins-ci.plugins&a=plugin`,
+   cross-checked against the `jenkinsci/plugin-pom` GitHub tags page). The new parent's own
+   `jenkins.version` minimum (`2.479`) and Java baseline (`maven.compiler.release` 17) were both
+   above this project's previous `2.426.3` / Java 11, so `jenkins.version` was bumped to `2.555.3`
+   (per <https://www.jenkins.io/doc/developer/plugin-development/choosing-jenkins-baseline/>'s
+   current recommendation, not the parent's bare minimum, and not the newest LTS `2.568.3` either)
+   and the matching `io.jenkins.tools.bom:bom-2.555.x:7020.vf38cb_40380d1` BOM. `java.level` /
+   `maven.compiler.source` / `maven.compiler.target` were bumped from `11` to `17` to satisfy the
+   parent's own compiler-release requirement. Docker build images pinned to `eclipse-temurin-11`
+   (`docker-build.sh`, `docker-build.cmd`, `docker/test-jenkins/Dockerfile`,
+   `docker-compose.override.yml`) were bumped to `eclipse-temurin-21` — not 17 — because the new
+   parent's managed `maven-hpi-plugin` version fails its own `validate` goal with "Java 21 or
+   later is necessary to build this plugin" when run under JDK 17, confirmed by an actual failing
+   build; `<maven.compiler.release>17</maven.compiler.release>` stays the *target* bytecode level,
+   JDK 21 is only required to *run* Maven/the hpi-plugin itself. Built and verified green on
+   tower-docker (`./docker-build.sh`) — see the repo's build history for the exact run.
+2. ~~**No `Jenkinsfile` yet.**~~ **Closed 2026-09-16.** A root `Jenkinsfile` calling `buildPlugin()`
+   from `jenkins-infra/pipeline-library` now exists, modeled on current real `jenkinsci`-hosted
+   plugins (`jenkinsci/git-plugin`, `jenkinsci/credentials-plugin`). It has no effect until the
+   repo is transferred into the `jenkinsci` org (`ci.jenkins.io` only builds repos it owns), but is
+   ready in advance as step 4 below describes.
 3. **GitHub two-factor authentication (2FA).** The hosting-request docs fetched above do not
    explicitly restate a 2FA requirement, but GitHub has required 2FA for anyone contributing code
    on github.com since March 2023, and the `jenkinsci` org (into which this repo will be forked)
@@ -79,7 +95,7 @@ The docs explicitly say: *"Make sure to fill out all fields as described."* The 
 
 | Field | What it needs |
 |---|---|
-| **Repository URL** | The current repo URL to host — `https://github.com/Retro-kharkov1/config-template-sync`. |
+| **Repository URL** | The current repo URL to host — `https://github.com/Retro-kharkov1/job-config-chain`. |
 | **New Repository Name** | The name it will have inside `jenkinsci`. Plugin repos must end in `-plugin` and be lowercase, so this should be `job-config-chain-plugin` (confirm the exact name against the current naming convention page before submitting — it may have evolved). |
 | **Description** | What the plugin does and how it differs from anything similar already hosted — the README's intro paragraph and use-case catalog are good source material to summarize from. |
 | **GitHub users to have commit permission** | GitHub handles (`@user1, @user2, …`) to grant push access on the new `jenkinsci`-hosted repo. |
@@ -100,13 +116,13 @@ Per the current docs:
   `jenkinsci` GitHub organization**, and the owner is invited to join `jenkinsci` as a
   collaborator on the new fork. This is the actual hosting event — the plugin now lives at
   `github.com/jenkinsci/job-config-chain-plugin` (or whatever name was requested), not at
-  `Retro-kharkov1/config-template-sync`.
-- **Old repo cleanup:** the owner is asked to delete the original `Retro-kharkov1` repo (or at
-  minimum stop treating it as canonical) so GitHub's fork network correctly shows the `jenkinsci`
+  `Retro-kharkov1/job-config-chain`.
+- **Old repo cleanup:** the owner is asked to delete or archive the original `Retro-kharkov1` repo
+  (or at minimum stop treating it as canonical) so GitHub's fork network correctly shows the `jenkinsci`
   copy as the primary source rather than a fork-of-a-fork.
-- **CI enablement:** `ci.jenkins.io` builds are wired up next, driven by a `Jenkinsfile` in the
-  repo (see the still-open item #2 above) — this is the point at which that file becomes
-  necessary, not before.
+- **CI enablement:** `ci.jenkins.io` builds are wired up next, driven by the `Jenkinsfile` now
+  present at the repo root (see item #2 in section 1, closed 2026-09-16) — this is the point at
+  which that file becomes necessary, not before.
 - **Release/Update-Center listing:** upload permissions to Artifactory get granted per the
   `repository-permissions-updater` repo's own README instructions (a follow-up PR against that
   repo, distinct from the hosting-request issue), after which releases cut under the granted
@@ -118,7 +134,8 @@ Per the current docs:
 To be explicit: everything in **section 2** (opening and filling out the hosting-request issue)
 requires the repo owner's own GitHub account (to open the issue and later accept the `jenkinsci`
 org invitation) and Jenkins community account (to be named for release permission). No agent or
-automation in this repo can file that request on the owner's behalf. The still-open items in
-section 1 are things an implementer *could* mechanically do (bump the parent POM, add a
-`Jenkinsfile`) — the one-way-door `groupId` decision itself is already resolved (see the
-"Already satisfied" checklist above).
+automation in this repo can file that request on the owner's behalf. Items 1 and 2 in section 1
+were the things an implementer *could* mechanically do (bump the parent POM, add a `Jenkinsfile`)
+— both are now closed (2026-09-16) — and the one-way-door `groupId` decision itself was already
+resolved before that (see the "Already satisfied" checklist above). Only items 3 and 4 (2FA,
+Jenkins community account) and section 2 itself remain owner-only.
