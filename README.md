@@ -1,10 +1,5 @@
 # Job Config Chain
 
-> **TODO (owner action):** the GitHub repository itself still needs a manual rename to
-> `job-config-chain` (Settings → Repository name). Once done, update every
-> `github.com/Retro-kharkov1/config-template-sync` URL in this file (and in `pom.xml`'s `<url>`/
-> `<scm>` block and `HOSTING.md`) to the new repository name.
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=github-sponsors)](https://github.com/sponsors/Retro-kharkov1)
 
@@ -53,7 +48,7 @@ docker-build.cmd       # Windows cmd.exe
 
 This runs the exact same two logical steps as `mvnw`/`mvnw.cmd`, just inside containers instead of
 on the host: [`gittools/gitversion`](https://gitversion.net/docs/usage/docker) computes the SemVer,
-then the official `maven` image (`eclipse-temurin-11`) runs `mvn -Drevision=<computed SemVer> clean
+then the official `maven` image (`eclipse-temurin-21`) runs `mvn -Drevision=<computed SemVer> clean
 verify`. `target/job-config-chain.hpi` lands on the **host** filesystem at the same path either
 way, since the repo directory is bind-mounted (not copied) into both containers.
 
