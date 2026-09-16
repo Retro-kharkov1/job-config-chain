@@ -1,4 +1,4 @@
-# Disposable, fully-seeded Jenkins for e2e-testing the config-template-sync plugin.
+# Disposable, fully-seeded Jenkins for e2e-testing the job-config-chain plugin.
 # See docker/test-jenkins/README.md for the one command + what's pre-seeded.
 #
 # `docker compose up --build` — builds the plugin's .hpi from THIS repo's current source

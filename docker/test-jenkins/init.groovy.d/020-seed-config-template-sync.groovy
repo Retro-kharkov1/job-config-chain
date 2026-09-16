@@ -1,5 +1,5 @@
 /*
- * Auto-seeds test data for the config-template-sync plugin's e2e job, so `docker compose
+ * Auto-seeds test data for the job-config-chain plugin's e2e job, so `docker compose
  * up` needs zero manual Script Console steps.
  *
  * Runs on every Jenkins boot (init.groovy.d scripts execute at the end of Jenkins
@@ -30,13 +30,13 @@ import com.cloudbees.plugins.credentials.CredentialsScope
 import com.cloudbees.plugins.credentials.SystemCredentialsProvider
 import com.cloudbees.plugins.credentials.domains.Domain
 import hudson.util.Secret
-import io.github.retrokharkov1.configtemplatesync.model.ConfigSet
-import io.github.retrokharkov1.configtemplatesync.model.ConfigSetRole
-import io.github.retrokharkov1.configtemplatesync.model.ContentType
-import io.github.retrokharkov1.configtemplatesync.model.SecretPlaceholder
-import io.github.retrokharkov1.configtemplatesync.model.BaseConfigReference
-import io.github.retrokharkov1.configtemplatesync.persistence.ConfigSetRepository
-import io.github.retrokharkov1.configtemplatesync.ui.JobConfigTemplateProperty
+import io.jenkins.plugins.jobconfigchain.model.ConfigSet
+import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole
+import io.jenkins.plugins.jobconfigchain.model.ContentType
+import io.jenkins.plugins.jobconfigchain.model.SecretPlaceholder
+import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference
+import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository
+import io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty
 import jenkins.model.Jenkins
 import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition
@@ -49,7 +49,7 @@ def SECRET_DOTTED_PATH = 'Database.Password'
 def CREDENTIAL_ID = 'test-app-dev-db-password'
 def CREDENTIAL_FAKE_VALUE = 'S3cr3tDbPass!'
 def JOB_NAME = 'config-template-sync-e2e'
-def FIXTURE_JENKINSFILE = new File('/opt/config-template-sync-e2e/e2e.Jenkinsfile')
+def FIXTURE_JENKINSFILE = new File('/opt/job-config-chain-e2e/e2e.Jenkinsfile')
 
 def jenkins = Jenkins.get()
 def repository = new ConfigSetRepository()
@@ -117,7 +117,7 @@ if (job != null) {
     job = jenkins.createProject(WorkflowJob.class, JOB_NAME)
     job.setDefinition(new CpsFlowDefinition(FIXTURE_JENKINSFILE.text, true))
     job.setDescription(
-            "e2e smoke test for the config-template-sync plugin: runs configTemplateValidate then " +
+            "e2e smoke test for the job-config-chain plugin: runs configTemplateValidate then " +
             "configTemplateSubstitute against this Job's own Config Templates (useBase: true, " +
             "configKey='${PROJECT_KEY}'). Not auto-triggered on startup — click Build Now.")
     job.save()

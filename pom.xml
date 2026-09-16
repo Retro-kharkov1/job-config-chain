@@ -11,12 +11,12 @@
     <relativePath />
   </parent>
 
-  <groupId>io.github.retrokharkov1</groupId>
-  <artifactId>config-template-sync</artifactId>
+  <groupId>io.jenkins.plugins</groupId>
+  <artifactId>job-config-chain</artifactId>
   <version>${revision}</version>
   <packaging>hpi</packaging>
 
-  <name>Config Template Sync</name>
+  <name>Job Config Chain</name>
   <description>
     Keeps a nested structured-config token store (per common/env layer) structurally in sync with
     #{Dotted.Path}# placeholder tokens in a target application config file, validating drift and

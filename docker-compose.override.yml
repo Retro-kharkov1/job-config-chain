@@ -2,7 +2,7 @@
 #
 # Compose loads this file automatically alongside docker-compose.yml, so the plain
 # `docker compose up -d` documented there keeps working — it just also picks up whatever
-# `target/config-template-sync.hpi` currently holds.
+# `target/job-config-chain.hpi` currently holds.
 #
 # Why this exists (two separate problems, one fix):
 #
@@ -25,20 +25,20 @@
 #
 # NOTE: the bind mount's source must exist before `up`, or Docker helpfully creates a DIRECTORY at
 # that path and Jenkins fails to load the plugin. Run the builder once on a fresh clone (the repo
-# ignores target/). If you ever see that, `rm -rf target/config-template-sync.hpi` and re-run it.
+# ignores target/). If you ever see that, `rm -rf target/job-config-chain.hpi` and re-run it.
 services:
   jenkins:
     volumes:
       - jenkins_home:/var/jenkins_home
       # Read-only, and deliberately NOT mounted straight onto
-      # /var/jenkins_home/plugins/config-template-sync.hpi. Bind-mounting a file into that
+      # /var/jenkins_home/plugins/job-config-chain.hpi. Bind-mounting a file into that
       # directory makes Docker create the directory itself, owned by root — and the container
       # runs as the `jenkins` user, which then cannot mkdir the plugins/<name>/ folder Jenkins
       # explodes an .hpi into. The plugin silently never loads: /configTemplates 404s and
       # init.groovy.d dies with "unable to resolve class" on every plugin class. It only appears
       # to work when the volume already existed (created jenkins-owned by an earlier boot) and
       # breaks on the next `down -v`. Observed 2026-09-05.
-      - ./target/config-template-sync.hpi:/opt/config-template-sync-dev/config-template-sync.hpi:ro
+      - ./target/job-config-chain.hpi:/opt/job-config-chain-dev/job-config-chain.hpi:ro
     # Copy the mounted build into the plugins directory as the `jenkins` user, then hand over to
     # the image's own entrypoint. Runs on every start, so `docker compose restart jenkins` after a
     # rebuild is all the dev loop needs; Jenkins re-explodes the plugin because the .hpi it finds
@@ -48,13 +48,13 @@ services:
       - -c
       - |
         mkdir -p /var/jenkins_home/plugins
-        if [ -f /opt/config-template-sync-dev/config-template-sync.hpi ]; then
-          cp /opt/config-template-sync-dev/config-template-sync.hpi \
-             /var/jenkins_home/plugins/config-template-sync.hpi
-          rm -rf /var/jenkins_home/plugins/config-template-sync
-          echo "[dev-override] installed locally built config-template-sync.hpi"
+        if [ -f /opt/job-config-chain-dev/job-config-chain.hpi ]; then
+          cp /opt/job-config-chain-dev/job-config-chain.hpi \
+             /var/jenkins_home/plugins/job-config-chain.hpi
+          rm -rf /var/jenkins_home/plugins/job-config-chain
+          echo "[dev-override] installed locally built job-config-chain.hpi"
         else
-          echo "[dev-override] WARNING: target/config-template-sync.hpi missing — run: docker compose --profile build run --rm builder"
+          echo "[dev-override] WARNING: target/job-config-chain.hpi missing — run: docker compose --profile build run --rm builder"
         fi
         exec /usr/local/bin/jenkins.sh
   # Build-only service: never started by `up` (it sits behind a profile), invoked explicitly via
