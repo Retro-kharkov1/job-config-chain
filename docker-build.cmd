@@ -13,7 +13,7 @@ rem Result: target\job-config-chain.hpi lands on the HOST filesystem at the same
 rem path mvnw.cmd already produces it at.
 
 set "GITVERSION_IMAGE=gittools/gitversion:6.8.2-alpine.3.23-9.0"
-set "MAVEN_IMAGE=maven:3.9-eclipse-temurin-11"
+set "MAVEN_IMAGE=maven:3.9-eclipse-temurin-21"
 
 set "REPO_DIR=%~dp0"
 if "%REPO_DIR:~-1%"=="\" set "REPO_DIR=%REPO_DIR:~0,-1%"

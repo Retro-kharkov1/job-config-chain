@@ -64,10 +64,12 @@ services:
   # Skips tests deliberately — this service exists to produce a binary to look at. Correctness is
   # the full `docker compose build`'s job, which runs `mvn clean verify` with the suite.
   #
-  # JDK 11 matches <java.level>11</java.level> in pom.xml, exactly as Dockerfile stage 1 does.
+  # JDK 21 is a real build-time requirement of the parent POM's managed maven-hpi-plugin
+  # (see docker/test-jenkins/Dockerfile's stage-1 comment) — not just a target-bytecode
+  # choice; pom.xml's own <maven.compiler.release> stays at 17.
   builder:
     profiles: ["build"]
-    image: maven:3.9-eclipse-temurin-11
+    image: maven:3.9-eclipse-temurin-21
     working_dir: /build
     command: mvn -B package -DskipTests
     volumes:
