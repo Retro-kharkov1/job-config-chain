@@ -40,7 +40,7 @@
 @SET __MVNW_ARG0_NAME__=
 @SET MVNW_USERNAME=
 @SET MVNW_PASSWORD=
-@REM config-template-sync: compute the CI-friendly `revision` property from GitVersion
+@REM job-config-chain: compute the CI-friendly `revision` property from GitVersion
 @REM before delegating to the real Maven binary, so a single `mvnw.cmd clean verify` —
 @REM no -D flag, no CI-platform script — produces a real computed SemVer in the built
 @REM .hpi (see the long comment on the `revision` property in pom.xml for why this
