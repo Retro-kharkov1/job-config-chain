@@ -391,11 +391,70 @@
           });
         }
 
+        // Monaco must follow Jenkins' own light/dark appearance (owner report, 2026-09-18): a
+        // light editor inside a dark controller was the only unthemed surface on these pages.
+        //
+        // The theme is detected from the page's OWN RENDERED BACKGROUND COLOUR rather than from a
+        // theme flag, because no dependable flag exists. Verified against jenkins-core 2.555.3:
+        // lib/layout/layout.jelly emits a bare html element and a head carrying only data-rooturl /
+        // data-resurl / data-crumb-* — there is no data-theme anywhere, and the strings
+        // "data-theme" and "prefers-color-scheme" do not occur in the core jar at all. Jenkins has
+        // no core notion of a theme: dark mode is CSS injected by an optional plugin
+        // (theme-manager / dark-theme), so any attribute we keyed off would be that plugin's
+        // private detail, and a controller themed by some other means would silently not match.
+        // Measuring the resulting colour is mechanism-agnostic: it is true for core themes,
+        // for either plugin, and for hand-written CSS.
+        //
+        // Relative luminance per WCAG 2.x (sRGB coefficients .2126/.7152/.0722, i.e. green
+        // dominates perceived brightness); anything below 0.5 counts as a dark surface. A transparent or
+        // unparseable background falls back to the OS preference, then to light.
+        function jenkinsPrefersDark() {
+          var probe = document.body || document.documentElement;
+          var bg = probe ? window.getComputedStyle(probe).backgroundColor : '';
+          var m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?/.exec(bg || '');
+          if (m &amp;&amp; (m[4] === undefined || parseFloat(m[4]) > 0)) {
+            var lum = (0.2126 * m[1] + 0.7152 * m[2] + 0.0722 * m[3]) / 255;
+            return lum &lt; 0.5;
+          }
+          return !!(window.matchMedia &amp;&amp; window.matchMedia('(prefers-color-scheme: dark)').matches);
+        }
+
+        // setTheme() is GLOBAL to the monaco namespace, not per-instance: one call themes every
+        // editor on the page, including ones created later (a content-type switch recreates the
+        // editor; compare mode creates a diff editor). That is why the theme is not passed as a
+        // `theme:` option at each monaco.editor.create() call site — doing so would require every
+        // current and future creation site to remember it.
+        function applyMonacoTheme() {
+          if (window.monaco &amp;&amp; monaco.editor) {
+            monaco.editor.setTheme(jenkinsPrefersDark() ? 'vs-dark' : 'vs');
+          }
+        }
+
+        // The appearance can change without a page reload: a theme plugin can swap its stylesheet
+        // or toggle a class, and the OS scheme can flip while the theme follows it. Observing
+        // class/style/attribute changes on both html and body catches the former (the repaint is
+        // what we re-measure), matchMedia catches the latter. Re-measuring is cheap — one
+        // getComputedStyle read — so no debounce is warranted here.
+        function watchJenkinsTheme() {
+          if (window.matchMedia) {
+            var mq = window.matchMedia('(prefers-color-scheme: dark)');
+            if (mq.addEventListener) { mq.addEventListener('change', applyMonacoTheme); }
+          }
+          if (window.MutationObserver) {
+            var obs = new MutationObserver(applyMonacoTheme);
+            var opts = { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] };
+            obs.observe(document.documentElement, opts);
+            if (document.body) { obs.observe(document.body, opts); }
+          }
+        }
+
         require.config({ paths: { vs: '${rootURL}/plugin/${it.pluginShortName}/monaco/vs' } });
         require(['vs/editor/editor.main'], function () {
           monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
             validate: true, allowComments: false, schemas: []
           });
+          applyMonacoTheme();
+          watchJenkinsTheme();
           registerXmlYamlFormatProviders();
           overrideEditor = monaco.editor.create(document.getElementById('overrideEditor'), {
             value: __overrideSeed, language: languageForType(currentContentType), automaticLayout: true
