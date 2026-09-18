@@ -1,0 +1,13 @@
+# Keeps the plugin's dependencies and workflow actions current. The Plugin Health Score's
+# `dependabot` probe looks for exactly this file; the practical reason for it is that a stale
+# Jenkins parent POM or a stale core baseline is the most common way a plugin quietly rots.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,3 @@
+# Satisfies the Plugin Health Score's `code-ownership` probe and makes review routing explicit
+# once the repository is hosted under the jenkinsci organization.
+* @Retro-kharkov1
