@@ -14,8 +14,8 @@ Ground truth for the JSON shape used here:
 
 Usage:
     python3 generate_update_center.py \
-        --hpi ../target/config-template-sync.hpi \
-        --base-url https://github.com/Retro-kharkov1/config-template-sync/releases/download/vVERSION \
+        --hpi ../target/job-config-chain.hpi \
+        --base-url https://github.com/Retro-kharkov1/job-config-chain/releases/download/vVERSION \
         --out site/update-center.json
 
 'VERSION' in --base-url is replaced with the plugin version read out of the .hpi's own
@@ -93,7 +93,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--site-id",
-        default="config-template-sync-update-center",
+        default="job-config-chain-update-center",
         help="Value for the top-level 'id' field (site source id).",
     )
     parser.add_argument(

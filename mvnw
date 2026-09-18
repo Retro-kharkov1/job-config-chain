@@ -147,7 +147,7 @@ MAVEN_HOME="${MAVEN_USER_HOME}/wrapper/dists/${distributionUrlNameMain-}/$(hash_
 
 exec_maven() {
   unset MVNW_VERBOSE MVNW_USERNAME MVNW_PASSWORD MVNW_REPOURL || :
-  # config-template-sync: compute the CI-friendly `revision` property from GitVersion
+  # job-config-chain: compute the CI-friendly `revision` property from GitVersion
   # before delegating to the real Maven binary, so a single `./mvnw clean verify` — no
   # -D flag, no CI-platform script — produces a real computed SemVer in the built
   # .hpi (see the long comment on the `revision` property in pom.xml for why this
