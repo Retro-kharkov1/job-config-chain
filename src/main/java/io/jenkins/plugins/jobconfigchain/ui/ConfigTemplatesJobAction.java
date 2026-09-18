@@ -88,6 +88,15 @@ public class ConfigTemplatesJobAction implements Action {
         return "configTemplates";
     }
 
+    /**
+     * This plugin's own Jenkins short-name, for the Monaco editor asset URLs in {@code index.jelly}
+     * ({@code ${it.pluginShortName}} — see {@link PluginShortName} for why this is resolved here
+     * instead of hardcoded).
+     */
+    public String getPluginShortName() {
+        return PluginShortName.get();
+    }
+
     /** The job this action was contributed to — read fresh, never cached. Exposed for the Jelly view. */
     public Job<?, ?> getJob() {
         return job;
