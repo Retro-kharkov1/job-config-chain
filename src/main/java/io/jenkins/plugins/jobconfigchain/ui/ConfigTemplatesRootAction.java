@@ -92,7 +92,16 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
     @Override
     public String getIconFileName() {
         // only shown to users who can see it; icon resolution mirrors Jenkins core's Managed Files link
-        return "symbol-document-text-outline-plugin-ionicons-api";
+        // Format is "symbol-<name> plugin-<plugin-short-name>", SPACE-separated, not one
+        // dash-joined token: core's lib/layout/icon.jelly hands the value to
+        // Functions#extractPluginNameFromIconSrc, which looks for a separate whitespace-delimited
+        // word starting with "plugin-". A dash-joined value yields an empty plugin name, the
+        // symbol is then looked up in core's own set under a name that does not exist there, and
+        // Jenkins renders its missing-symbol placeholder — the cross the owner reported on
+        // 2026-09-18. Verified against a shipped plugin doing the same thing: credentials uses
+        // "symbol-credentials plugin-credentials". Requires ionicons-api as a real runtime
+        // dependency (declared in pom.xml), otherwise the symbol still cannot be resolved.
+        return "symbol-layers-outline plugin-ionicons-api";
     }
 
     @Override

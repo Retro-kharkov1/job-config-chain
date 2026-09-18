@@ -206,6 +206,16 @@
       <artifactId>plain-credentials</artifactId>
     </dependency>
     <dependency>
+      <!-- Supplies the `symbol-*-plugin-ionicons-api` icon symbols used by
+           ConfigTemplatesRootAction/ConfigTemplatesJobAction#getIconFileName(). Without this as a
+           real runtime dependency the symbol cannot be resolved on a live controller and Jenkins
+           renders its missing-symbol placeholder instead of the icon (owner report, 2026-09-18:
+           a cross appeared on both "Config Templates" menu entries). Version is managed by the
+           imported bom-2.555.x. -->
+      <groupId>io.jenkins.plugins</groupId>
+      <artifactId>ionicons-api</artifactId>
+    </dependency>
+    <dependency>
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
       <version>2.10.1</version>

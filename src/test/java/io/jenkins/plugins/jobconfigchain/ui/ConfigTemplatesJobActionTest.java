@@ -68,6 +68,19 @@ public class ConfigTemplatesJobActionTest {
                 new ConfigTemplatesRootAction().getDisplayName(), jobAction.getDisplayName());
         assertEquals("icon must match the ManagementLink entry",
                 new ConfigTemplatesRootAction().getIconFileName(), jobAction.getIconFileName());
+
+        // Guards the exact defect reported 2026-09-18: the value had been written as one
+        // dash-joined token ("symbol-<name>-plugin-<plugin>"), which Jenkins cannot resolve at
+        // all — core's Functions#extractPluginNameFromIconSrc scans for a separate
+        // whitespace-delimited "plugin-" word, so the plugin name came back empty and both menu
+        // entries rendered the missing-symbol placeholder. Asserting the shape (not just that the
+        // two sites agree) is the point: the previous assertion above passed happily while BOTH
+        // sites were equally broken.
+        String icon = jobAction.getIconFileName();
+        assertTrue("icon must name a symbol: " + icon, icon.startsWith("symbol-"));
+        assertTrue("icon must carry the owning plugin as a separate \"plugin-\" word, "
+                        + "not dash-joined onto the symbol name: " + icon,
+                icon.contains(" plugin-"));
         assertEquals("target must be a plain job-relative segment, exposed at "
                         + "/job/<name>/configTemplates just like /job/<name>/configure",
                 "configTemplates", jobAction.getUrlName());
