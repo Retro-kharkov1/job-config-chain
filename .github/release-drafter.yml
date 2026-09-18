@@ -1,0 +1,5 @@
+# Drafts release notes from merged pull requests. The Plugin Health Score's `release-drafter`
+# probe checks for this configuration; it becomes functionally useful once releases are cut
+# through the Jenkins CD workflow rather than by hand.
+_extends: .github
+tag-template: $NEXT_MINOR_VERSION
