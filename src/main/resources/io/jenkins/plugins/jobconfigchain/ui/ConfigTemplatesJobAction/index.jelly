@@ -257,8 +257,8 @@
       <st:include class="${it.sharedBlocksClass}" page="baseChainBlock.jelly" it="${it}"/>
       <st:include class="${it.sharedBlocksClass}" page="editorBlock.jelly" it="${it}"/>
 
-      <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
-      <link rel="stylesheet" href="${rootURL}/plugin/config-template-sync/monaco/vs/editor/editor.main.css"/>
+      <script src="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/loader.js"/>
+      <link rel="stylesheet" href="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/editor/editor.main.css"/>
       <script>
         var __overrideSeed = <j:out value="${it.editorSeedJsonForScript}"/>;
         var __availableProjectKeys = <j:out value="${it.availableCommonProjectKeysJsonForScript}"/>;
@@ -391,7 +391,7 @@
           });
         }
 
-        require.config({ paths: { vs: '${rootURL}/plugin/config-template-sync/monaco/vs' } });
+        require.config({ paths: { vs: '${rootURL}/plugin/${it.pluginShortName}/monaco/vs' } });
         require(['vs/editor/editor.main'], function () {
           monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
             validate: true, allowComments: false, schemas: []

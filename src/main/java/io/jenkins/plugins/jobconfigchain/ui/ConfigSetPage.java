@@ -100,6 +100,15 @@ public abstract class ConfigSetPage {
         return projectKey;
     }
 
+    /**
+     * This plugin's own Jenkins short-name, for the Monaco editor asset URLs in {@code index.jelly}
+     * ({@code ${it.pluginShortName}} — see {@link PluginShortName} for why this is resolved here
+     * instead of hardcoded).
+     */
+    public String getPluginShortName() {
+        return PluginShortName.get();
+    }
+
     public ConfigSet getConfigSet() {
         return repository.find(projectKey, getRole(), getEnvironment());
     }

@@ -480,8 +480,8 @@
       </f:section>
       </div>
 
-      <script src="${rootURL}/plugin/config-template-sync/monaco/vs/loader.js"/>
-      <link rel="stylesheet" href="${rootURL}/plugin/config-template-sync/monaco/vs/editor/editor.main.css"/>
+      <script src="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/loader.js"/>
+      <link rel="stylesheet" href="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/editor/editor.main.css"/>
       <script>
         var __seed = <j:out value="${it.editorSeedJsonForScript}"/>;
         // This Config Set's content type (see multi-format-content.md) — committed and immutable once a first
@@ -544,7 +544,7 @@
           return 'json';
         }
 
-        require.config({ paths: { vs: '${rootURL}/plugin/config-template-sync/monaco/vs' } });
+        require.config({ paths: { vs: '${rootURL}/plugin/${it.pluginShortName}/monaco/vs' } });
         require(['vs/editor/editor.main'], function () {
           monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
             validate: true, allowComments: false, schemas: []
