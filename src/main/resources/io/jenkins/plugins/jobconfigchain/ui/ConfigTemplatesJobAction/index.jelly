@@ -735,6 +735,28 @@
           return label.length &gt; max ? label.slice(0, max - 1) + '…' : label;
         }
 
+        // Localized text for the JS-built base-chain rows. The strings live in
+        // baseChainBlock.properties (and its _uk/_ru siblings) and are carried into the page as
+        // data-* attributes on the baseChainRowStrings template, because Jelly cannot substitute
+        // ${%key} inside a script block. Falling back to the key name rather than to hardcoded
+        // English keeps a missing attribute visible instead of silently looking correct in one
+        // language only - which is the failure mode this whole pass exists to remove.
+        function baseChainText(name) {
+          var tpl = document.getElementById('baseChainRowStrings');
+          var value = tpl ? tpl.dataset[name] : null;
+          return value ? value : name;
+        }
+
+        // Minimal MessageFormat-style positional substitution, enough for the {0}/{1}/{2} the
+        // base-chain strings use. Written out rather than pulled in, since the page carries no
+        // i18n runtime of its own.
+        function baseChainFormat(name) {
+          var args = Array.prototype.slice.call(arguments, 1);
+          return baseChainText(name).replace(/\{(\d+)\}/g, function (whole, i) {
+            return args[Number(i)] !== undefined ? String(args[Number(i)]) : whole;
+          });
+        }
+
         function buildBaseChainRowElement(row, index) {
           var tr = document.createElement('tr');
           tr.className = 'ctsync-basechain-row';
@@ -747,7 +769,7 @@
           var handle = document.createElement('span');
           handle.className = 'ctsync-basechain-drag-handle';
           handle.setAttribute('aria-hidden', 'true');
-          handle.title = 'Drag to reorder';
+          handle.title = baseChainText('dragHandleTitle');
           // Hit-target fix (owner report, 2026-09-11): rendered size bumped from 8x16 to 12x24
           // (viewBox coordinates unchanged — the browser scales the same glyph up), matching the
           // wider .ctsync-basechain-drag-cell/-drag-handle boxes above.
@@ -854,7 +876,7 @@
             openLink.rel = 'noopener noreferrer';
             openLink.className = 'ctsync-basechain-open-link';
             openLink.style.flex = '0 0 auto';
-            openLink.title = 'Open ' + row.projectKey + ' in a new tab';
+            openLink.title = baseChainFormat('openInNewTabTitle', row.projectKey);
             openLink.innerHTML = '&lt;svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"&gt;'
                 + '&lt;path d="M6.5 3H3.5C3.22 3 3 3.22 3 3.5v9c0 .28.22.5.5.5h9c.28 0 .5-.22.5-.5v-3M9 3h4v4M13 3L7 9" '
                 + 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/&gt;&lt;/svg&gt;';
@@ -924,7 +946,7 @@
           var upBtn = document.createElement('button');
           upBtn.type = 'button';
           upBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
-          upBtn.title = 'Move up (higher precedence rows come later)';
+          upBtn.title = baseChainText('moveUpTitle');
           upBtn.innerHTML = '&#9650;';
           upBtn.disabled = (index === 0);
           upBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, -1); }; })(index);
@@ -933,7 +955,7 @@
           var downBtn = document.createElement('button');
           downBtn.type = 'button';
           downBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
-          downBtn.title = 'Move down (later rows win on overlapping keys)';
+          downBtn.title = baseChainText('moveDownTitle');
           downBtn.innerHTML = '&#9660;';
           downBtn.disabled = (index === baseChainRows.length - 1);
           downBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, 1); }; })(index);
@@ -942,7 +964,7 @@
           var removeBtn = document.createElement('button');
           removeBtn.type = 'button';
           removeBtn.className = 'jenkins-button jenkins-button--destructive ctsync-basechain-remove-btn';
-          removeBtn.title = 'Remove this base from the chain';
+          removeBtn.title = baseChainText('removeTitle');
           removeBtn.innerHTML = '&#10005;';
           removeBtn.onclick = (function (idx) { return function () { removeBaseChainRow(idx); }; })(index);
           actionsTd.appendChild(removeBtn);
@@ -972,8 +994,8 @@
             var curRef = lastPerReference[index];
             var caption = document.createElement('div');
             caption.className = 'ctsync-basechain-resolved-caption';
-            caption.textContent = 'Resolved content (read-only) — ' + curRef.projectKey + ', '
-                + curRef.pinMode + ' (v' + curRef.resolvedVersionNumber + ')';
+            caption.textContent = baseChainFormat('resolvedCaption', curRef.projectKey,
+                curRef.pinMode, curRef.resolvedVersionNumber);
             detailTd.appendChild(caption);
             var diffContainer = document.createElement('div');
             diffContainer.className = 'ctsync-basechain-diff-container';
@@ -993,7 +1015,7 @@
             rowDiffEditor.setModel({ original: leftModel, modified: rightModel });
             baseChainDiffEditors.push(rowDiffEditor);
           } else {
-            detailTd.textContent = 'Not yet resolvable — check the project/version picker above.';
+            detailTd.textContent = baseChainText('notResolvable');
           }
           detailTr.appendChild(detailTd);
           return [tr, detailTr];
@@ -1291,11 +1313,16 @@
           toggle.style.display = 'inline';
           tr.querySelector('.js-basechain-count').textContent = chain.length;
           var countLabel = tr.querySelector('.js-basechain-count').nextSibling;
-          if (countLabel) { countLabel.textContent = ' ' + (chain.length === 1 ? 'base' : 'bases'); }
+          if (countLabel) {
+            // Singular and plural are separate keys, not an English 's' appended at runtime:
+            // most target languages do not pluralize that way.
+            countLabel.textContent = ' ' + (chain.length === 1
+                ? tpl.dataset.baseSingular : tpl.dataset.basePlural);
+          }
           var detail = tr.querySelector('.js-basechain-detail');
           detail.id = 'baseChainDetail-' + v.versionNumber;
           if (chain.length === 0) {
-            detail.textContent = '(no declared chain — 0 bases)';
+            detail.textContent = tpl.dataset.noDeclaredChain;
           } else {
             detail.innerHTML = '';
             for (var c = 0; c &lt; chain.length; c++) {
@@ -1318,7 +1345,7 @@
             btn.setAttribute('data-always-disabled', 'true');
             btn.title = tpl.dataset.alreadyActiveTitle;
           } else {
-            btn.title = 'Activate version ' + v.versionNumber + ' without changing the editor content';
+            btn.title = tpl.dataset.activateTitle.replace('{0}', String(v.versionNumber));
             btn.onclick = (function (num) {
               return function (e) { e.stopPropagation(); activateVersion(num); };
             })(v.versionNumber);

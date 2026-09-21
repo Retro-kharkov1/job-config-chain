@@ -89,7 +89,7 @@ public class ConfigTemplatesJobAction implements Action {
 
     @Override
     public String getDisplayName() {
-        return "Config Templates";
+        return Messages.ConfigTemplates_DisplayName();
     }
 
     @Override
@@ -660,10 +660,8 @@ public class ConfigTemplatesJobAction implements Action {
         if (asString != null && asString.equals(SecretPlaceholder.VALUE)) {
             return null;
         }
-        return "Cannot mark '" + path + "' as a secret path: the currently-active version (v"
-                + active.getVersionNumber() + ") already stores a real value there. Replace that value "
-                + "with the '" + SecretPlaceholder.VALUE
-                + "' placeholder and save a new version first, then bind the credential.";
+        return Messages.SecretPath_RejectedActiveValueHoldsRealValue(
+                path, active.getVersionNumber(), SecretPlaceholder.VALUE);
     }
 
     // ---- Compare (mirrors ConfigSetPage#doDiffVersions/#jsCompareVersions) ----

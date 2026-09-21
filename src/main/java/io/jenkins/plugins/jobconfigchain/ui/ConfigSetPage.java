@@ -819,10 +819,8 @@ public abstract class ConfigSetPage {
         if (asString != null && asString.equals(SecretPlaceholder.VALUE)) {
             return null;
         }
-        return "Cannot mark '" + path + "' as a secret path: the currently-active version (v"
-                + active.getVersionNumber() + ") already stores a real value there. Replace that value "
-                + "with the '" + SecretPlaceholder.VALUE + "' placeholder and save a new version first, "
-                + "then bind the credential.";
+        return Messages.SecretPath_RejectedActiveValueHoldsRealValue(
+                path, active.getVersionNumber(), SecretPlaceholder.VALUE);
     }
 
     /**
