@@ -2,8 +2,11 @@ package io.jenkins.plugins.jobconfigchain.ui;
 
 import hudson.Extension;
 import hudson.model.ManagementLink;
+import io.jenkins.plugins.jobconfigchain.model.ConfigSet;
 import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
 import jenkins.model.Jenkins;
+import org.kohsuke.stapler.bind.JavaScriptMethod;
+import net.sf.json.JSONObject;
 import org.kohsuke.stapler.StaplerProxy;
 
 import java.util.List;
@@ -170,5 +173,118 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
 
     ConfigSetRepository getRepository() {
         return repository;
+    }
+
+    // ---- Deleted Config Sets --------------------------------------------------------------------
+    // A withdrawn Config Set keeps its file, its history and its name. It disappears from the live
+    // inventory above - and from the job base-chain picker, and from every resolver - but an
+    // administrator can still see it here, put it back, or destroy it for good.
+
+    /** The withdrawn Config Sets, revealed by the "show deleted" toggle. */
+    public List<ConfigSet> getDeletedConfigSets() {
+        return repository.listDeletedCommon();
+    }
+
+    /**
+     * The project keys currently occupied by a withdrawn Config Set, as a ready-to-embed JS string
+     * literal. Used only to warn before navigating to a name that cannot be created - the real
+     * refusal is server-side, in the save path, because this page creates nothing by itself.
+     */
+    public String getDeletedProjectKeysJsonForScript() {
+        net.sf.json.JSONArray keys = new net.sf.json.JSONArray();
+        for (ConfigSet deleted : getDeletedConfigSets()) {
+            keys.add(deleted.getProjectKey());
+        }
+        return ConfigSetPage.toJsScriptStringLiteral(keys.toString());
+    }
+
+    /**
+     * The Config Set named by a {@code ?deleted=} / {@code ?restored=} / {@code ?purged=} parameter
+     * after a lifecycle action redirected here, or {@code null}.
+     *
+     * <p>Rendered server-side rather than as a toast because the action navigates away from the
+     * page that would have shown the toast. It is validated against the repository rather than
+     * echoed, so a hand-typed parameter renders nothing: the deleted and restored banners require
+     * the record to actually be in that state, and the purged one requires it to be gone.</p>
+     */
+    public String getFlashDeletedKey() {
+        String key = flashParameter("deleted");
+        ConfigSet record = key == null ? null : repository.findCommonIncludingDeleted(key);
+        return record != null && record.isDeleted() ? key : null;
+    }
+
+    public String getFlashRestoredKey() {
+        String key = flashParameter("restored");
+        ConfigSet record = key == null ? null : repository.findCommonIncludingDeleted(key);
+        return record != null && !record.isDeleted() ? key : null;
+    }
+
+    public String getFlashPurgedKey() {
+        String key = flashParameter("purged");
+        return key != null && repository.findCommonIncludingDeleted(key) == null ? key : null;
+    }
+
+    private static String flashParameter(String name) {
+        org.kohsuke.stapler.StaplerRequest2 request = org.kohsuke.stapler.Stapler.getCurrentRequest2();
+        if (request == null) {
+            return null;
+        }
+        String value = request.getParameter(name);
+        return value == null || value.trim().isEmpty() ? null : value;
+    }
+
+    /**
+     * Restores a withdrawn Config Set. No typed-name confirmation: it is fully reversible - the
+     * worst outcome is withdrawing it again - and gating a reversible action behind the same
+     * ceremony as an irreversible one teaches operators to type through both without reading.
+     */
+    @JavaScriptMethod(name = "restoreConfigSet")
+    public JSONObject jsRestoreConfigSet(String payloadJson) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        String key = readProjectKey(payloadJson);
+        if (key == null) {
+            return lifecycleError("NOT_FOUND", "No Config Set named.");
+        }
+        return new CommonConfigSetPage(key, repository).jsRestoreConfigSet();
+    }
+
+    /** What purging the named Config Set would destroy, and whether anything still references it. */
+    @JavaScriptMethod(name = "purgePreflight")
+    public JSONObject jsPurgePreflight(String payloadJson) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        String key = readProjectKey(payloadJson);
+        if (key == null) {
+            return lifecycleError("NOT_FOUND", "No Config Set named.");
+        }
+        return new CommonConfigSetPage(key, repository).jsPurgePreflight();
+    }
+
+    /** Destroys a withdrawn Config Set, after the same typed-name confirmation as the delete. */
+    @JavaScriptMethod(name = "purgeConfigSet")
+    public JSONObject jsPurgeConfigSet(String payloadJson) {
+        Jenkins.get().checkPermission(Jenkins.ADMINISTER);
+        String key = readProjectKey(payloadJson);
+        if (key == null) {
+            return lifecycleError("NOT_FOUND", "No Config Set named.");
+        }
+        return new CommonConfigSetPage(key, repository).jsPurgeConfigSet(payloadJson);
+    }
+
+    private static String readProjectKey(String payloadJson) {
+        com.google.gson.JsonObject payload = ConfigSetPage.parseJsPayloadObject(payloadJson);
+        if (payload == null || !payload.has("projectKey")
+                || !payload.get("projectKey").isJsonPrimitive()) {
+            return null;
+        }
+        String key = payload.get("projectKey").getAsString();
+        return key.trim().isEmpty() ? null : key;
+    }
+
+    private static JSONObject lifecycleError(String code, String message) {
+        JSONObject result = new JSONObject();
+        result.put("ok", false);
+        result.put("errorCode", code);
+        result.put("error", message);
+        return result;
     }
 }
