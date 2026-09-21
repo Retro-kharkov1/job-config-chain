@@ -3,17 +3,26 @@
   <!--
     Per-column filtering for the plugin's data tables (owner request, 2026-09-21).
 
-    Sorting is NOT implemented here: Jenkins core already ships scripts/sortable.js and loads it on
-    every page (jenkins-core 2.555.3, lib/layout/layout.jelly), activating for any table carrying
-    the "sortable" class - core's own buildListTable.jelly and projectView.jelly use exactly
-    class="jenkins-table sortable". Re-implementing a comparator here would be more code and would
-    look foreign next to native Jenkins tables, so the tables simply opt in to the core behaviour
-    and this block only adds what core has no equivalent for.
+    Sorting itself is core's: Jenkins ships scripts/sortable.js, loads it on every page, and
+    activates it for any table carrying the "sortable" class. This block only adds filtering, which
+    core has no equivalent for - and is shaped around two hard constraints found by reading core's
+    sortable.js (2.555.3) rather than assuming:
+
+      * It sorts `table.rows` from index 1 onward, and that collection spans thead AND tbody. A
+        second header row is therefore treated as data: core physically moves it into tbody and
+        sorts it among the rows. Seen live - an earlier version of this block put the filters in
+        their own thead row, and the first sort dragged that row into the body.
+      * getSorter() reads `rows[1]` to decide whether a column sorts as text, number or date, so an
+        extra row near the top corrupts that detection silently - something no amount of
+        keep-it-pinned styling would fix.
+
+    Hence the filter controls live INSIDE the existing header cells, and the status line lives
+    OUTSIDE the table. Nothing is added to the table's row set at all.
 
     One implementation, three consumers: the Config Sets list, Version history and Secrets manifest
-    each just tag their table with ctsync-filterable. The Base chain table deliberately does not -
-    its row order IS the merge-patch precedence, so neither sorting nor filtering may reorder or
-    hide rows there without misrepresenting which value wins.
+    tag their table with ctsync-filterable. The Base chain table deliberately does not - its row
+    order IS the merge-patch precedence, so neither sorting nor filtering may reorder or hide rows
+    there without misrepresenting which value wins.
   -->
   <template id="ctsyncTableToolsStrings"
             data-filter-placeholder="${%filter.placeholder}"
@@ -22,27 +31,22 @@
             data-any-label="${%filter.any}"/>
 
   <style>
-    .ctsync-filter-row th {
-      padding-top: 4px;
-      padding-bottom: 6px;
-      background: inherit;
-    }
     .ctsync-filter-input {
+      display: block;
       width: 100%;
       min-width: 0;
       box-sizing: border-box;
+      margin-top: 4px;
       padding: 2px 6px;
       font-size: 12px;
       font-weight: normal;
     }
-    .ctsync-filter-count {
+    .ctsync-filter-status {
       margin: 4px 2px 0;
       font-size: 12px;
       color: var(--text-color-secondary, #666);
     }
-    /* Hidden rather than removed, so a sort performed while a filter is active still sees the
-       full row set and the filter can be widened again without a re-render. */
-    .ctsync-filter-count[hidden] { display: none; }
+    .ctsync-filter-status[hidden] { display: none; }
   </style>
 
   <script><![CDATA[
@@ -61,16 +65,47 @@
         return template.replace('{0}', String(a)).replace('{1}', String(b));
       }
 
-      // Rows the table renders for its own state, not data: the server-rendered empty state and
-      // the row this script inserts when nothing matches. Filtering or counting them would make
-      // an empty table report one row, and could hide the very message explaining the emptiness.
-      function isStructuralRow(tr) {
-        return tr.classList.contains('ctsync-empty-state-row')
-            || tr.classList.contains('ctsync-no-match-row');
+      // The server renders its own "nothing here yet" row inside tbody. Counting it would make an
+      // empty table report one row, and filtering it would hide the very message explaining the
+      // emptiness.
+      function dataRows(tbody) {
+        return Array.prototype.filter.call(tbody.rows, function (tr) {
+          return !tr.classList.contains('ctsync-empty-state-row');
+        });
       }
 
-      function dataRows(tbody) {
-        return Array.prototype.filter.call(tbody.rows, function (tr) { return !isStructuralRow(tr); });
+      // Core replaces each header cell's innerHTML wholesale when it wires sorting, so a control
+      // placed there first would be swallowed into the sort link. Core exposes table.sortable once
+      // it has run; wait for that rather than racing it. The wait is bounded so a table that never
+      // gets sorting still ends up with its filters.
+      function whenSortingWired(table, callback) {
+        if (!table.classList.contains('sortable') || table.sortable) { callback(); return; }
+        var attempts = 0;
+        (function poll() {
+          if (table.sortable || attempts++ > 50) { callback(); return; }
+          setTimeout(poll, 20);
+        })();
+      }
+
+      function buildControl(th, s) {
+        // A column whose values come from a fixed set (a content type, an active flag) gets a
+        // picker rather than a text box: the values are already known, so making the user guess
+        // and type them - and get nothing when they type "json" for a cell reading "JSON" - would
+        // be the wrong model. The column declares this itself; inferring it from how few distinct
+        // values happen to be present today would silently flip to a text box as soon as real data
+        // grew more varied.
+        var enumerable = th.dataset.ctsyncFilter === 'enum';
+        var control;
+        if (enumerable) {
+          control = document.createElement('select');
+          control.className = 'jenkins-select__input ctsync-filter-input';
+        } else {
+          control = document.createElement('input');
+          control.type = 'search';
+          control.className = 'jenkins-input ctsync-filter-input';
+          control.placeholder = s.placeholder;
+        }
+        return { control: control, enumerable: enumerable };
       }
 
       function wire(table) {
@@ -80,83 +115,53 @@
         table.dataset.ctsyncFilterWired = 'true';
 
         var s = strings();
-        var headerCells = Array.prototype.slice.call(thead.rows[0].cells);
-
-        var filterRow = thead.insertRow(-1);
-        filterRow.className = 'ctsync-filter-row';
         var inputs = [];
-        headerCells.forEach(function (th, index) {
-          var cell = document.createElement('th');
-          // A column with no header text is an actions/control column - there is nothing
-          // meaningful to type against it, and an input there would just eat width.
-          if (th.textContent.trim() !== '') {
-            // A column whose values come from a fixed set (a content type, an active flag) gets a
-            // picker rather than a text box: the values are already known, so making the user
-            // guess and type them - and get nothing when they type "json" for a cell reading
-            // "JSON" - would be the wrong model. The column declares this itself in the markup;
-            // inferring it from how few distinct values happen to be present today would silently
-            // flip to a text box as soon as real data grew more varied.
-            var enumerable = th.dataset.ctsyncFilter === 'enum';
-            var control;
-            if (enumerable) {
-              control = document.createElement('select');
-              control.className = 'jenkins-select__input ctsync-filter-input';
-            } else {
-              control = document.createElement('input');
-              control.type = 'search';
-              control.className = 'jenkins-input ctsync-filter-input';
-              control.placeholder = s.placeholder;
-            }
-            control.setAttribute('aria-label', s.placeholder + ': ' + th.textContent.trim());
-            // Core's sortable binds its click handler on the header; without this, using a filter
-            // would also re-sort the table under the user.
-            control.addEventListener('click', function (e) { e.stopPropagation(); });
-            control.addEventListener(enumerable ? 'change' : 'input', function () { apply(table); });
-            inputs.push({ index: index, input: control, enumerable: enumerable });
-            cell.appendChild(control);
-          }
-          filterRow.appendChild(cell);
+
+        Array.prototype.forEach.call(thead.rows[0].cells, function (th, index) {
+          // An empty header is an actions/control column - there is nothing meaningful to type
+          // against it, and a control there would only eat width.
+          var caption = th.textContent.trim();
+          if (caption === '') { return; }
+
+          var built = buildControl(th, s);
+          var control = built.control;
+          control.setAttribute('aria-label', s.placeholder + ': ' + caption);
+          // Core binds sorting to the anchor that now wraps the caption in this same cell. Without
+          // this, using a filter would also re-sort the table under the user.
+          control.addEventListener('click', function (e) { e.stopPropagation(); });
+          control.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+          control.addEventListener(built.enumerable ? 'change' : 'input', function () {
+            apply(table);
+          });
+          th.appendChild(control);
+          inputs.push({ index: index, input: control, enumerable: built.enumerable });
         });
+
         table.ctsyncFilterInputs = inputs;
         syncEnumOptions(table);
 
-        var count = document.createElement('div');
-        count.className = 'ctsync-filter-count';
-        count.hidden = true;
-        table.parentNode.insertBefore(count, table.nextSibling);
-        table.ctsyncFilterCount = count;
+        var status = document.createElement('div');
+        status.className = 'ctsync-filter-status';
+        status.hidden = true;
+        table.parentNode.insertBefore(status, table.nextSibling);
+        table.ctsyncFilterStatus = status;
 
-        // Version history and Secrets manifest rebuild their tbody after Save/Activate. Without
-        // this, an active filter would silently stop applying to the rows that replaced the ones
-        // it was filtering - the table would look unfiltered while the inputs still held text.
-        //
-        // The callback must ignore the no-match row, because apply() inserts and removes that row
-        // itself. A simple "currently applying" flag does NOT work here: observer callbacks are
-        // delivered as a microtask, so they run after apply() has already cleared the flag, and
-        // each pass re-triggers the next - an infinite loop that hangs the tab (hit live while
-        // verifying this feature). Filtering the records by what actually changed is what breaks
-        // the cycle.
+        // Version history and Secrets manifest rebuild their tbody after Save/Activate, and a sort
+        // re-appends every row. Without this, an active filter would silently stop applying to the
+        // rows that replaced the ones it was filtering - the table would look unfiltered while the
+        // controls still held a value. Nothing in this block adds or removes tbody rows, so the
+        // observer cannot retrigger itself.
         if (window.MutationObserver) {
-          var observer = new MutationObserver(function (records) {
-            var onlyOurOwnRows = records.every(function (record) {
-              var touched = Array.prototype.slice.call(record.addedNodes)
-                  .concat(Array.prototype.slice.call(record.removedNodes));
-              return touched.length > 0 && touched.every(function (node) {
-                return node.nodeType === 1 && node.classList.contains('ctsync-no-match-row');
-              });
-            });
-            if (onlyOurOwnRows) { return; }
+          new MutationObserver(function () {
             syncEnumOptions(table);
             apply(table);
-          });
-          observer.observe(tbody, { childList: true });
+          }).observe(tbody, { childList: true });
         }
       }
 
       // Options come from the column's actual cells, not a hardcoded list: the plugin's content
       // types can grow, and a stale hardcoded set would offer values that match nothing or omit
-      // ones that exist. Re-run after an AJAX re-render, preserving the current selection so a
-      // Save does not silently widen an active filter.
+      // ones that exist.
       function syncEnumOptions(table) {
         var s = strings();
         (table.ctsyncFilterInputs || []).forEach(function (f) {
@@ -187,17 +192,15 @@
       }
 
       function apply(table) {
-        var tbody = table.tBodies[0];
-        var inputs = table.ctsyncFilterInputs || [];
         var s = strings();
-        var terms = inputs
+        var terms = (table.ctsyncFilterInputs || [])
             .map(function (f) {
               return { index: f.index, enumerable: f.enumerable,
                        value: f.input.value.trim().toLowerCase() };
             })
             .filter(function (f) { return f.value !== ''; });
 
-        var rows = dataRows(tbody);
+        var rows = dataRows(table.tBodies[0]);
         var visible = 0;
         rows.forEach(function (tr) {
           var match = terms.every(function (t) {
@@ -212,32 +215,22 @@
           if (match) { visible++; }
         });
 
-        // Only touch the no-match row when its presence actually needs to change. Removing and
-        // re-adding an identical row on every keystroke would churn the DOM and emit mutation
-        // records for no reason.
-        var existing = tbody.querySelector('.ctsync-no-match-row');
-        var wanted = terms.length > 0 && visible === 0 && rows.length > 0;
-        if (existing && !wanted) {
-          existing.remove();
-        } else if (!existing && wanted) {
-          var tr = document.createElement('tr');
-          tr.className = 'ctsync-no-match-row ctsync-empty-state-row';
-          var td = document.createElement('td');
-          td.colSpan = table.tHead.rows[0].cells.length;
-          td.textContent = s.noMatches;
-          tr.appendChild(td);
-          tbody.appendChild(tr);
-        }
-
-        var count = table.ctsyncFilterCount;
-        if (count) {
-          count.hidden = terms.length === 0;
-          count.textContent = format(s.count, visible, rows.length);
+        var status = table.ctsyncFilterStatus;
+        if (status) {
+          status.hidden = terms.length === 0;
+          // The no-matches message lives here rather than as a row in tbody, because core's
+          // sortable treats every tbody row as data and would sort the message among the results.
+          status.textContent = (terms.length > 0 && visible === 0 && rows.length > 0)
+              ? s.noMatches
+              : format(s.count, visible, rows.length);
         }
       }
 
       function init() {
-        Array.prototype.forEach.call(document.querySelectorAll('table.ctsync-filterable'), wire);
+        Array.prototype.forEach.call(document.querySelectorAll('table.ctsync-filterable'),
+          function (table) {
+            whenSortingWired(table, function () { wire(table); });
+          });
       }
 
       if (document.readyState === 'loading') {
