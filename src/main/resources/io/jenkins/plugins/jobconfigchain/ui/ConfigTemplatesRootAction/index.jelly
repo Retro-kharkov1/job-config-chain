@@ -151,7 +151,7 @@
               <th>${%column.name}</th>
               <th data-ctsync-filter="enum">${%column.type}</th>
               <th>${%column.activeVersion}</th>
-              <th>${%column.lastModified}</th>
+              <th>${%column.changedBy}</th>
             </tr>
           </thead>
           <tbody>
