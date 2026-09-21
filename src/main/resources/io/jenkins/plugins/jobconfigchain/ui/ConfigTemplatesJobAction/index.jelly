@@ -718,7 +718,12 @@
         // page does not perform; this call is the deterministic path for the ones it does.
         // Guarded because the filter block is only included on pages that have filterable tables.
         function refreshTableFilters() {
-          if (typeof window.ctsyncRefreshTableFilters === 'function') {
+          // `typeof window` first, not `typeof window.x`: the latter still throws when window
+          // itself is undefined, which is exactly the case in the Nashorn JS-engine unit tests
+          // that run this script with only a document stub - the same reason setTimeout is
+          // guarded this way further down.
+          if (typeof window !== 'undefined'
+              &amp;&amp; typeof window.ctsyncRefreshTableFilters === 'function') {
             window.ctsyncRefreshTableFilters();
           }
         }
