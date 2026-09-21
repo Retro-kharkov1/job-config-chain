@@ -999,8 +999,7 @@ public class ConfigTemplatesJobActionTest {
         Matcher matcher = INLINE_SCRIPT.matcher(html);
         StringBuilder allScripts = new StringBuilder();
         while (matcher.find()) {
-            if (matcher.group(1) != null) { allScripts.append(matcher.group(1)).append('
-'); }
+            if (matcher.group(1) != null) { allScripts.append(matcher.group(1)).append('\n'); }
         }
 
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
