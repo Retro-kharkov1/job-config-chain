@@ -143,6 +143,37 @@ public class TableFilterBehaviourTest {
                 status(page).toLowerCase().contains("no rows"));
     }
 
+    /**
+     * Establishes whether this harness can observe a tbody rebuild at all, so the test below
+     * cannot be misread. The filter's re-application after Save/Activate rides on a
+     * MutationObserver; if the harness never delivers those callbacks, a failure there says
+     * nothing about the plugin.
+     */
+    @Test
+    public void theHarnessDeliversMutationObserverCallbacksForATbodyRebuild() throws Exception {
+        seed("probe-row", ContentType.JSON);
+        HtmlPage page = listPageWithScripting();
+
+        String fired = js(page,
+                "  var t = document.querySelector('table.ctsync-filterable');"
+                        + "  window.__probeFired = 0;"
+                        + "  new MutationObserver(function () { window.__probeFired++; })"
+                        + "      .observe(t.tBodies[0], { childList: true });"
+                        + "  var rows = Array.prototype.slice.call(t.tBodies[0].rows)"
+                        + "      .map(function (r) { return r.cloneNode(true); });"
+                        + "  t.tBodies[0].innerHTML = '';"
+                        + "  rows.forEach(function (r) { t.tBodies[0].appendChild(r); });"
+                        + "  return 'mutated';");
+        assertEquals("mutated", fired);
+        page.getWebClient().waitForBackgroundJavaScript(3000);
+
+        String count = js(page, "  return String(window.__probeFired || 0);");
+        assertTrue("this harness must deliver MutationObserver callbacks for a childList change on "
+                        + "tbody, otherwise the re-application test below is measuring the harness "
+                        + "rather than the plugin - callbacks seen: " + count,
+                Integer.parseInt(count) > 0);
+    }
+
     @Test
     public void anActiveFilterIsReappliedAfterTheTableBodyIsRebuilt() throws Exception {
         seed("rebuild-keep", ContentType.JSON);
