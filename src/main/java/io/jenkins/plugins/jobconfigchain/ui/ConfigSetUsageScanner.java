@@ -122,7 +122,14 @@ public final class ConfigSetUsageScanner {
 
     /** Scans every Job on this controller. */
     public static Usage scan(String projectKey) {
-        return scan(projectKey, Jenkins.get().allItems(Job.class));
+        // allItems is declared over the raw Job type, so the result is copied into a wildcard list
+        // rather than handed straight to the overload below - which keeps that overload, the one
+        // the tests drive, free of raw types.
+        List<Job<?, ?>> jobs = new ArrayList<>();
+        for (Job<?, ?> job : Jenkins.get().allItems(Job.class)) {
+            jobs.add(job);
+        }
+        return scan(projectKey, jobs);
     }
 
     /**
