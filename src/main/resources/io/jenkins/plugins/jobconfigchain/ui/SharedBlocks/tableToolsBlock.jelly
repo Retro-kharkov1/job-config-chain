@@ -164,7 +164,10 @@
         // rows that replaced the ones it was filtering - the table would look unfiltered while the
         // controls still held a value. Nothing in this block adds or removes tbody rows, so the
         // observer cannot retrigger itself.
-        if (window.MutationObserver) {
+        // `typeof window` first: this script is also evaluated by the Nashorn JS-engine
+        // unit tests, which provide a document stub but no window, and `window.x` throws
+        // a ReferenceError there rather than returning undefined.
+        if (typeof window !== 'undefined' && window.MutationObserver) {
           new MutationObserver(function () {
             syncEnumOptions(table);
             apply(table);
@@ -252,7 +255,7 @@
       // here: an explicit call is deterministic, and it is testable - the test harness this plugin
       // builds with delivers no MutationObserver callbacks at all, so the observer path cannot be
       // covered by a test at present (see TableFilterBehaviourTest).
-      window.ctsyncRefreshTableFilters = function () {
+      var refreshAll = function () {
         Array.prototype.forEach.call(document.querySelectorAll('table.ctsync-filterable'),
           function (table) {
             if (table.ctsyncFilterInputs) {
@@ -261,6 +264,9 @@
             }
           });
       };
+      if (typeof window !== 'undefined') {
+        window.ctsyncRefreshTableFilters = refreshAll;
+      }
 
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
