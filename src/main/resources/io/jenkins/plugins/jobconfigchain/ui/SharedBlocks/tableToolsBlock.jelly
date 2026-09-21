@@ -113,9 +113,23 @@
         // Version history and Secrets manifest rebuild their tbody after Save/Activate. Without
         // this, an active filter would silently stop applying to the rows that replaced the ones
         // it was filtering - the table would look unfiltered while the inputs still held text.
+        //
+        // The callback must ignore the no-match row, because apply() inserts and removes that row
+        // itself. A simple "currently applying" flag does NOT work here: observer callbacks are
+        // delivered as a microtask, so they run after apply() has already cleared the flag, and
+        // each pass re-triggers the next - an infinite loop that hangs the tab (hit live while
+        // verifying this feature). Filtering the records by what actually changed is what breaks
+        // the cycle.
         if (window.MutationObserver) {
-          var observer = new MutationObserver(function () {
-            if (table.ctsyncApplying) { return; }
+          var observer = new MutationObserver(function (records) {
+            var onlyOurOwnRows = records.every(function (record) {
+              var touched = Array.prototype.slice.call(record.addedNodes)
+                  .concat(Array.prototype.slice.call(record.removedNodes));
+              return touched.length > 0 && touched.every(function (node) {
+                return node.nodeType === 1 && node.classList.contains('ctsync-no-match-row');
+              });
+            });
+            if (onlyOurOwnRows) { return; }
             apply(table);
           });
           observer.observe(tbody, { childList: true });
@@ -130,8 +144,6 @@
             .map(function (f) { return { index: f.index, value: f.input.value.trim().toLowerCase() }; })
             .filter(function (f) { return f.value !== ''; });
 
-        table.ctsyncApplying = true;
-
         var rows = dataRows(tbody);
         var visible = 0;
         rows.forEach(function (tr) {
@@ -143,9 +155,14 @@
           if (match) { visible++; }
         });
 
+        // Only touch the no-match row when its presence actually needs to change. Removing and
+        // re-adding an identical row on every keystroke would churn the DOM and emit mutation
+        // records for no reason.
         var existing = tbody.querySelector('.ctsync-no-match-row');
-        if (existing) { existing.remove(); }
-        if (terms.length > 0 && visible === 0 && rows.length > 0) {
+        var wanted = terms.length > 0 && visible === 0 && rows.length > 0;
+        if (existing && !wanted) {
+          existing.remove();
+        } else if (!existing && wanted) {
           var tr = document.createElement('tr');
           tr.className = 'ctsync-no-match-row ctsync-empty-state-row';
           var td = document.createElement('td');
@@ -160,8 +177,6 @@
           count.hidden = terms.length === 0;
           count.textContent = format(s.count, visible, rows.length);
         }
-
-        table.ctsyncApplying = false;
       }
 
       function init() {
