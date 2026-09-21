@@ -1,0 +1,178 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout">
+  <!--
+    Per-column filtering for the plugin's data tables (owner request, 2026-09-21).
+
+    Sorting is NOT implemented here: Jenkins core already ships scripts/sortable.js and loads it on
+    every page (jenkins-core 2.555.3, lib/layout/layout.jelly), activating for any table carrying
+    the "sortable" class - core's own buildListTable.jelly and projectView.jelly use exactly
+    class="jenkins-table sortable". Re-implementing a comparator here would be more code and would
+    look foreign next to native Jenkins tables, so the tables simply opt in to the core behaviour
+    and this block only adds what core has no equivalent for.
+
+    One implementation, three consumers: the Config Sets list, Version history and Secrets manifest
+    each just tag their table with ctsync-filterable. The Base chain table deliberately does not -
+    its row order IS the merge-patch precedence, so neither sorting nor filtering may reorder or
+    hide rows there without misrepresenting which value wins.
+  -->
+  <template id="ctsyncTableToolsStrings"
+            data-filter-placeholder="${%filter.placeholder}"
+            data-count-label="${%filter.count}"
+            data-no-matches="${%filter.noMatches}"/>
+
+  <style>
+    .ctsync-filter-row th {
+      padding-top: 4px;
+      padding-bottom: 6px;
+      background: inherit;
+    }
+    .ctsync-filter-input {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      padding: 2px 6px;
+      font-size: 12px;
+      font-weight: normal;
+    }
+    .ctsync-filter-count {
+      margin: 4px 2px 0;
+      font-size: 12px;
+      color: var(--text-color-secondary, #666);
+    }
+    /* Hidden rather than removed, so a sort performed while a filter is active still sees the
+       full row set and the filter can be widened again without a re-render. */
+    .ctsync-filter-count[hidden] { display: none; }
+  </style>
+
+  <script><![CDATA[
+    (function () {
+      function strings() {
+        var tpl = document.getElementById('ctsyncTableToolsStrings');
+        return {
+          placeholder: (tpl &amp;&amp; tpl.dataset.filterPlaceholder) || 'Filter',
+          count: (tpl &amp;&amp; tpl.dataset.countLabel) || '{0} of {1}',
+          noMatches: (tpl &amp;&amp; tpl.dataset.noMatches) || 'No rows match the filter'
+        };
+      }
+
+      function format(template, a, b) {
+        return template.replace('{0}', String(a)).replace('{1}', String(b));
+      }
+
+      // Rows the table renders for its own state, not data: the server-rendered empty state and
+      // the row this script inserts when nothing matches. Filtering or counting them would make
+      // an empty table report one row, and could hide the very message explaining the emptiness.
+      function isStructuralRow(tr) {
+        return tr.classList.contains('ctsync-empty-state-row')
+            || tr.classList.contains('ctsync-no-match-row');
+      }
+
+      function dataRows(tbody) {
+        return Array.prototype.filter.call(tbody.rows, function (tr) { return !isStructuralRow(tr); });
+      }
+
+      function wire(table) {
+        var thead = table.tHead;
+        var tbody = table.tBodies[0];
+        if (!thead || !tbody || table.dataset.ctsyncFilterWired === 'true') { return; }
+        table.dataset.ctsyncFilterWired = 'true';
+
+        var s = strings();
+        var headerCells = Array.prototype.slice.call(thead.rows[0].cells);
+
+        var filterRow = thead.insertRow(-1);
+        filterRow.className = 'ctsync-filter-row';
+        var inputs = [];
+        headerCells.forEach(function (th, index) {
+          var cell = document.createElement('th');
+          // A column with no header text is an actions/control column - there is nothing
+          // meaningful to type against it, and an input there would just eat width.
+          if (th.textContent.trim() !== '') {
+            var input = document.createElement('input');
+            input.type = 'search';
+            input.className = 'jenkins-input ctsync-filter-input';
+            input.placeholder = s.placeholder;
+            input.setAttribute('aria-label', s.placeholder + ': ' + th.textContent.trim());
+            // Core's sortable binds its click handler on the header; without this, typing in or
+            // clicking a filter would also re-sort the table under the user.
+            input.addEventListener('click', function (e) { e.stopPropagation(); });
+            input.addEventListener('input', function () { apply(table); });
+            inputs.push({ index: index, input: input });
+            cell.appendChild(input);
+          }
+          filterRow.appendChild(cell);
+        });
+        table.ctsyncFilterInputs = inputs;
+
+        var count = document.createElement('div');
+        count.className = 'ctsync-filter-count';
+        count.hidden = true;
+        table.parentNode.insertBefore(count, table.nextSibling);
+        table.ctsyncFilterCount = count;
+
+        // Version history and Secrets manifest rebuild their tbody after Save/Activate. Without
+        // this, an active filter would silently stop applying to the rows that replaced the ones
+        // it was filtering - the table would look unfiltered while the inputs still held text.
+        if (window.MutationObserver) {
+          var observer = new MutationObserver(function () {
+            if (table.ctsyncApplying) { return; }
+            apply(table);
+          });
+          observer.observe(tbody, { childList: true });
+        }
+      }
+
+      function apply(table) {
+        var tbody = table.tBodies[0];
+        var inputs = table.ctsyncFilterInputs || [];
+        var s = strings();
+        var terms = inputs
+            .map(function (f) { return { index: f.index, value: f.input.value.trim().toLowerCase() }; })
+            .filter(function (f) { return f.value !== ''; });
+
+        table.ctsyncApplying = true;
+
+        var rows = dataRows(tbody);
+        var visible = 0;
+        rows.forEach(function (tr) {
+          var match = terms.every(function (t) {
+            var cell = tr.cells[t.index];
+            return cell &amp;&amp; cell.textContent.toLowerCase().indexOf(t.value) !== -1;
+          });
+          tr.style.display = match ? '' : 'none';
+          if (match) { visible++; }
+        });
+
+        var existing = tbody.querySelector('.ctsync-no-match-row');
+        if (existing) { existing.remove(); }
+        if (terms.length > 0 &amp;&amp; visible === 0 &amp;&amp; rows.length > 0) {
+          var tr = document.createElement('tr');
+          tr.className = 'ctsync-no-match-row ctsync-empty-state-row';
+          var td = document.createElement('td');
+          td.colSpan = table.tHead.rows[0].cells.length;
+          td.textContent = s.noMatches;
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+        }
+
+        var count = table.ctsyncFilterCount;
+        if (count) {
+          count.hidden = terms.length === 0;
+          count.textContent = format(s.count, visible, rows.length);
+        }
+
+        table.ctsyncApplying = false;
+      }
+
+      function init() {
+        Array.prototype.forEach.call(document.querySelectorAll('table.ctsync-filterable'), wire);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  ]]></script>
+</j:jelly>
