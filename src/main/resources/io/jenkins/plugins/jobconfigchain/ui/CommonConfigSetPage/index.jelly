@@ -536,7 +536,9 @@
         // forEach), never through renderVersionHistoryRows/renderSecretsManifestRows — so those two
         // wraps need their own phantom-scroll reconciliation pass here too.
         reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+        refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
         reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+        refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
 
         // JSON/XML/YAML all dispatch through this one language-mode lookup — no
         // per-format special-casing anywhere else in this script beyond it.
@@ -827,12 +829,14 @@
           if (versions.length === 0) {
             tbody.appendChild(buildEmptyStateRow(6, '${%emptyState.noVersions}'));
             reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+            refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
             return;
           }
           for (var i = 0; i &lt; versions.length; i++) {
             tbody.appendChild(buildHistoryRowElement(versions[i]));
           }
           reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+          refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
         }
 
         // Shared by every AJAX-rendered table on this page (ux-ui-designer correction,
@@ -866,6 +870,16 @@
 
         // Belt-and-suspenders re-check shortly after render — web-font loading or async layout can
         // still nudge row heights a couple px after the initial synchronous measurement.
+        // Announce a rebuilt table body to the filter block, so re-application does not depend
+        // on its MutationObserver firing. The observer remains as a backstop for rebuilds this
+        // page does not perform; this call is the deterministic path for the ones it does.
+        // Guarded because the filter block is only included on pages that have filterable tables.
+        function refreshTableFilters() {
+          if (typeof window.ctsyncRefreshTableFilters === 'function') {
+            window.ctsyncRefreshTableFilters();
+          }
+        }
+
         function reconcilePhantomScrollSoon(wrapEl) {
           reconcilePhantomScroll(wrapEl);
           // Nashorn-based JS-engine unit tests (ConfigTemplatesUiTest) run this same script without
@@ -916,12 +930,14 @@
           if (manifest.length === 0) {
             tbody.appendChild(buildEmptyStateRow(3, '${%emptyState.noSecrets}'));
             reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+            refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
             return;
           }
           for (var i = 0; i &lt; manifest.length; i++) {
             tbody.appendChild(buildSecretRowElement(manifest[i]));
           }
           reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+          refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
         }
 
         function buildSecretRowElement(entry) {

@@ -246,6 +246,22 @@
           });
       }
 
+      // Called by whatever rebuilt a table body, so re-application does not depend on the
+      // MutationObserver being delivered. The observer stays as a backstop for rebuilds this
+      // plugin does not perform itself, but the pages that DO rebuild their own tables announce it
+      // here: an explicit call is deterministic, and it is testable - the test harness this plugin
+      // builds with delivers no MutationObserver callbacks at all, so the observer path cannot be
+      // covered by a test at present (see TableFilterBehaviourTest).
+      window.ctsyncRefreshTableFilters = function () {
+        Array.prototype.forEach.call(document.querySelectorAll('table.ctsync-filterable'),
+          function (table) {
+            if (table.ctsyncFilterInputs) {
+              syncEnumOptions(table);
+              apply(table);
+            }
+          });
+      };
+
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
       } else {
