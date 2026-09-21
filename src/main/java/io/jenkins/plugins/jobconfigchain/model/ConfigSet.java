@@ -56,6 +56,19 @@ public class ConfigSet implements Serializable {
      */
     private ContentType contentType;
 
+    /**
+     * {@code null} means this Config Set is live; non-null means it has been soft-deleted and
+     * carries who did it and when. Deletion is reversible and deliberately leaves everything else
+     * on this object untouched — the whole premise is that the history survives a withdrawal.
+     *
+     * <p>No {@link #readResolve()} patching is needed for it, unlike {@link #contentType}: a
+     * Config Set persisted before this feature existed simply has no {@code <deletion>} element, so
+     * reflection-based deserialization leaves the field {@code null}, which is already the correct
+     * and safe "live" state. That is the reason this is a nullable reference rather than a
+     * {@code boolean} with a sentinel.</p>
+     */
+    private ConfigSetDeletion deletion;
+
     public ConfigSet(String projectKey, ConfigSetRole role, String environment, String displayName,
                       ContentType contentType) {
         this.projectKey = Objects.requireNonNull(projectKey, "projectKey");
@@ -125,6 +138,42 @@ public class ConfigSet implements Serializable {
         return role == ConfigSetRole.COMMON
                 ? projectKey + "--common"
                 : projectKey + "--env--" + environment;
+    }
+
+    /** Whether this Config Set has been withdrawn from service but not yet purged. */
+    public boolean isDeleted() {
+        return deletion != null;
+    }
+
+    /** The audit trail of the withdrawal, or {@code null} while this Config Set is live. */
+    public ConfigSetDeletion getDeletion() {
+        return deletion;
+    }
+
+    /**
+     * Withdraws this Config Set from service, keeping every version, the secrets manifest, the
+     * active-version pointer and the content type exactly as they are. Nothing here is destructive;
+     * {@link #restore()} is its exact inverse.
+     *
+     * @throws IllegalStateException if it is already deleted — a second deletion would overwrite
+     *         the original actor and timestamp, losing the audit trail this exists to keep.
+     */
+    public void markDeleted(String actor, long epochMillis) {
+        if (deletion != null) {
+            throw new IllegalStateException(
+                    "Config Set '" + getStorageKey() + "' is already deleted (by "
+                            + deletion.getDeletedBy() + ")");
+        }
+        deletion = new ConfigSetDeletion(actor, epochMillis);
+    }
+
+    /** Returns this Config Set to service. @throws IllegalStateException if it is not deleted. */
+    public void restore() {
+        if (deletion == null) {
+            throw new IllegalStateException(
+                    "Config Set '" + getStorageKey() + "' is not deleted, so it cannot be restored");
+        }
+        deletion = null;
     }
 
     public Map<String, String> getSecretsManifest() {
