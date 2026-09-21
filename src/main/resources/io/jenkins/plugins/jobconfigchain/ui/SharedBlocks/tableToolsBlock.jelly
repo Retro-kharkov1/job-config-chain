@@ -18,7 +18,8 @@
   <template id="ctsyncTableToolsStrings"
             data-filter-placeholder="${%filter.placeholder}"
             data-count-label="${%filter.count}"
-            data-no-matches="${%filter.noMatches}"/>
+            data-no-matches="${%filter.noMatches}"
+            data-any-label="${%filter.any}"/>
 
   <style>
     .ctsync-filter-row th {
@@ -51,7 +52,8 @@
         return {
           placeholder: (tpl && tpl.dataset.filterPlaceholder) || 'Filter',
           count: (tpl && tpl.dataset.countLabel) || '{0} of {1}',
-          noMatches: (tpl && tpl.dataset.noMatches) || 'No rows match the filter'
+          noMatches: (tpl && tpl.dataset.noMatches) || 'No rows match the filter',
+          any: (tpl && tpl.dataset.anyLabel) || 'Any'
         };
       }
 
@@ -88,21 +90,35 @@
           // A column with no header text is an actions/control column - there is nothing
           // meaningful to type against it, and an input there would just eat width.
           if (th.textContent.trim() !== '') {
-            var input = document.createElement('input');
-            input.type = 'search';
-            input.className = 'jenkins-input ctsync-filter-input';
-            input.placeholder = s.placeholder;
-            input.setAttribute('aria-label', s.placeholder + ': ' + th.textContent.trim());
-            // Core's sortable binds its click handler on the header; without this, typing in or
-            // clicking a filter would also re-sort the table under the user.
-            input.addEventListener('click', function (e) { e.stopPropagation(); });
-            input.addEventListener('input', function () { apply(table); });
-            inputs.push({ index: index, input: input });
-            cell.appendChild(input);
+            // A column whose values come from a fixed set (a content type, an active flag) gets a
+            // picker rather than a text box: the values are already known, so making the user
+            // guess and type them - and get nothing when they type "json" for a cell reading
+            // "JSON" - would be the wrong model. The column declares this itself in the markup;
+            // inferring it from how few distinct values happen to be present today would silently
+            // flip to a text box as soon as real data grew more varied.
+            var enumerable = th.dataset.ctsyncFilter === 'enum';
+            var control;
+            if (enumerable) {
+              control = document.createElement('select');
+              control.className = 'jenkins-select__input ctsync-filter-input';
+            } else {
+              control = document.createElement('input');
+              control.type = 'search';
+              control.className = 'jenkins-input ctsync-filter-input';
+              control.placeholder = s.placeholder;
+            }
+            control.setAttribute('aria-label', s.placeholder + ': ' + th.textContent.trim());
+            // Core's sortable binds its click handler on the header; without this, using a filter
+            // would also re-sort the table under the user.
+            control.addEventListener('click', function (e) { e.stopPropagation(); });
+            control.addEventListener(enumerable ? 'change' : 'input', function () { apply(table); });
+            inputs.push({ index: index, input: control, enumerable: enumerable });
+            cell.appendChild(control);
           }
           filterRow.appendChild(cell);
         });
         table.ctsyncFilterInputs = inputs;
+        syncEnumOptions(table);
 
         var count = document.createElement('div');
         count.className = 'ctsync-filter-count';
@@ -130,10 +146,44 @@
               });
             });
             if (onlyOurOwnRows) { return; }
+            syncEnumOptions(table);
             apply(table);
           });
           observer.observe(tbody, { childList: true });
         }
+      }
+
+      // Options come from the column's actual cells, not a hardcoded list: the plugin's content
+      // types can grow, and a stale hardcoded set would offer values that match nothing or omit
+      // ones that exist. Re-run after an AJAX re-render, preserving the current selection so a
+      // Save does not silently widen an active filter.
+      function syncEnumOptions(table) {
+        var s = strings();
+        (table.ctsyncFilterInputs || []).forEach(function (f) {
+          if (!f.enumerable) { return; }
+          var previous = f.input.value;
+          var seen = [];
+          dataRows(table.tBodies[0]).forEach(function (tr) {
+            var cell = tr.cells[f.index];
+            var text = cell ? cell.textContent.trim() : '';
+            if (text !== '' && seen.indexOf(text) === -1) { seen.push(text); }
+          });
+          seen.sort();
+          f.input.innerHTML = '';
+          var any = document.createElement('option');
+          any.value = '';
+          any.text = s.any;
+          f.input.appendChild(any);
+          seen.forEach(function (value) {
+            var option = document.createElement('option');
+            option.value = value;
+            option.text = value;
+            f.input.appendChild(option);
+          });
+          // Only restore a selection that still exists; otherwise the control would display a
+          // value the table can no longer produce, filtering everything away with no way back.
+          f.input.value = seen.indexOf(previous) !== -1 ? previous : '';
+        });
       }
 
       function apply(table) {
@@ -141,7 +191,10 @@
         var inputs = table.ctsyncFilterInputs || [];
         var s = strings();
         var terms = inputs
-            .map(function (f) { return { index: f.index, value: f.input.value.trim().toLowerCase() }; })
+            .map(function (f) {
+              return { index: f.index, enumerable: f.enumerable,
+                       value: f.input.value.trim().toLowerCase() };
+            })
             .filter(function (f) { return f.value !== ''; });
 
         var rows = dataRows(tbody);
@@ -149,7 +202,11 @@
         rows.forEach(function (tr) {
           var match = terms.every(function (t) {
             var cell = tr.cells[t.index];
-            return cell && cell.textContent.toLowerCase().indexOf(t.value) !== -1;
+            if (!cell) { return false; }
+            var text = cell.textContent.trim().toLowerCase();
+            // A picked option is an exact value, so match it exactly - a substring test would let
+            // "XML" also match a hypothetical "XMLA". Typed text stays a substring search.
+            return t.enumerable ? text === t.value : text.indexOf(t.value) !== -1;
           });
           tr.style.display = match ? '' : 'none';
           if (match) { visible++; }

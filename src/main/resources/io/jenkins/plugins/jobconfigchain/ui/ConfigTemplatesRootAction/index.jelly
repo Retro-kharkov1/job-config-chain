@@ -149,7 +149,7 @@
           <thead>
             <tr>
               <th>${%column.name}</th>
-              <th>${%column.type}</th>
+              <th data-ctsync-filter="enum">${%column.type}</th>
               <th>${%column.activeVersion}</th>
               <th>${%column.lastModified}</th>
             </tr>
