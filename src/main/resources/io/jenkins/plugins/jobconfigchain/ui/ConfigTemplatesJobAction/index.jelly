@@ -371,7 +371,9 @@
         // wraps need their own phantom-scroll reconciliation pass here too (baseChainRowsTableWrap
         // is covered by the renderBaseChainRows() call fired from the require() callback below).
         reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+        refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
         reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+        refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
 
         function languageForType(type) {
           if (type === 'XML') { return 'xml'; }
@@ -711,6 +713,16 @@
 
         // Belt-and-suspenders re-check shortly after render — web-font loading or async layout can
         // still nudge row heights a couple px after the initial synchronous measurement.
+        // Announce a rebuilt table body to the filter block, so re-application does not depend
+        // on its MutationObserver firing. The observer remains as a backstop for rebuilds this
+        // page does not perform; this call is the deterministic path for the ones it does.
+        // Guarded because the filter block is only included on pages that have filterable tables.
+        function refreshTableFilters() {
+          if (typeof window.ctsyncRefreshTableFilters === 'function') {
+            window.ctsyncRefreshTableFilters();
+          }
+        }
+
         function reconcilePhantomScrollSoon(wrapEl) {
           reconcilePhantomScroll(wrapEl);
           // Nashorn-based JS-engine unit tests (ConfigTemplatesUiTest) run this same script without
@@ -1279,6 +1291,7 @@
           if (versions.length === 0) {
             tbody.appendChild(buildEmptyStateRow(7, '${%emptyState.noVersions}'));
             reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+            refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
             document.getElementById('modeEditBtn').style.display = 'none';
             return;
           }
@@ -1286,6 +1299,7 @@
             tbody.appendChild(buildHistoryRowElement(versions[i]));
           }
           reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
+          refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
           document.getElementById('modeEditBtn').style.display = (versions.length >= 2) ? '' : 'none';
         }
 
@@ -1360,12 +1374,14 @@
           if (manifest.length === 0) {
             tbody.appendChild(buildEmptyStateRow(3, '${%emptyState.noSecrets}'));
             reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+            refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
             return;
           }
           for (var i = 0; i &lt; manifest.length; i++) {
             tbody.appendChild(buildSecretRowElement(manifest[i]));
           }
           reconcilePhantomScrollSoon(document.getElementById('secretsManifestTableWrap'));
+          refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
         }
 
         function buildSecretRowElement(entry) {
