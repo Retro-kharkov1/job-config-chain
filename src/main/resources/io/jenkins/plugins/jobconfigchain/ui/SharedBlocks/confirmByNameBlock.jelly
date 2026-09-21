@@ -47,8 +47,26 @@
 
       // {0}/{1} substitution, the same hand-rolled shape the other blocks use - the pages carry no
       // i18n runtime of their own.
-      function format(template, a, b) {
-        return String(template).replace('{0}', String(a)).replace('{1}', String(b));
+      /**
+       * Substitutes {0}, {1}, ... in a localized template.
+       *
+       * Every occurrence is replaced, not the first: purge.dialogMessage names the Config Set
+       * twice - once in the warning and once in "type X to confirm" - and a first-match-only
+       * replace left a literal {0} in the second half of the very prompt that guards an
+       * irreversible action. String.replace with a string pattern replaces one match, which is
+       * exactly the trap.
+       *
+       * A function replacer rather than a replacement string, so a value containing $& or $' is
+       * inserted literally instead of being read as a replacement directive. A placeholder with no
+       * matching argument is left standing, which reads as an untranslated template rather than
+       * the word "undefined".
+       */
+      function format(template) {
+        var args = arguments;
+        return String(template).replace(/\{(\d+)\}/g, function (placeholder, index) {
+          var value = args[Number(index) + 1];
+          return value === undefined ? placeholder : String(value);
+        });
       }
 
       /**
