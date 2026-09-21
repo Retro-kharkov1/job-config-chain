@@ -20,7 +20,7 @@
          instead of toggling a separate placeholder div. -->
     <div id="versionHistoryTableWrap" class="ctsync-scroll-table">
       <table class="jenkins-table ctsync-history-table sortable ctsync-filterable" style="width:100%">
-        <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th>${%column.baseChain}</th><th>${%column.active}</th><th>${%column.actions}</th></tr></thead>
+        <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th>${%column.baseChain}</th><th data-ctsync-filter="enum">${%column.active}</th><th>${%column.actions}</th></tr></thead>
         <tbody id="versionHistoryTbody">
           <j:if test="${it.versions.isEmpty()}">
             <tr class="ctsync-empty-state-row"><td colspan="7">${%emptyState.noVersions}</td></tr>
