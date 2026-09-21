@@ -49,9 +49,9 @@
       function strings() {
         var tpl = document.getElementById('ctsyncTableToolsStrings');
         return {
-          placeholder: (tpl &amp;&amp; tpl.dataset.filterPlaceholder) || 'Filter',
-          count: (tpl &amp;&amp; tpl.dataset.countLabel) || '{0} of {1}',
-          noMatches: (tpl &amp;&amp; tpl.dataset.noMatches) || 'No rows match the filter'
+          placeholder: (tpl && tpl.dataset.filterPlaceholder) || 'Filter',
+          count: (tpl && tpl.dataset.countLabel) || '{0} of {1}',
+          noMatches: (tpl && tpl.dataset.noMatches) || 'No rows match the filter'
         };
       }
 
@@ -137,7 +137,7 @@
         rows.forEach(function (tr) {
           var match = terms.every(function (t) {
             var cell = tr.cells[t.index];
-            return cell &amp;&amp; cell.textContent.toLowerCase().indexOf(t.value) !== -1;
+            return cell && cell.textContent.toLowerCase().indexOf(t.value) !== -1;
           });
           tr.style.display = match ? '' : 'none';
           if (match) { visible++; }
@@ -145,7 +145,7 @@
 
         var existing = tbody.querySelector('.ctsync-no-match-row');
         if (existing) { existing.remove(); }
-        if (terms.length > 0 &amp;&amp; visible === 0 &amp;&amp; rows.length > 0) {
+        if (terms.length > 0 && visible === 0 && rows.length > 0) {
           var tr = document.createElement('tr');
           tr.className = 'ctsync-no-match-row ctsync-empty-state-row';
           var td = document.createElement('td');
