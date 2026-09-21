@@ -371,7 +371,7 @@
               window.ctsyncNotify(r.error, true);
               return;
             }
-            window.location.href = '${rootURL}/${it.urlName}/?restored='
+            window.location.href = '${rootURL}/manage/${it.urlName}/?restored='
                 + encodeURIComponent(projectKey);
           });
         }
@@ -415,7 +415,7 @@
                     function (t2) {
                       var r2 = t2.responseObject();
                       if (!r2.ok) { window.ctsyncNotify(r2.error, true); return; }
-                      window.location.href = '${rootURL}/${it.urlName}/?purged='
+                      window.location.href = '${rootURL}/manage/${it.urlName}/?purged='
                           + encodeURIComponent(projectKey);
                     });
               }
