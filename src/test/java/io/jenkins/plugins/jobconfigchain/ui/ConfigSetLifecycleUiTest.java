@@ -39,7 +39,13 @@ public class ConfigSetLifecycleUiTest {
     @Rule
     public JenkinsRule jenkins = new JenkinsRule();
 
-    private final ConfigSetRepository repository = new ConfigSetRepository();
+    /**
+     * Built on demand, never as a field initializer: the constructor runs before the JenkinsRule
+     * has started a controller, and this repository resolves JENKINS_HOME through Jenkins.get().
+     */
+    private ConfigSetRepository repository() {
+        return new ConfigSetRepository();
+    }
 
     private ConfigSet seed(String projectKey) {
         ConfigSet set = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
@@ -47,12 +53,12 @@ public class ConfigSetLifecycleUiTest {
         set.addVersion("{\"a\":2}", "second", "bob", 2L);
         set.activate(v1);
         set.putSecretManifestEntry("db.password", "cred-id");
-        repository.save(set);
+        repository().save(set);
         return set;
     }
 
     private CommonConfigSetPage page(String projectKey) {
-        return new CommonConfigSetPage(projectKey, repository);
+        return new CommonConfigSetPage(projectKey, repository());
     }
 
     private JSONObject confirm(String name) {
@@ -90,7 +96,7 @@ public class ConfigSetLifecycleUiTest {
 
         assertFalse(result.getBoolean("ok"));
         assertEquals("NAME_MISMATCH", result.getString("errorCode"));
-        assertNotNull("nothing may have been withdrawn", repository.findCommon("typo-app"));
+        assertNotNull("nothing may have been withdrawn", repository().findCommon("typo-app"));
     }
 
     @Test
@@ -104,7 +110,7 @@ public class ConfigSetLifecycleUiTest {
         assertEquals("REFERENCED", result.getString("errorCode"));
         assertEquals("the operator must be told which job, not merely that something blocks it",
                 "uses-it", result.getJSONArray("activeJobs").getJSONObject(0).getString("fullName"));
-        assertNotNull(repository.findCommon("in-use-app"));
+        assertNotNull(repository().findCommon("in-use-app"));
     }
 
     @Test
@@ -122,7 +128,7 @@ public class ConfigSetLifecycleUiTest {
 
         JSONObject result = page("historical-app").jsDeleteConfigSet(confirm("historical-app").toString());
         assertTrue(result.getBoolean("ok"));
-        assertNull(repository.findCommon("historical-app"));
+        assertNull(repository().findCommon("historical-app"));
     }
 
     @Test
@@ -138,7 +144,7 @@ public class ConfigSetLifecycleUiTest {
         assertFalse(result.getBoolean("ok"));
         assertEquals("REFERENCED", result.getString("errorCode"));
         assertNotNull("the record must survive a refused purge",
-                repository.findCommonIncludingDeleted("historical-app"));
+                repository().findCommonIncludingDeleted("historical-app"));
     }
 
     @Test
@@ -149,7 +155,7 @@ public class ConfigSetLifecycleUiTest {
 
         assertFalse(result.getBoolean("ok"));
         assertEquals("NOT_DELETED", result.getString("errorCode"));
-        assertNotNull(repository.findCommon("live-app"));
+        assertNotNull(repository().findCommon("live-app"));
     }
 
     // ---- The archive-clobbering hazard ----------------------------------------------------------
@@ -168,7 +174,7 @@ public class ConfigSetLifecycleUiTest {
         assertFalse(result.getBoolean("ok"));
         assertEquals("DELETED", result.getString("errorCode"));
 
-        ConfigSet survivor = repository.findCommonIncludingDeleted("withdrawn-app");
+        ConfigSet survivor = repository().findCommonIncludingDeleted("withdrawn-app");
         assertEquals("the archived history must be untouched", 2, survivor.getVersions().size());
         assertTrue(survivor.isDeleted());
     }
@@ -184,7 +190,7 @@ public class ConfigSetLifecycleUiTest {
                 .jsSave("{\"content\":\"{}\",\"note\":\"new\",\"activate\":false}");
 
         assertFalse(result.getBoolean("ok"));
-        assertEquals(2, repository.findCommonIncludingDeleted("withdrawn-app").getVersions().size());
+        assertEquals(2, repository().findCommonIncludingDeleted("withdrawn-app").getVersions().size());
     }
 
     // ---- Happy paths ----------------------------------------------------------------------------
@@ -196,15 +202,15 @@ public class ConfigSetLifecycleUiTest {
         assertTrue(page("round-trip-app").jsDeleteConfigSet(confirm("round-trip-app").toString())
                 .getBoolean("ok"));
 
-        ConfigSet withdrawn = repository.findCommonIncludingDeleted("round-trip-app");
+        ConfigSet withdrawn = repository().findCommonIncludingDeleted("round-trip-app");
         assertTrue(withdrawn.isDeleted());
         assertEquals(2, withdrawn.getVersions().size());
         assertEquals("cred-id", withdrawn.getSecretsManifest().get("db.password"));
-        assertNull("it must be gone from the live inventory", repository.findCommon("round-trip-app"));
+        assertNull("it must be gone from the live inventory", repository().findCommon("round-trip-app"));
 
         assertTrue(page("round-trip-app").jsRestoreConfigSet().getBoolean("ok"));
 
-        ConfigSet restored = repository.findCommon("round-trip-app");
+        ConfigSet restored = repository().findCommon("round-trip-app");
         assertNotNull(restored);
         assertEquals(2, restored.getVersions().size());
         assertEquals(1, restored.getActiveVersionNumber());
@@ -219,10 +225,10 @@ public class ConfigSetLifecycleUiTest {
         assertTrue(page("purge-app").jsPurgeConfigSet(confirm("purge-app").toString())
                 .getBoolean("ok"));
 
-        assertNull(repository.findCommonIncludingDeleted("purge-app"));
+        assertNull(repository().findCommonIncludingDeleted("purge-app"));
         // And the name is creatable again, which is what makes purge the way out of a reserved one.
         seed("purge-app");
-        assertNotNull(repository.findCommon("purge-app"));
+        assertNotNull(repository().findCommon("purge-app"));
     }
 
     // ---- Rendering ------------------------------------------------------------------------------
