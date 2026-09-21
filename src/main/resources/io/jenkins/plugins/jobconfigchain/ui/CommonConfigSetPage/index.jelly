@@ -217,8 +217,9 @@
         <p>A path listed here is structurally locked: the JSON editor below may only hold the literal
            <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
            value is supplied only via the Jenkins credential picked below, never typed here.</p>
+        <st:include class="${it.sharedBlocksClass}" page="tableToolsBlock.jelly" it="${it}"/>
         <div id="secretsManifestTableWrap" class="ctsync-scroll-table">
-          <table class="jenkins-table" style="width:100%">
+          <table class="jenkins-table sortable ctsync-filterable" style="width:100%">
             <thead><tr><th>${%column.dottedPath}</th><th>${%column.credential}</th><th/></tr></thead>
             <tbody id="secretsManifestTbody">
               <j:choose>
@@ -283,7 +284,7 @@
         <p>Click a row to compare it against the editor's current draft (no checkbox required —
            click any row again to return to editing).</p>
         <div id="versionHistoryTableWrap" class="ctsync-scroll-table">
-          <table class="jenkins-table ctsync-history-table" style="width:100%">
+          <table class="jenkins-table ctsync-history-table sortable ctsync-filterable" style="width:100%">
             <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th>${%column.active}</th><th>${%column.actions}</th></tr></thead>
             <tbody id="versionHistoryTbody">
               <j:if test="${it.versions.isEmpty()}">

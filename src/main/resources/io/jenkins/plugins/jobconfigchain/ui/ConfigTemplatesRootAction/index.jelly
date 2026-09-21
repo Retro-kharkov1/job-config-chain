@@ -143,8 +143,9 @@
         from that project's page.
       </p>
 
+      <st:include class="${it.sharedBlocksClass}" page="tableToolsBlock.jelly" it="${it}"/>
       <div id="commonConfigSetsTableWrap" class="ctsync-scroll-table">
-        <table class="jenkins-table sortable" style="width:100%">
+        <table class="jenkins-table sortable ctsync-filterable" style="width:100%">
           <thead>
             <tr>
               <th>${%column.name}</th>
