@@ -2,6 +2,7 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
   <l:layout title="${%title}">
     <l:main-panel>
+      <st:bind var="proxy" value="${it}"/>
       <style>
         /* Scoped to this page only (never a global Jenkins style override) — same
            ".ctsync-page" scoping + bordered jenkins-section card convention already applied to
@@ -12,6 +13,10 @@
         .ctsync-page .jenkins-button { margin: 4px 6px 4px 0; }
         .ctsync-btn-row { margin: 12px 0 0; }
         .ctsync-btn-row--right { text-align: right; }
+        /* Opacity alone is not an accessible signal, which is why the Status column carries the
+           word as well - this only keeps the eye on the live inventory. */
+        .ctsync-row--deleted { opacity: 0.62; }
+        .ctsync-row--deleted td:first-child a { text-decoration: line-through; }
         /* Bordered-card framing for f:section — identical rule, identical reasoning, and the
            identical (already-fixed) color token as CommonConfigSetPage/EnvConfigSetPage's own
            "Bordered-card framing for f:section" comment: Jenkins core's own jenkins-section only
@@ -143,6 +148,38 @@
         from that project's page.
       </p>
 
+      <st:include class="${it.sharedBlocksClass}" page="confirmByNameBlock.jelly" it="${it}"/>
+
+      <j:if test="${it.flashDeletedKey != null}">
+        <div class="alert alert-info">${%flash.deleted(it.flashDeletedKey)}</div>
+      </j:if>
+      <j:if test="${it.flashRestoredKey != null}">
+        <div class="alert alert-info">${%flash.restored(it.flashRestoredKey)}</div>
+      </j:if>
+      <j:if test="${it.flashPurgedKey != null}">
+        <div class="alert alert-info">${%flash.purged(it.flashPurgedKey)}</div>
+      </j:if>
+
+      <div id="purgeBlockedBanner" class="alert alert-danger ctsync-blocked-banner"
+           style="display:none"/>
+
+      <j:if test="${!it.deletedConfigSets.isEmpty()}">
+        <div class="ctsync-btn-row">
+          <label>
+            <input type="checkbox" id="showDeletedToggle" onclick="toggleDeletedRows(this.checked);"/>
+            ${%showDeleted.label} (${it.deletedConfigSets.size()})
+          </label>
+        </div>
+      </j:if>
+
+      <template id="ctsyncListStrings"
+                data-purge-dialog-title="${%purge.dialogTitle}"
+                data-purge-dialog-message="${%purge.dialogMessage}"
+                data-purge-ok-label="${%purge.okLabel}"
+                data-purge-blocked-intro="${%purge.blockedIntro}"
+                data-job-row="${%deletedRow.jobRow}"
+                data-name-reserved="${%newConfigSet.nameReserved}"/>
+
       <st:include class="${it.sharedBlocksClass}" page="tableToolsBlock.jelly" it="${it}"/>
       <div id="commonConfigSetsTableWrap" class="ctsync-scroll-table">
         <table class="jenkins-table sortable ctsync-filterable" style="width:100%">
@@ -152,12 +189,18 @@
               <th data-ctsync-filter="enum">${%column.type}</th>
               <th>${%column.activeVersion}</th>
               <th>${%column.changedBy}</th>
+              <th data-ctsync-filter="enum">${%column.status}</th>
+              <!-- data-sort-disable is required, not decorative: it is core's own marker for a
+                   column that cannot be ordered by its content, and the filter block keys off it
+                   to skip offering a filter over a column of buttons. TableFilterMarkupTest
+                   enforces both. -->
+              <th data-sort-disable="true">${%column.actions}</th>
             </tr>
           </thead>
           <tbody>
             <j:choose>
               <j:when test="${it.commonConfigSets.isEmpty()}">
-                <tr class="ctsync-empty-state-row"><td colspan="4">${%emptyState.noConfigSets}</td></tr>
+                <tr class="ctsync-empty-state-row"><td colspan="6">${%emptyState.noConfigSets}</td></tr>
               </j:when>
               <j:otherwise>
                 <j:forEach var="cs" items="${it.commonConfigSets}">
@@ -180,6 +223,8 @@
                         <j:otherwise>&#8212;</j:otherwise>
                       </j:choose>
                     </td>
+                    <td>${%status.live}</td>
+                    <td/>
                   </tr>
                 </j:forEach>
               </j:otherwise>
@@ -187,6 +232,46 @@
           </tbody>
         </table>
       </div>
+
+      <!--
+        Deleted rows live in a template, NOT hidden inside the tbody, and the toggle clones them in
+        and takes them out again. A template's content is a separate document fragment, so neither
+        core's sortable nor the filter block can see it until it is deliberately inserted.
+
+        Hiding them in place with display:none instead would break three ways, all silently: the
+        filter block rewrites style.display on every data row each time any filter changes, so the
+        hidden rows would reappear on the first keystroke; its row count would include them; and it
+        derives the Type column options from every row present, so the picker would offer types no
+        visible row has.
+      -->
+      <template id="deletedRowsTemplate">
+        <j:forEach var="cs" items="${it.deletedConfigSets}">
+          <tr class="ctsync-row--deleted">
+            <td>
+              <a href="${rootURL}/${it.urlName}/${cs.projectKey}/">${cs.projectKey}</a>
+            </td>
+            <td>${cs.contentType}</td>
+            <td>
+              <j:choose>
+                <j:when test="${cs.activeVersion != null}">v${cs.activeVersion.versionNumber}</j:when>
+                <j:otherwise>${%noActiveVersion}</j:otherwise>
+              </j:choose>
+            </td>
+            <td>${%deletedRow.deletedBy(cs.deletion.deletedBy)}</td>
+            <td>${%status.deleted}</td>
+            <td>
+              <button type="button" class="jenkins-button ctsync-restore-btn"
+                      data-project-key="${cs.projectKey}" title="${%restore.title}"
+                      onclick="restoreDeleted(this.getAttribute('data-project-key'));"
+                      >${%restore.label}</button>
+              <button type="button" class="jenkins-button jenkins-button--destructive ctsync-purge-btn"
+                      data-project-key="${cs.projectKey}" title="${%purge.title}"
+                      onclick="purgeDeleted(this.getAttribute('data-project-key'));"
+                      >&#128465; ${%purge.label}</button>
+            </td>
+          </tr>
+        </j:forEach>
+      </template>
 
       <!-- New Config Set (owner-directed layout redesign, 2026-09-04): heading rendered by
            f:section's own title bar (matching the "heading lives inside the frame" convention
@@ -229,6 +314,115 @@
       <script>
         // Phantom-scroll reconciliation (owner report, 2026-09-11): see CommonConfigSetPage/index.jelly's
         // identical comment/helper for the full rationale.
+        // ---- Deleted Config Sets ---------------------------------------------------------------
+        // The rows are cloned out of an inert template into the tbody and removed again, rather
+        // than hidden in place. See the template's own comment for why - in short, the filter block
+        // rewrites display on every data row, counts them, and derives the Type options from them,
+        // so a row hidden inside the table is not actually hidden for long.
+
+        function listStrings() {
+          var tpl = document.getElementById('ctsyncListStrings');
+          return tpl ? tpl.dataset : {};
+        }
+
+        function announceRowsChanged() {
+          // The published contract of the filter block: whoever rebuilds a table body says so, and
+          // the block re-derives its enum options and re-applies any active filter. Without this a
+          // filter would keep matching the rows it was given and quietly ignore the new ones.
+          if (typeof window !== 'undefined'
+              &amp;&amp; typeof window.ctsyncRefreshTableFilters === 'function') {
+            window.ctsyncRefreshTableFilters();
+          }
+        }
+
+        function toggleDeletedRows(show) {
+          var table = document.querySelector('table.ctsync-filterable');
+          var tbody = table.tBodies[0];
+          if (show) {
+            var template = document.getElementById('deletedRowsTemplate');
+            var rows = template.content.querySelectorAll('tr');
+            for (var i = 0; i &lt; rows.length; i++) {
+              tbody.appendChild(document.importNode(rows[i], true));
+            }
+          } else {
+            var present = tbody.querySelectorAll('tr.ctsync-row--deleted');
+            for (var j = 0; j &lt; present.length; j++) {
+              present[j].parentNode.removeChild(present[j]);
+            }
+          }
+          announceRowsChanged();
+        }
+
+        function lifecycleButtons(projectKey, disabled) {
+          var buttons = document.querySelectorAll('[data-project-key="' + projectKey + '"]');
+          for (var i = 0; i &lt; buttons.length; i++) {
+            buttons[i].disabled = disabled;
+          }
+        }
+
+        function restoreDeleted(projectKey) {
+          // No typed-name confirmation: restoring is fully reversible, and asking for the same
+          // ceremony as a purge would train the operator to type through both without reading.
+          lifecycleButtons(projectKey, true);
+          proxy.restoreConfigSet(JSON.stringify({ projectKey: projectKey }), function (t) {
+            var r = t.responseObject();
+            if (!r.ok) {
+              lifecycleButtons(projectKey, false);
+              window.ctsyncNotify(r.error, true);
+              return;
+            }
+            window.location.href = '${rootURL}/${it.urlName}/?restored='
+                + encodeURIComponent(projectKey);
+          });
+        }
+
+        function purgeJobItems(entries) {
+          var items = [];
+          for (var i = 0; i &lt; entries.length; i++) {
+            items.push({
+              text: window.ctsyncFormatMessage(listStrings().jobRow, entries[i].fullName,
+                  entries[i].versions.join(', ')),
+              url: entries[i].url
+            });
+          }
+          return items;
+        }
+
+        function purgeDeleted(projectKey) {
+          var d = listStrings();
+          lifecycleButtons(projectKey, true);
+          window.ctsyncHideBlocked('purgeBlockedBanner');
+          proxy.purgePreflight(JSON.stringify({ projectKey: projectKey }), function (t) {
+            lifecycleButtons(projectKey, false);
+            var r = t.responseObject();
+            if (r.blocked) {
+              // Purge is refused for ANY reference, including one only an old job version names:
+              // there is no restore afterwards to repair a rollback this would have broken.
+              window.ctsyncShowBlocked('purgeBlockedBanner',
+                  window.ctsyncFormatMessage(d.purgeDialogTitle, projectKey),
+                  [{ intro: d.purgeBlockedIntro,
+                     items: purgeJobItems(r.activeJobs.concat(r.historicalJobs)) }]);
+              return;
+            }
+            if (!r.ok) { window.ctsyncNotify(r.error, true); return; }
+            window.ctsyncConfirmByName({
+              expectedName: projectKey,
+              title: window.ctsyncFormatMessage(d.purgeDialogTitle, projectKey),
+              message: window.ctsyncFormatMessage(d.purgeDialogMessage, projectKey),
+              okLabel: d.purgeOkLabel,
+              onConfirm: function (typed) {
+                proxy.purgeConfigSet(JSON.stringify({ projectKey: projectKey, confirmName: typed }),
+                    function (t2) {
+                      var r2 = t2.responseObject();
+                      if (!r2.ok) { window.ctsyncNotify(r2.error, true); return; }
+                      window.location.href = '${rootURL}/${it.urlName}/?purged='
+                          + encodeURIComponent(projectKey);
+                    });
+              }
+            });
+          });
+        }
+
         function reconcilePhantomScroll(wrapEl) {
           if (!wrapEl) { return; }
           var realOverflow = wrapEl.scrollHeight - wrapEl.clientHeight;
