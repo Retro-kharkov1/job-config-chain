@@ -17,6 +17,7 @@ import io.jenkins.plugins.jobconfigchain.merge.tree.TreeNode;
 import io.jenkins.plugins.jobconfigchain.merge.tree.TreePaths;
 import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSet;
+import io.jenkins.plugins.jobconfigchain.model.ConfigSetDeletion;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSetVersion;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
@@ -118,21 +119,48 @@ public abstract class ConfigSetPage {
         return PluginShortName.get();
     }
 
+    /**
+     * The LIVE Config Set, or {@code null} when there is none or it has been withdrawn.
+     *
+     * <p>This accessor gates mutation, and that is why it must not see a deleted record: every
+     * save, activate and secret binding funnels through it, and a withdrawn Config Set must accept
+     * none of them. The accessors that merely DISPLAY the record read
+     * {@link #getConfigSetIncludingDeleted()} instead, because the point of a reversible deletion
+     * is that an administrator can still inspect the history before deciding to restore or purge.
+     * The two groups are deliberately split; do not collapse them back.</p>
+     */
     public ConfigSet getConfigSet() {
         return repository.find(projectKey, getRole(), getEnvironment());
+    }
+
+    /** The record whether live or withdrawn — for display and for the lifecycle actions only. */
+    ConfigSet getConfigSetIncludingDeleted() {
+        return repository.findCommonIncludingDeleted(projectKey);
     }
 
     public boolean isExists() {
         return getConfigSet() != null;
     }
 
+    /** Whether this Config Set has been withdrawn from service but not yet purged. */
+    public boolean isDeleted() {
+        ConfigSet raw = getConfigSetIncludingDeleted();
+        return raw != null && raw.isDeleted();
+    }
+
+    /** Who withdrew it and when, or {@code null} while it is live. */
+    public ConfigSetDeletion getDeletion() {
+        ConfigSet raw = getConfigSetIncludingDeleted();
+        return raw == null ? null : raw.getDeletion();
+    }
+
     public List<io.jenkins.plugins.jobconfigchain.model.ConfigSetVersion> getVersions() {
-        ConfigSet cs = getConfigSet();
+        ConfigSet cs = getConfigSetIncludingDeleted();
         return cs == null ? List.of() : cs.getVersions();
     }
 
     public io.jenkins.plugins.jobconfigchain.model.ConfigSetVersion getActiveVersion() {
-        ConfigSet cs = getConfigSet();
+        ConfigSet cs = getConfigSetIncludingDeleted();
         return cs == null ? null : cs.getActiveVersion();
     }
 
@@ -143,7 +171,7 @@ public abstract class ConfigSetPage {
      * {@code configSet}/{@code property} accessor to read it.
      */
     public Map<String, String> getSecretsManifestForDisplay() {
-        ConfigSet cs = getConfigSet();
+        ConfigSet cs = getConfigSetIncludingDeleted();
         return cs == null ? Collections.emptyMap() : cs.getSecretsManifest();
     }
 
@@ -160,7 +188,7 @@ public abstract class ConfigSetPage {
      * selection AND the Monaco editor's initial {@code language}.
      */
     public String getContentTypeValue() {
-        ConfigSet cs = getConfigSet();
+        ConfigSet cs = getConfigSetIncludingDeleted();
         return cs == null ? ContentType.JSON.name() : cs.getContentType().name();
     }
 
@@ -275,6 +303,12 @@ public abstract class ConfigSetPage {
      */
     private SaveOutcome saveImpl(String content, String note, boolean activate, String baseChainJson,
                                   String contentTypeParam, boolean explicitlyStandalone) {
+        if (isDeleted()) {
+            // Also what refuses creating a new Config Set over a withdrawn one name: this page is
+            // reached for any key, and a save is how a Config Set comes into existence.
+            return SaveOutcome.error(
+                    "This Config Set is deleted. Restore it or purge it before saving to this name.");
+        }
         try {
             ConfigSet configSet = getConfigSet();
             ContentType resolvedContentType;
@@ -617,7 +651,28 @@ public abstract class ConfigSetPage {
         return activateImpl(payload.get("version").getAsInt());
     }
 
+    /**
+     * The refusal every mutation on a withdrawn Config Set shares.
+     *
+     * <p>The repository refuses the write underneath regardless, but it does so by throwing, which
+     * would reach the operator as a stack trace. This turns it into the same structured result
+     * every other refusal on this page produces. The {@code errorCode} lets the client show a
+     * localized message rather than this raw string, which exists as its fallback.</p>
+     */
+    private JSONObject deletedRefusal() {
+        JSONObject result = new JSONObject();
+        result.put("ok", false);
+        result.put("errorCode", "DELETED");
+        result.put("error", "This Config Set is deleted. Restore it before editing.");
+        return result;
+    }
+
     private JSONObject activateImpl(int version) {
+        if (isDeleted()) {
+            // Checked before the null-configSet branch below, which would otherwise report
+            // "No such version" - true in its own terms, and thoroughly misleading here.
+            return deletedRefusal();
+        }
         JSONObject result = new JSONObject();
         ConfigSet configSet = getConfigSet();
         ConfigSetVersion activated = configSet == null ? null : configSet.getVersion(version);
@@ -694,6 +749,13 @@ public abstract class ConfigSetPage {
     }
 
     private JSONObject addSecretImpl(String path, String credentialId) {
+        if (isDeleted()) {
+            // The most dangerous of these guards. Further down, this method CREATES a brand-new
+            // ConfigSet when getConfigSet() returns null - which a withdrawn record now does - so
+            // without this, binding a secret on a deleted Config Set page would write a fresh,
+            // empty record over an entire archived version history.
+            return deletedRefusal();
+        }
         JSONObject result = new JSONObject();
         if (path == null || path.trim().isEmpty() || credentialId == null || credentialId.trim().isEmpty()) {
             result.put("ok", false);
@@ -777,6 +839,9 @@ public abstract class ConfigSetPage {
     }
 
     private JSONObject removeSecretImpl(String path) {
+        if (isDeleted()) {
+            return deletedRefusal();
+        }
         JSONObject result = new JSONObject();
         if (path == null || path.trim().isEmpty()) {
             result.put("ok", false);
@@ -881,7 +946,7 @@ public abstract class ConfigSetPage {
      * {@code null} if it is missing/malformed — never throws, so callers can surface a clean
      * structured {@code ok:false} error instead of a 500.
      */
-    private static JsonObject parseJsPayloadObject(String payloadJson) {
+    static JsonObject parseJsPayloadObject(String payloadJson) {
         if (payloadJson == null) {
             return null;
         }
@@ -1081,7 +1146,7 @@ public abstract class ConfigSetPage {
         }
     }
 
-    private static String currentAuthor() {
+    static String currentAuthor() {
         User current = User.current();
         return current == null ? "anonymous" : current.getId();
     }
