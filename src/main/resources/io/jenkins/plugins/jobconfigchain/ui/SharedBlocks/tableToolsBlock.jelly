@@ -118,10 +118,16 @@
         var inputs = [];
 
         Array.prototype.forEach.call(thead.rows[0].cells, function (th, index) {
-          // An empty header is an actions/control column - there is nothing meaningful to type
-          // against it, and a control there would only eat width.
+          // Skip columns there is nothing meaningful to filter on. Two signals, because the
+          // action columns are not spelled consistently: the secrets tables render an empty
+          // header, while the version-history tables render a captioned "Actions" column. An
+          // empty caption alone was NOT enough - every row's action cell holds the same button
+          // label, so a filter there matched either everything or nothing, and one stray
+          // keystroke hid a table that plainly had data while claiming no rows matched.
+          // data-sort-disable is core's own marker for "this column is not orderable"; a column
+          // that cannot be ordered by its content cannot sensibly be filtered by it either.
           var caption = th.textContent.trim();
-          if (caption === '') { return; }
+          if (caption === '' || th.dataset.sortDisable) { return; }
 
           var built = buildControl(th, s);
           var control = built.control;
@@ -143,7 +149,14 @@
         var status = document.createElement('div');
         status.className = 'ctsync-filter-status';
         status.hidden = true;
-        table.parentNode.insertBefore(status, table.nextSibling);
+        // Outside the SCROLL WRAPPER, not merely outside the table. The wrapper caps its height
+        // and scrolls internally, so a status line placed next to the table would sit below the
+        // fold of the very box it reports on - the user would have to scroll a miniature inner
+        // pane to discover why the table looks empty. That defeats the whole reason this line is
+        // not a row in tbody.
+        var scrollWrap = table.closest ? table.closest('.ctsync-scroll-table') : null;
+        var anchor = scrollWrap || table;
+        anchor.parentNode.insertBefore(status, anchor.nextSibling);
         table.ctsyncFilterStatus = status;
 
         // Version history and Secrets manifest rebuild their tbody after Save/Activate, and a sort
