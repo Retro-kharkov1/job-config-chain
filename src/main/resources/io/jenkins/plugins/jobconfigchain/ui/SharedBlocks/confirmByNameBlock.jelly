@@ -1,0 +1,173 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout">
+  <!--
+    Confirm-by-typing-the-name, shared by the Config Set page (delete) and the global list page
+    (purge). Both are destructive to whoever is building against the Config Set, so both make the
+    operator type its name rather than click Yes.
+
+    The dialog is Jenkins core's own. Core bundles a global `window.dialog` through the app bundle
+    it loads on every page, and `dialog.prompt(title, options)` renders a real <dialog> with a text
+    input and returns a Promise resolving with what was typed. So there is no hand-built modal here
+    and should not be one: this plugin has never had an overlay of its own, and a bespoke one would
+    have to re-solve focus trapping, Escape handling and theming that core already solved.
+
+    Two things about that promise are easy to get wrong and are handled below. It REJECTS with no
+    argument when the operator cancels, so a missing .catch() produces an unhandled rejection on
+    every cancel. And `allowEmpty: false` keeps the OK button disabled until something is typed,
+    which is why nothing here has to guard against an empty confirmation.
+
+    This block is CDATA, like tableToolsBlock, so && and < are written literally. The two host
+    pages are NOT, so anything added to their own scripts still needs &amp;&amp; and &lt;.
+  -->
+  <template id="ctsyncConfirmStrings"
+            data-cancel-label="${%confirm.cancelLabel}"
+            data-name-mismatch="${%confirm.nameMismatch}"/>
+
+  <style>
+    .ctsync-blocked-banner { margin: 8px 0; }
+    .ctsync-blocked-banner ul { margin: 6px 0 0 18px; }
+    .ctsync-blocked-banner li { margin: 2px 0; }
+    .ctsync-blocked-note { margin-top: 8px; font-size: 12px; }
+  </style>
+
+  <script><![CDATA[
+    (function () {
+      function strings() {
+        var tpl = document.getElementById('ctsyncConfirmStrings');
+        return {
+          cancel: (tpl && tpl.dataset.cancelLabel) || 'Cancel',
+          mismatch: (tpl && tpl.dataset.nameMismatch) || 'The typed name does not match.'
+        };
+      }
+
+      function hasDialog() {
+        return typeof window !== 'undefined' && window.dialog
+            && typeof window.dialog.prompt === 'function';
+      }
+
+      // {0}/{1} substitution, the same hand-rolled shape the other blocks use - the pages carry no
+      // i18n runtime of their own.
+      function format(template, a, b) {
+        return String(template).replace('{0}', String(a)).replace('{1}', String(b));
+      }
+
+      /**
+       * Asks the operator to type expectedName, then calls onConfirm(typed).
+       * Falls back to a plain prompt only if core's dialog is somehow absent, so the feature still
+       * works rather than silently doing nothing.
+       */
+      function confirmByName(opts) {
+        var s = strings();
+        function proceed(typed) {
+          if (typed === null || typed === undefined) { return; }
+          if (typed.replace(/^\s+|\s+$/g, '') !== opts.expectedName) {
+            notify(s.mismatch, true);
+            return;
+          }
+          opts.onConfirm(typed);
+        }
+        if (!hasDialog()) {
+          proceed(window.prompt(opts.message));
+          return;
+        }
+        window.dialog.prompt(opts.title, {
+          message: opts.message,
+          allowEmpty: false,
+          type: 'destructive',
+          okText: opts.okLabel,
+          cancelText: s.cancel
+        }).then(proceed).catch(function () {
+          // Cancelling rejects with no argument. Without this the cancel path would raise an
+          // unhandled rejection every time, which is noise in the console and, in some browsers,
+          // a reported error.
+        });
+      }
+
+      /**
+       * Explains a refusal. The list is written into an inline banner element as well as shown in
+       * a dialog, because the banner persists after the dialog closes, can be selected and copied,
+       * and can be asserted by a test - none of which is true of a modal.
+       */
+      function showBlocked(bannerId, title, sections) {
+        var banner = document.getElementById(bannerId);
+        var plain = [];
+        if (banner) {
+          banner.innerHTML = '';
+          var heading = document.createElement('strong');
+          heading.textContent = title;
+          banner.appendChild(heading);
+        }
+        for (var i = 0; i < sections.length; i++) {
+          var section = sections[i];
+          if (!section.items || section.items.length === 0) { continue; }
+          plain.push(section.intro);
+          if (banner) {
+            var intro = document.createElement('div');
+            intro.className = 'ctsync-blocked-note';
+            intro.textContent = section.intro;
+            banner.appendChild(intro);
+            var list = document.createElement('ul');
+            banner.appendChild(list);
+          }
+          for (var j = 0; j < section.items.length; j++) {
+            plain.push('  ' + section.items[j].text);
+            if (banner) {
+              var item = document.createElement('li');
+              if (section.items[j].url) {
+                var link = document.createElement('a');
+                link.href = section.items[j].url;
+                link.textContent = section.items[j].text;
+                item.appendChild(link);
+              } else {
+                item.textContent = section.items[j].text;
+              }
+              list.appendChild(item);
+            }
+          }
+        }
+        if (banner) { banner.style.display = ''; }
+        if (typeof window !== 'undefined' && window.dialog
+            && typeof window.dialog.alert === 'function') {
+          window.dialog.alert(title, { message: plain.join('\n'), type: 'destructive' });
+        } else {
+          notify(title, true);
+        }
+      }
+
+      function hideBlocked(bannerId) {
+        var banner = document.getElementById(bannerId);
+        if (banner) {
+          banner.innerHTML = '';
+          banner.style.display = 'none';
+        }
+      }
+
+      /** The native Jenkins toast, the convention this plugin already uses for save feedback. */
+      function notify(message, isError) {
+        if (typeof window === 'undefined' || !window.notificationBar) { return; }
+        window.notificationBar.show(message,
+            isError ? window.notificationBar.ERROR : window.notificationBar.SUCCESS);
+      }
+
+      /**
+       * Epoch millis rendered in the reader's own locale. Shared here rather than copied into a
+       * third page: the Config Set page and the list page both show timestamps the server cannot
+       * format, because it does not know the reader's locale.
+       */
+      function formatTimestamp(epochMillis) {
+        var value = Number(epochMillis);
+        if (!value) { return ''; }
+        return new Date(value).toLocaleString();
+      }
+
+      if (typeof window !== 'undefined') {
+        window.ctsyncConfirmByName = confirmByName;
+        window.ctsyncShowBlocked = showBlocked;
+        window.ctsyncHideBlocked = hideBlocked;
+        window.ctsyncNotify = notify;
+        window.ctsyncFormatTimestamp = formatTimestamp;
+        window.ctsyncFormatMessage = format;
+      }
+    })();
+  ]]></script>
+</j:jelly>
