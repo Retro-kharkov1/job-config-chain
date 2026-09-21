@@ -165,7 +165,7 @@ public class ConfigTemplateValidateStep extends Step {
 
         @Override
         public String getDisplayName() {
-            return "Validate config template drift for the calling Job's own Config Templates";
+            return io.jenkins.plugins.jobconfigchain.ui.Messages.Step_Validate_DisplayName();
         }
 
         @Override
