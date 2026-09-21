@@ -92,6 +92,12 @@ public class TableFilterMarkupTest {
         }
     }
 
+    /** The literal skip-rule condition from wire(), so a test can assert on the logic itself. */
+    private static String skipCondition(String block) {
+        Matcher m = Pattern.compile("if \\(([^)]*caption[^)]*)\\) \\{ return; }").matcher(block);
+        return m.find() ? m.group(1).trim() : "<skip rule not found>";
+    }
+
     @Test
     public void filterControlsAreSkippedForColumnsThatDeclareThemselvesUnsortable() throws Exception {
         String block = read(BLOCK);
@@ -100,9 +106,12 @@ public class TableFilterMarkupTest {
         // but data-sort-disable - got a text filter. Every one of its cells renders the same
         // button label, so typing any other character hid every row while the table reported "no
         // rows match" for data that was plainly there.
-        assertTrue("the filter block must skip columns marked data-sort-disable, not only "
-                        + "empty-captioned ones",
-                block.contains("th.dataset.sortDisable"));
+        // Asserting the token merely exists would pass on `caption === '' && th.dataset.sortDisable`
+        // - an AND, which reintroduces the exact bug while keeping the token. Pin the whole
+        // condition, so the logic itself is what is guarded.
+        assertTrue("the skip rule must be an OR over both signals, found: " + skipCondition(block),
+                skipCondition(block).matches(
+                        "caption\\s*===\\s*''\\s*\\|\\|\\s*th\\.dataset\\.sortDisable"));
     }
 
     @Test
@@ -132,8 +141,13 @@ public class TableFilterMarkupTest {
         // which is inside .ctsync-scroll-table - the element that caps height and scrolls. The
         // count and the "no rows match" message then sat below the fold of the very box they
         // describe, which is exactly what keeping them out of tbody was meant to avoid.
-        assertTrue("the status line must anchor to the scroll wrapper, not the table",
-                block.contains("closest('.ctsync-scroll-table')"));
+        // Checking only that closest(...) appears would pass on an insertion that puts the line
+        // BEFORE the wrapper, or next to the table again - both of which look right in a diff and
+        // are wrong on screen. Pin the anchor resolution and the insertion point together.
+        assertTrue("the anchor must resolve to the scroll wrapper, falling back to the table: "
+                        + block, block.contains("var anchor = scrollWrap || table;"));
+        assertTrue("the status line must be inserted AFTER that anchor",
+                block.contains("anchor.parentNode.insertBefore(status, anchor.nextSibling);"));
         assertFalse("the status line must not be inserted next to the table itself",
                 block.contains("table.parentNode.insertBefore(status, table.nextSibling)"));
     }
