@@ -647,7 +647,7 @@
                   // The page identity is gone, so it cannot stay. The list page renders the
                   // confirmation server-side from this query parameter - a toast would not survive
                   // the navigation.
-                  window.location.href = '${rootURL}/configTemplates/?deleted='
+                  window.location.href = '${rootURL}/manage/configTemplates/?deleted='
                       + encodeURIComponent(r2.projectKey);
                 });
               }
@@ -694,7 +694,7 @@
                     else { window.ctsyncNotify(r2.error, true); }
                     return;
                   }
-                  window.location.href = '${rootURL}/configTemplates/?purged='
+                  window.location.href = '${rootURL}/manage/configTemplates/?purged='
                       + encodeURIComponent(r2.projectKey);
                 });
               }
