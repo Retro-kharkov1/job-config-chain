@@ -987,6 +987,58 @@ public class ConfigTemplatesJobActionTest {
                 + "match 'json-proj's JSON type", "[\"json-proj\"]", row1Json);
     }
 
+    @Test
+    public void jobPage_pinnedVersionLabel_isTruncatedSoLongNotesCannotPushTheRowActionsOut()
+            throws Exception {
+        FreeStyleProject project = jenkins.createFreeStyleProject("job-basechain-version-label");
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        String html = page.getWebResponse().getContentAsString();
+
+        Matcher matcher = INLINE_SCRIPT.matcher(html);
+        StringBuilder allScripts = new StringBuilder();
+        while (matcher.find()) {
+            if (matcher.group(1) != null) { allScripts.append(matcher.group(1)).append('
+'); }
+        }
+
+        ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
+        assertNotNull(engine);
+        engine.eval("var document = { getElementById: function() { return { addEventListener: function(){}, "
+                + "style:{}, classList:{add:function(){},remove:function(){}} }; }, "
+                + "querySelectorAll: function() { return []; } };"
+                + "var require = function(){}; require.config = function(){};"
+                + "var monaco = undefined;"
+                + "function makeStaplerProxy() { return {}; }"
+                + allScripts);
+
+        // A note short enough to read in the select must come back byte-for-byte. The info icon's
+        // visibility is derived from exactly this equality, so an over-eager truncation here would
+        // also paint an icon that reveals nothing.
+        Object shortLabel = engine.eval("baseChainVersionLabel({version: 3, note: 'tidy up'})");
+        assertEquals("v3 — tidy up", shortLabel);
+        assertEquals("a label that already fits must be returned unchanged",
+                shortLabel, engine.eval("truncateVersionLabel(baseChainVersionLabel("
+                        + "{version: 3, note: 'tidy up'}))"));
+
+        // Owner report 2026-09-21: an unbounded note widened the select, widened the column, and
+        // pushed the row's action buttons out of the table.
+        engine.eval("var longLabel = baseChainVersionLabel({version: 12, "
+                + "note: 'switched the payment gateway sandbox endpoint and raised every retry budget'});");
+        Object truncated = engine.eval("truncateVersionLabel(longLabel)");
+        assertEquals("a long label must be capped so the select cannot grow without bound",
+                40, ((String) truncated).length());
+        assertTrue("a truncated label must end in an ellipsis so the elision is visible: " + truncated,
+                ((String) truncated).endsWith("…"));
+        assertTrue("the truncated label must keep the version prefix, which is the part that "
+                        + "actually identifies the row: " + truncated,
+                ((String) truncated).startsWith("v12 — "));
+        assertEquals("truncation must not mutate the source label - the untruncated text is what "
+                        + "the info tooltip shows", Boolean.TRUE,
+                engine.eval("longLabel !== truncateVersionLabel(longLabel)"));
+    }
+
     private int saveViaJsProxyLikeCall(FreeStyleProject project, JenkinsRule.WebClient wc, String content,
                                         String note, String baseChainJson) throws Exception {
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
