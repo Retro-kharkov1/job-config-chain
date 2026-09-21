@@ -244,10 +244,18 @@
           gap: 6px;
           min-width: 0;
         }
+        /* No max-width here on purpose. Jenkins core declares
+           `.jenkins-select__input { max-width: 100% !important }`, which no amount of specificity
+           can outrank — measured live in Chrome, a 220px cap on this selector computed as 100%
+           and had zero effect. (The same is true of this file's older
+           `.ctsync-basechain-table select.jenkins-select__input { max-width: 200px }`, which has
+           never applied either.) What actually bounds the width is the truncated option text;
+           `flex: 0 1 auto` then keeps the control at that bounded content width instead of
+           stretching to fill the cell, while `min-width: 0` lets it give way under pressure so a
+           narrow viewport shrinks the select rather than overflowing the table. */
         .ctsync-basechain-version-cell select {
-          max-width: 220px;
           min-width: 0;
-          flex: 1 1 auto;
+          flex: 0 1 auto;
         }
         /* Same circular secondary-action treatment as the open-in-new-tab link above, so the two
            icon affordances in this row read as one family. */
