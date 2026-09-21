@@ -484,7 +484,7 @@ public class ConfigTemplateSubstituteStep extends Step {
 
         @Override
         public String getDisplayName() {
-            return "Substitute real values into a config template for the calling Job's own Config Templates";
+            return io.jenkins.plugins.jobconfigchain.ui.Messages.Step_Substitute_DisplayName();
         }
 
         @Override

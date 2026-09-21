@@ -150,7 +150,7 @@ public class SetupConfigTemplateStep extends Step {
 
         @Override
         public String getDisplayName() {
-            return "Store config-template parameters for the current build";
+            return io.jenkins.plugins.jobconfigchain.ui.Messages.Step_Setup_DisplayName();
         }
 
         @Override

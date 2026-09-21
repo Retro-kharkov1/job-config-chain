@@ -106,7 +106,7 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
 
     @Override
     public String getDisplayName() {
-        return "Config Templates";
+        return Messages.ConfigTemplates_DisplayName();
     }
 
     @Override
@@ -116,7 +116,7 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
 
     @Override
     public String getDescription() {
-        return "Manage per-project Config Sets and their environment overlays.";
+        return Messages.ConfigTemplatesRootAction_Description();
     }
 
     /**

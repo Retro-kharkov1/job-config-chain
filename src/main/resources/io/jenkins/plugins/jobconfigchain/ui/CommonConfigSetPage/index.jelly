@@ -329,7 +329,8 @@
              stashed on this template (rendered once by Jelly) rather than re-implemented in JS. -->
         <template id="historyRowTemplate"
                   data-active-label="${%activeStatus}"
-                  data-already-active-title="${%activate.alreadyActiveTitle}">
+                  data-already-active-title="${%activate.alreadyActiveTitle}"
+                  data-activate-title="${%activate.title}">
           <tr class="ctsync-history-row" tabindex="0" role="button">
             <td data-th="${%column.version}" class="js-version"/>
             <td data-th="${%column.created}" class="js-created"/>
@@ -897,7 +898,7 @@
             btn.setAttribute('data-always-disabled', 'true');
             btn.title = tpl.dataset.alreadyActiveTitle;
           } else {
-            btn.title = 'Activate version ' + v.versionNumber + ' without changing the editor content';
+            btn.title = tpl.dataset.activateTitle.replace('{0}', String(v.versionNumber));
             btn.onclick = (function (num) {
               return function (e) { e.stopPropagation(); activateVersion(num); };
             })(v.versionNumber);

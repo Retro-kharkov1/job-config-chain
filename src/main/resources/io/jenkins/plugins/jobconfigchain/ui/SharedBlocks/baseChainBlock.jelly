@@ -48,8 +48,20 @@
            right after the shared .ctsync-scroll-table rule) overrides width back to 100% for
            this table only, leaving every other .ctsync-scroll-table usage unaffected. -->
       <div class="ctsync-scroll-table ctsync-scroll-table--full-width" id="baseChainRowsTableWrap">
+        <!-- Localized strings for the JS-built rows. The row markup is created in script
+             (buildBaseChainRowElement), which cannot use Jelly's ${%key} substitution, so the
+             translated text is carried here as data-* attributes and read via dataset - the same
+             pattern secretRowTemplate/versionRowTemplate already use in this plugin. -->
+        <template id="baseChainRowStrings"
+                  data-drag-handle-title="${%row.dragHandle.title}"
+                  data-move-up-title="${%row.moveUp.title}"
+                  data-move-down-title="${%row.moveDown.title}"
+                  data-remove-title="${%row.remove.title}"
+                  data-open-in-new-tab-title="${%row.openInNewTab.title}"
+                  data-resolved-caption="${%row.resolvedCaption}"
+                  data-not-resolvable="${%row.notResolvable}"/>
         <table class="jenkins-table ctsync-basechain-table" id="baseChainRowsTable">
-          <thead><tr><th/><th/><th>#</th><th>${%column.configKey}</th><th>Mode</th><th>Pinned version</th><th/></tr></thead>
+          <thead><tr><th/><th/><th>#</th><th>${%column.configKey}</th><th>${%column.mode}</th><th>${%column.pinnedVersion}</th><th/></tr></thead>
           <tbody id="baseChainRowsBody"/>
         </table>
       </div>
