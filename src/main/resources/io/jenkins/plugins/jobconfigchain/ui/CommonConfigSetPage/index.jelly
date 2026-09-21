@@ -42,6 +42,18 @@
            same convention already used by this plugin's own page-level action rows (see the
            env-override page's Generate Template/Back row) — not left-aligned in the page flow. */
         .ctsync-btn-row--right { text-align: right; }
+        /* Heading and its page-level action on one line, mirroring .ctsync-editor-header-row
+           below rather than inventing a second alignment mechanism. ctsync-btn-row--right is
+           deliberately NOT reused here: it right-aligns a full-width block on the next line, which
+           reads as a second row rather than as the top-right of the page. */
+        .ctsync-page-header {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+        .ctsync-page-header h1 { margin-right: 16px; }
         /* A banner that pairs a status message with a single follow-up action should present the
            action on the opposite side from the message, not immediately inline after the text. */
         .ctsync-banner-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
@@ -207,10 +219,64 @@
 
       <div class="ctsync-page">
 
-      <h1>${it.displayName}</h1>
-      <j:if test="${!it.exists}">
-        <div class="alert alert-info">${%notExistYet}</div>
-      </j:if>
+      <st:include class="${it.sharedBlocksClass}" page="confirmByNameBlock.jelly" it="${it}"/>
+
+      <div class="ctsync-page-header">
+        <h1>${it.displayName}</h1>
+        <div class="ctsync-btn-row">
+          <j:choose>
+            <j:when test="${it.deleted}">
+              <button type="button" id="restoreConfigSetBtn" class="jenkins-button"
+                      title="${%restore.title}"
+                      onclick="restoreConfigSetClicked();">${%restore.label}</button>
+              <button type="button" id="purgeConfigSetBtn"
+                      class="jenkins-button jenkins-button--destructive"
+                      title="${%purge.title}"
+                      onclick="purgeConfigSetClicked();">&#128465; ${%purge.label}</button>
+            </j:when>
+            <j:when test="${it.exists}">
+              <button type="button" id="deleteConfigSetBtn"
+                      class="jenkins-button jenkins-button--destructive"
+                      title="${%deleteConfigSet.title}"
+                      onclick="deleteConfigSetClicked();">&#128465; ${%deleteConfigSet.label}</button>
+            </j:when>
+          </j:choose>
+        </div>
+      </div>
+
+      <div id="deleteBlockedBanner" class="alert alert-danger ctsync-blocked-banner"
+           style="display:none"/>
+
+      <!-- Localized text for the script-built dialogs. Jelly cannot substitute ${%key} inside a
+           script block, so it rides on data-* here, the pattern the row templates already use. -->
+      <template id="ctsyncLifecycleStrings"
+                data-delete-dialog-title="${%deleteConfigSet.dialogTitle}"
+                data-delete-dialog-message="${%deleteConfigSet.dialogMessage}"
+                data-delete-ok-label="${%deleteConfigSet.okLabel}"
+                data-blocked-intro="${%deleteConfigSet.blockedIntro}"
+                data-historical-note="${%deleteConfigSet.historicalNote}"
+                data-job-row="${%deleteConfigSet.jobRow}"
+                data-purge-dialog-title="${%purge.dialogTitle}"
+                data-purge-dialog-message="${%purge.dialogMessage}"
+                data-purge-ok-label="${%purge.okLabel}"
+                data-purge-blocked-intro="${%purge.blockedIntro}"/>
+
+      <j:choose>
+        <j:when test="${it.deleted}">
+          <!-- Never the "does not exist yet - Save creates it" notice below: a deleted Config Set
+               rendering as a blank new one is exactly the invitation to clobber an archive that
+               reserving the name exists to prevent. -->
+          <div class="alert alert-warning">
+            ${%deletedState.banner(it.deletion.deletedBy)}
+            <span class="ctsync-created-cell" data-epoch="${it.deletion.deletedAtEpochMillis}"
+                  >${it.deletion.deletedAtEpochMillis}</span>
+            ${%deletedState.editingDisabled}
+          </div>
+        </j:when>
+        <j:when test="${!it.exists}">
+          <div class="alert alert-info">${%notExistYet}</div>
+        </j:when>
+      </j:choose>
 
       <div id="secretsManifestDetails">
       <f:section title="${%secretsManifest.heading}">
@@ -515,6 +581,127 @@
         // toLocaleString() -> the user agent's own configured locale/timezone, exactly matching
         // what the rest of the browser chrome already displays dates in). Falls back to the raw
         // number only if the value is missing/garbage, never throws.
+        // ---- Deletion lifecycle --------------------------------------------------------------
+        // The click asks the server what would break BEFORE prompting for the name. Making somebody
+        // type an exact Config Set name and only then telling them it cannot be done is worse than
+        // telling them up front - and the answer is needed anyway, because it is what populates the
+        // refusal. The server re-checks everything regardless: this response can be stale by the
+        // time the delete call lands.
+
+        function lifecycleStrings() {
+          var tpl = document.getElementById('ctsyncLifecycleStrings');
+          return tpl ? tpl.dataset : {};
+        }
+
+        function jobItems(entries) {
+          var items = [];
+          for (var i = 0; i &lt; entries.length; i++) {
+            var versions = entries[i].versions.join(', ');
+            items.push({
+              text: window.ctsyncFormatMessage(lifecycleStrings().jobRow, entries[i].fullName, versions),
+              url: entries[i].url
+            });
+          }
+          return items;
+        }
+
+        function showLifecycleRefusal(titleTemplate, introKey, response) {
+          var d = lifecycleStrings();
+          window.ctsyncShowBlocked('deleteBlockedBanner',
+              window.ctsyncFormatMessage(titleTemplate, '${it.projectKey}'),
+              [{ intro: d[introKey], items: jobItems(response.activeJobs) },
+               { intro: d.historicalNote, items: jobItems(response.historicalJobs) }]);
+        }
+
+        function deleteConfigSetClicked() {
+          var button = document.getElementById('deleteConfigSetBtn');
+          button.disabled = true;
+          window.ctsyncHideBlocked('deleteBlockedBanner');
+          proxy.deletePreflight(function (t) {
+            button.disabled = false;
+            var r = t.responseObject();
+            var d = lifecycleStrings();
+            if (r.blocked) {
+              // No prompt at all in this branch: there is nothing for the operator to confirm.
+              showLifecycleRefusal(d.deleteDialogTitle, 'blockedIntro', r);
+              return;
+            }
+            if (!r.ok) { window.ctsyncNotify(r.error, true); return; }
+            var historical = r.historicalJobs.length > 0
+                ? '\n\n' + d.historicalNote + '\n' + jobItems(r.historicalJobs)
+                    .map(function (item) { return item.text; }).join('\n')
+                : '';
+            window.ctsyncConfirmByName({
+              expectedName: '${it.projectKey}',
+              title: window.ctsyncFormatMessage(d.deleteDialogTitle, '${it.projectKey}'),
+              message: window.ctsyncFormatMessage(d.deleteDialogMessage, '${it.projectKey}') + historical,
+              okLabel: d.deleteOkLabel,
+              onConfirm: function (typed) {
+                proxy.deleteConfigSet(JSON.stringify({ confirmName: typed }), function (t2) {
+                  var r2 = t2.responseObject();
+                  if (!r2.ok) {
+                    if (r2.blocked) { showLifecycleRefusal(d.deleteDialogTitle, 'blockedIntro', r2); }
+                    else { window.ctsyncNotify(r2.error, true); }
+                    return;
+                  }
+                  // The page identity is gone, so it cannot stay. The list page renders the
+                  // confirmation server-side from this query parameter - a toast would not survive
+                  // the navigation.
+                  window.location.href = '${rootURL}/configTemplates/?deleted='
+                      + encodeURIComponent(r2.projectKey);
+                });
+              }
+            });
+          });
+        }
+
+        function restoreConfigSetClicked() {
+          var button = document.getElementById('restoreConfigSetBtn');
+          button.disabled = true;
+          proxy.restoreConfigSet(function (t) {
+            button.disabled = false;
+            var r = t.responseObject();
+            if (!r.ok) { window.ctsyncNotify(r.error, true); return; }
+            // Restore changes what the whole page may do, so it is re-rendered rather than patched.
+            window.location.reload();
+          });
+        }
+
+        function purgeConfigSetClicked() {
+          var button = document.getElementById('purgeConfigSetBtn');
+          button.disabled = true;
+          window.ctsyncHideBlocked('deleteBlockedBanner');
+          proxy.purgePreflight(function (t) {
+            button.disabled = false;
+            var r = t.responseObject();
+            var d = lifecycleStrings();
+            if (r.blocked) {
+              showLifecycleRefusal(d.purgeDialogTitle, 'purgeBlockedIntro', r);
+              return;
+            }
+            if (!r.ok) { window.ctsyncNotify(r.error, true); return; }
+            window.ctsyncConfirmByName({
+              expectedName: '${it.projectKey}',
+              title: window.ctsyncFormatMessage(d.purgeDialogTitle, '${it.projectKey}'),
+              message: window.ctsyncFormatMessage(d.purgeDialogMessage, '${it.projectKey}',
+                  r.versionCount),
+              okLabel: d.purgeOkLabel,
+              onConfirm: function (typed) {
+                proxy.purgeConfigSet(JSON.stringify({ confirmName: typed }), function (t2) {
+                  var r2 = t2.responseObject();
+                  if (!r2.ok) {
+                    if (r2.blocked) { showLifecycleRefusal(d.purgeDialogTitle, 'purgeBlockedIntro', r2); }
+                    else { window.ctsyncNotify(r2.error, true); }
+                    return;
+                  }
+                  window.location.href = '${rootURL}/configTemplates/?purged='
+                      + encodeURIComponent(r2.projectKey);
+                });
+              }
+            });
+          });
+        }
+
         function formatTimestamp(epochMillis) {
           if (epochMillis === null || epochMillis === undefined || isNaN(epochMillis)) { return String(epochMillis); }
           var d = new Date(Number(epochMillis));
