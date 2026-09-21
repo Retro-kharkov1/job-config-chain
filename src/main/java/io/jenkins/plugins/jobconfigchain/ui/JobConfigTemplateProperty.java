@@ -188,7 +188,7 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
 
         @Override
         public String getDisplayName() {
-            return "Config Templates";
+            return Messages.ConfigTemplates_DisplayName();
         }
 
         /**

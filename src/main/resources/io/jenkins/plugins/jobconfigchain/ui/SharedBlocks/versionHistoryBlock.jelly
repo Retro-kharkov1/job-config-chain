@@ -99,7 +99,11 @@
     </div>
     <template id="historyRowTemplate"
               data-active-label="${%activeStatus}"
-              data-already-active-title="${%activate.alreadyActiveTitle}">
+              data-already-active-title="${%activate.alreadyActiveTitle}"
+              data-base-singular="${%baseChain.countSingular}"
+              data-base-plural="${%baseChain.countPlural}"
+              data-no-declared-chain="${%baseChain.noneDeclared}"
+              data-activate-title="${%activate.title}">
       <tr class="ctsync-history-row" tabindex="0" role="button">
         <td data-th="${%column.version}" class="js-version"/>
         <td data-th="${%column.created}" class="js-created"/>
