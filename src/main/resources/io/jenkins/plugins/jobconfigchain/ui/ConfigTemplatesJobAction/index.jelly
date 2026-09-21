@@ -280,6 +280,18 @@
           background-color: var(--table-hover-color, #f0f6ff);
           color: var(--link-color, #0059b3);
         }
+        /* Keep each row's controls on a single line (owner report, 2026-09-21: "the buttons
+           moved"). The three action buttons sum to ~108px inside a ~146px cell, so they look like
+           they fit — but inter-button spacing pushed the total past the cell's content width and
+           the remove button wrapped onto a second line, doubling the row height to 96px and
+           leaving the actions column visibly ragged. The Mode radios broke the same way, splitting
+           "Active / Pin" across two lines. Measured in Chrome: nowrap on both cells takes the row
+           from 96px to 57px and, because these cells are narrow and the flexible cells beside them
+           can still shrink, adds no horizontal overflow even at a 620px container. Class-based
+           rather than :last-child/:nth-child so a future column reorder cannot silently
+           re-point these rules at the wrong cells. */
+        .ctsync-basechain-actions-cell,
+        .ctsync-basechain-mode-cell { white-space: nowrap; }
         .ctsync-basechain-row.ctsync-basechain-row--dragging { opacity: 0.5; cursor: grabbing; }
         .ctsync-basechain-row.ctsync-basechain-row--drop-target { border-top: 2px solid var(--link-color, #0059b3); }
         @media (max-width: 480px) {
@@ -852,6 +864,7 @@
           tr.appendChild(projectTd);
 
           var modeTd = document.createElement('td');
+          modeTd.className = 'ctsync-basechain-mode-cell';
           modeTd.appendChild(buildModeRadio(row, index, 'ACTIVE', 'Active'));
           modeTd.appendChild(buildModeRadio(row, index, 'PINNED', 'Pin'));
           tr.appendChild(modeTd);
@@ -907,6 +920,7 @@
           tr.appendChild(versionTd);
 
           var actionsTd = document.createElement('td');
+          actionsTd.className = 'ctsync-basechain-actions-cell';
           var upBtn = document.createElement('button');
           upBtn.type = 'button';
           upBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
