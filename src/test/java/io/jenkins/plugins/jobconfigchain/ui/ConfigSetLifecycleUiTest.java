@@ -47,6 +47,20 @@ public class ConfigSetLifecycleUiTest {
         return new ConfigSetRepository();
     }
 
+    /**
+     * A web client with scripting off, for the tests that assert on rendered markup.
+     *
+     * <p>These pages embed the Monaco editor, whose bundle HtmlUnit's JavaScript engine cannot
+     * parse at all. Executing it is also beside the point here: what is being asserted is what the
+     * server rendered, and the behaviour that does need a running script is covered by the
+     * endpoint tests above, which call the same methods the browser would.</p>
+     */
+    private JenkinsRule.WebClient markupClient() {
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        return wc;
+    }
+
     private ConfigSet seed(String projectKey) {
         ConfigSet set = new ConfigSet(projectKey, ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         int v1 = set.addVersion("{\"a\":1}", "initial", "alice", 1L);
@@ -237,11 +251,11 @@ public class ConfigSetLifecycleUiTest {
     public void theDeleteButtonRendersOnALiveConfigSetAndNotOnAnAbsentOne() throws Exception {
         seed("rendered-app");
 
-        HtmlPage live = jenkins.createWebClient().goTo("manage/configTemplates/rendered-app/");
+        HtmlPage live = markupClient().goTo("manage/configTemplates/rendered-app/");
         assertNotNull("a live Config Set offers the delete action",
                 live.getElementById("deleteConfigSetBtn"));
 
-        HtmlPage absent = jenkins.createWebClient().goTo("manage/configTemplates/never-created/");
+        HtmlPage absent = markupClient().goTo("manage/configTemplates/never-created/");
         assertNull("there is nothing to delete before the first save",
                 absent.getElementById("deleteConfigSetBtn"));
     }
@@ -251,7 +265,7 @@ public class ConfigSetLifecycleUiTest {
         seed("withdrawn-app");
         page("withdrawn-app").jsDeleteConfigSet(confirm("withdrawn-app").toString());
 
-        HtmlPage rendered = jenkins.createWebClient().goTo("manage/configTemplates/withdrawn-app/");
+        HtmlPage rendered = markupClient().goTo("manage/configTemplates/withdrawn-app/");
         String text = rendered.asNormalizedText();
 
         assertNotNull(rendered.getElementById("restoreConfigSetBtn"));
@@ -269,7 +283,7 @@ public class ConfigSetLifecycleUiTest {
     public void theJobPageNeverOffersDeletion() throws Exception {
         FreeStyleProject job = jenkins.createFreeStyleProject("untouched-job");
 
-        HtmlPage rendered = jenkins.createWebClient().goTo("job/" + job.getName() + "/configTemplates/");
+        HtmlPage rendered = markupClient().goTo("job/" + job.getName() + "/configTemplates/");
 
         assertNull("deletion is a global Config Set action only",
                 rendered.getElementById("deleteConfigSetBtn"));
@@ -281,7 +295,7 @@ public class ConfigSetLifecycleUiTest {
         seed("withdrawn-app");
         page("withdrawn-app").jsDeleteConfigSet(confirm("withdrawn-app").toString());
 
-        HtmlPage list = jenkins.createWebClient().goTo("manage/configTemplates/");
+        HtmlPage list = markupClient().goTo("manage/configTemplates/");
 
         assertNotNull("the toggle appears only when something is deleted",
                 list.getElementById("showDeletedToggle"));
@@ -295,12 +309,12 @@ public class ConfigSetLifecycleUiTest {
         seed("withdrawn-app");
         page("withdrawn-app").jsDeleteConfigSet(confirm("withdrawn-app").toString());
 
-        HtmlPage real = jenkins.createWebClient().goTo("manage/configTemplates/?deleted=withdrawn-app");
+        HtmlPage real = markupClient().goTo("manage/configTemplates/?deleted=withdrawn-app");
         assertTrue(real.asNormalizedText().contains("withdrawn-app"));
 
         // Validated against the repository rather than echoed, so a hand-typed parameter renders
         // nothing at all.
-        HtmlPage invented = jenkins.createWebClient().goTo("manage/configTemplates/?deleted=never-existed");
+        HtmlPage invented = markupClient().goTo("manage/configTemplates/?deleted=never-existed");
         assertFalse(invented.asNormalizedText().contains("never-existed"));
     }
 }
