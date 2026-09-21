@@ -233,6 +233,45 @@
           outline: 2px solid var(--link-color, #0059b3);
           outline-offset: 2px;
         }
+        /* Pinned-version cell (owner report, 2026-09-21): a version note is free text, so a long
+           one used to widen the select, widen the column, and push the row's action buttons out of
+           the table. The select is now capped and the label truncated, with the full text reachable
+           through the info affordance beside it. Capping alone is not enough: a native select's
+           option text cannot be ellipsised by CSS, so the string itself is shortened too. */
+        .ctsync-basechain-version-cell {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          min-width: 0;
+        }
+        .ctsync-basechain-version-cell select {
+          max-width: 220px;
+          min-width: 0;
+          flex: 1 1 auto;
+        }
+        /* Same circular secondary-action treatment as the open-in-new-tab link above, so the two
+           icon affordances in this row read as one family. */
+        .ctsync-basechain-version-info {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+          width: 22px;
+          height: 22px;
+          font-size: 12px;
+          font-style: italic;
+          font-weight: 600;
+          color: var(--text-color-secondary, #666);
+          cursor: help;
+          background-color: transparent;
+          border: 1px solid var(--table-border-color, #ccc);
+          border-radius: 50%;
+          transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+        .ctsync-basechain-version-info:hover {
+          background-color: var(--table-hover-color, #f0f6ff);
+          color: var(--link-color, #0059b3);
+        }
         .ctsync-basechain-row.ctsync-basechain-row--dragging { opacity: 0.5; cursor: grabbing; }
         .ctsync-basechain-row.ctsync-basechain-row--drop-target { border-top: 2px solid var(--link-color, #0059b3); }
         @media (max-width: 480px) {
@@ -661,6 +700,21 @@
           }
         }
 
+        // A version's display label. Kept in one place because it is produced for the option
+        // text, for the truncation comparison, and for the info tooltip - three copies of the same
+        // concatenation would be three chances for them to drift apart.
+        function baseChainVersionLabel(version) {
+          return 'v' + version.version + ' — ' + version.note;
+        }
+
+        // Notes are free text with no length limit, so the label is shortened for display. Returns
+        // the input unchanged when it already fits - callers rely on that to detect whether
+        // anything was actually elided.
+        function truncateVersionLabel(label) {
+          var max = 40;
+          return label.length &gt; max ? label.slice(0, max - 1) + '…' : label;
+        }
+
         function buildBaseChainRowElement(row, index) {
           var tr = document.createElement('tr');
           tr.className = 'ctsync-basechain-row';
@@ -796,20 +850,51 @@
 
           var versionTd = document.createElement('td');
           if (row.pinMode === 'PINNED') {
+            var versionCell = document.createElement('div');
+            versionCell.className = 'ctsync-basechain-version-cell';
+
             var versionSelect = document.createElement('select');
             versionSelect.className = 'jenkins-select__input';
             var versions = commonVersionCatalog.versionsByProject[row.projectKey] || [];
+            var fullLabels = {};
             for (var v = 0; v &lt; versions.length; v++) {
               var vopt = document.createElement('option');
               vopt.value = versions[v].version;
-              vopt.text = 'v' + versions[v].version + ' — ' + versions[v].note;
+              var fullLabel = baseChainVersionLabel(versions[v]);
+              fullLabels[String(versions[v].version)] = fullLabel;
+              vopt.text = truncateVersionLabel(fullLabel);
+              // The untruncated label also rides along as the option's own tooltip, so a user
+              // browsing the open dropdown can read a long note without closing it first.
+              vopt.title = fullLabel;
               if (versions[v].version === row.pinnedVersionNumber) { vopt.selected = true; }
               versionSelect.appendChild(vopt);
             }
+            versionCell.appendChild(versionSelect);
+
+            // Info affordance carrying the SELECTED version's full label. Shown only when
+            // something is actually elided - a short note is fully readable in the select, and an
+            // icon that reveals nothing new is just noise.
+            var infoIcon = document.createElement('span');
+            infoIcon.className = 'ctsync-basechain-version-info';
+            infoIcon.setAttribute('aria-hidden', 'true');
+            infoIcon.textContent = 'i';
+            versionCell.appendChild(infoIcon);
+
+            var syncVersionInfo = function () {
+              var label = fullLabels[String(versionSelect.value)] || '';
+              var elided = label !== truncateVersionLabel(label);
+              infoIcon.title = label;
+              infoIcon.style.display = elided ? '' : 'none';
+            };
+            syncVersionInfo();
+
             versionSelect.onchange = (function (idx) {
-              return function () { onBaseChainPinnedVersionChange(idx, this.value); };
+              return function () {
+                onBaseChainPinnedVersionChange(idx, this.value);
+                syncVersionInfo();
+              };
             })(index);
-            versionTd.appendChild(versionSelect);
+            versionTd.appendChild(versionCell);
           }
           tr.appendChild(versionTd);
 
