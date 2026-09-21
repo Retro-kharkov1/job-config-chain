@@ -311,6 +311,7 @@
       <!-- Same four shared fragments EnvConfigSetPage/index.jelly renders — see this project's
            tech-lead design contract (2026-09-09) and ConfigTemplatesJobAction's own javadoc for the
            method-name-parity guarantee this relies on. -->
+      <st:include class="${it.sharedBlocksClass}" page="tableToolsBlock.jelly" it="${it}"/>
       <st:include class="${it.sharedBlocksClass}" page="versionHistoryBlock.jelly" it="${it}"/>
       <st:include class="${it.sharedBlocksClass}" page="secretsManifestBlock.jelly" it="${it}"/>
       <st:include class="${it.sharedBlocksClass}" page="baseChainBlock.jelly" it="${it}"/>
