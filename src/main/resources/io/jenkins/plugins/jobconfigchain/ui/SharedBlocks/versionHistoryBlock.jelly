@@ -19,7 +19,7 @@
          way. renderVersionHistoryRows (both hosts' own script) inserts/removes this row directly
          instead of toggling a separate placeholder div. -->
     <div id="versionHistoryTableWrap" class="ctsync-scroll-table">
-      <table class="jenkins-table ctsync-history-table" style="width:100%">
+      <table class="jenkins-table ctsync-history-table sortable ctsync-filterable" style="width:100%">
         <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th>${%column.baseChain}</th><th>${%column.active}</th><th>${%column.actions}</th></tr></thead>
         <tbody id="versionHistoryTbody">
           <j:if test="${it.versions.isEmpty()}">
