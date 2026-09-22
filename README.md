@@ -61,6 +61,48 @@ A self-hosted private Update Center (search-and-install like an official plugin)
 — see the update-center scripts under `distribution/` if you want that flow instead of manual
 upload.
 
+### Installing a published release
+
+Cutting a GitHub Release on this repository publishes the build two ways
+(`.github/workflows/publish-github-packages.yaml`). Pick the one that matches what you're doing:
+
+**Installing the plugin into a running Jenkins — use the Release asset, no credentials needed.**
+Every [GitHub Release](https://github.com/Retro-kharkov1/job-config-chain/releases) has the built
+`.hpi` attached as a downloadable asset. Download it, then Manage Jenkins → Plugins → Advanced
+settings → Deploy Plugin → select the downloaded file (same flow as the local build above, just
+skipping the build step). No GitHub account or token is required — the asset is a plain,
+anonymously-downloadable file.
+
+**Consuming this plugin as a Maven dependency — use GitHub Packages, credentials required.**
+The `.hpi`, `.jar`, and `pom` are also published to this repository's GitHub Packages Maven
+registry at `https://maven.pkg.github.com/Retro-kharkov1/job-config-chain`. GitHub's Maven
+registry requires authentication to download from it even for a public package — there is no
+anonymous-read mode. Add both a repository entry and matching server credentials:
+
+```xml
+<!-- pom.xml or a profile -->
+<repositories>
+  <repository>
+    <id>github</id>
+    <url>https://maven.pkg.github.com/Retro-kharkov1/job-config-chain</url>
+  </repository>
+</repositories>
+```
+
+```xml
+<!-- ~/.m2/settings.xml -->
+<servers>
+  <server>
+    <id>github</id>
+    <username>YOUR_GITHUB_USERNAME</username>
+    <password>YOUR_GITHUB_PERSONAL_ACCESS_TOKEN</password> <!-- needs read:packages scope -->
+  </server>
+</servers>
+```
+
+This is an interim/parallel distribution channel, independent of the official Jenkins Update
+Center path described in `HOSTING.md`.
+
 ## Getting started
 
 A from-scratch walkthrough for a brand-new user, install to first successful build.
