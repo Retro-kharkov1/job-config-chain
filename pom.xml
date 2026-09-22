@@ -245,4 +245,39 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+  <!--
+    GitHub Packages publishing is deliberately a PROFILE, not an unconditional
+    <distributionManagement> override.
+
+    Why: the inherited parent (org.jenkins-ci.plugins:plugin) already declares its own
+    <distributionManagement> pointing at https://repo.jenkins-ci.org/{releases,snapshots}/
+    (confirmed by fetching that parent pom directly, not assumed) — that is the registry
+    the *official* Jenkins hosting/release path (see HOSTING.md) uses once this repo is
+    forked into the jenkinsci GitHub org and released via ci.jenkins.io's own tooling and
+    Jenkins-project Artifactory credentials. HOSTING.md's transfer step forks this exact
+    repo history — including this pom.xml — into jenkinsci/job-config-chain-plugin, so an
+    unconditional override here would silently redirect that FUTURE official release
+    (running under different, jenkinsci-owned CI/credentials) at this personal GitHub
+    Packages registry instead of Jenkins' own Artifactory, which is not what it expects
+    and has no credentials for.
+
+    Gating it behind this profile means a bare `mvn deploy` / `mvn release:perform` (what
+    the official jenkins-infra pipeline-library's buildPlugin()/release tooling runs)
+    keeps resolving distributionManagement from the parent POM exactly as before. Only
+    the interim GitHub Actions publish workflow in this repo
+    (.github/workflows/publish-github-packages.yaml) opts in explicitly with
+    `-Pgithub-packages`.
+  -->
+  <profiles>
+    <profile>
+      <id>github-packages</id>
+      <distributionManagement>
+        <repository>
+          <id>github</id>
+          <name>GitHub Retro-kharkov1 Apache Maven Packages</name>
+          <url>https://maven.pkg.github.com/Retro-kharkov1/job-config-chain</url>
+        </repository>
+      </distributionManagement>
+    </profile>
+  </profiles>
 </project>
