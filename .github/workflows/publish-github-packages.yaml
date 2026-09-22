@@ -1,0 +1,111 @@
+# Publishes this plugin's Maven artifacts (.hpi, .jar, pom) to this repository's GitHub
+# Packages Maven registry, and attaches the built .hpi to the triggering GitHub Release
+# as a downloadable asset.
+#
+# Two distribution paths, both produced by this one workflow run, for two different
+# consumers — see README.md "Installing a published release" for the consumer-facing
+# version of this split:
+#
+#   1. GitHub Packages (Maven registry) — for anyone consuming this plugin as a Maven
+#      dependency (e.g. another plugin's pom.xml). GitHub's Maven registry requires
+#      authentication to DOWNLOAD from it, even for a public package/repo — there is no
+#      anonymous-read mode (verified against GitHub's own Packages docs). That is fine
+#      for a Maven consumer (they already manage a settings.xml with credentials), but
+#      it means Packages alone cannot be how a Jenkins admin installs the plugin.
+#   2. GitHub Release asset (the .hpi) — for a Jenkins admin who just wants to install
+#      the plugin. Jenkins' own "Manage Plugins -> Advanced -> Deploy Plugin" UI accepts
+#      a bare uploaded file or a plain URL, with no field to supply a bearer token — so
+#      it can only ever consume an anonymously-downloadable asset, which a GitHub Release
+#      asset on a public repo is. This half is therefore not optional decoration on top
+#      of the Packages requirement, it is what makes the plugin actually installable.
+#
+# Version: computed by GitVersion from the tagged commit, the exact same mechanism
+# mvnw/mvnw.cmd/docker-build.sh already use for local/Docker builds (see GitVersion.yml
+# and pom.xml's `revision` property comment) — not hardcoded and not re-derived a
+# different way here.
+#
+# distributionManagement for GitHub Packages lives behind the `github-packages` Maven
+# profile in pom.xml, not as an unconditional override — see the comment on that profile
+# in pom.xml for why (protects the future official jenkinsci-hosted release path).
+
+name: Publish to GitHub Packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to (re-)publish (defaults to the latest release when run manually)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        id: tag
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ inputs.tag }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="$(gh release view --repo "${{ github.repository }}" --json tagName --jq .tagName)"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0 # GitVersion needs full history to compute SemVer from tags
+
+      - name: Compute SemVer via GitVersion
+        id: gitversion
+        run: |
+          SEMVER="$(docker run --rm -v "$PWD:/repo" gittools/gitversion:6.8.2-alpine.3.23-9.0 /repo /showvariable SemVer)"
+          echo "SemVer: $SEMVER"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          # JDK 21 to RUN Maven/maven-hpi-plugin (its `validate` goal requires it on this
+          # parent POM version) — independent of maven.compiler.release=17, the target
+          # bytecode level. Same reasoning as docker-build.sh; see that script's comments.
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+          server-id: github # matches the <id>github</id> in pom.xml's github-packages profile
+
+      - name: Build and publish to GitHub Packages
+        # Calls `mvn` directly (preinstalled on the GitHub-hosted runner), not the
+        # ./mvnw wrapper — the wrapper shells out to its own `dotnet-gitversion` CLI
+        # invocation to compute -Drevision (see mvnw's own comments), which isn't
+        # installed on this runner and would add a second, redundant SemVer computation
+        # on top of the one already done above via the same gittools/gitversion image
+        # docker-build.sh uses. Passing -Drevision explicitly here is the single source
+        # of truth for this run's version.
+        #
+        # `deploy` runs the full default lifecycle first (compile, test, package, verify)
+        # then publishes — a red test suite aborts here and nothing gets published or
+        # attached to the release. `-Pgithub-packages` opts into the GitHub Packages
+        # distributionManagement profile in pom.xml (see that file for why it is gated).
+        run: >
+          mvn -B -Pgithub-packages
+          -Drevision=${{ steps.gitversion.outputs.semver }}
+          -Dmaven.clean.failOnError=false
+          clean deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach .hpi to the GitHub Release
+        run: gh release upload "${{ steps.tag.outputs.tag }}" target/job-config-chain.hpi --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
