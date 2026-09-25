@@ -74,7 +74,7 @@ jobs:
           echo "SemVer: $SEMVER"
           echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           # JDK 21 to RUN Maven/maven-hpi-plugin (its `validate` goal requires it on this
           # parent POM version) — independent of maven.compiler.release=17, the target
