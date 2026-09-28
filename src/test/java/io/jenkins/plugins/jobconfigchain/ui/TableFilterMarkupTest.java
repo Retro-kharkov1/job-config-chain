@@ -38,8 +38,37 @@ public class TableFilterMarkupTest {
     private static final File BLOCK =
             new File(UI_RESOURCES, "SharedBlocks/tableToolsBlock.jelly");
 
+    // CSP migration (Jenkins hosting requirement, see
+    // https://www.jenkins.io/doc/developer/security/csp/): the filter/sort JS this class guards
+    // used to live as an inline <script> inside tableToolsBlock.jelly above. It has since moved
+    // into each host page's own external index.js (verbatim, duplicated three times - see the
+    // comment on tableToolsBlock.jelly itself) because a resource resolved via
+    // h.getViewResource(it, ...) always resolves relative to the CALLER's own index.jelly, never
+    // a SharedBlocks-relative path. The three copies are required to stay byte-identical, so the
+    // JS-content guards below check all three rather than the now-empty jelly fragment.
+    private static final List<File> JS_COPIES = List.of(
+            new File(UI_RESOURCES, "CommonConfigSetPage/index.js"),
+            new File(UI_RESOURCES, "ConfigTemplatesJobAction/index.js"),
+            new File(UI_RESOURCES, "ConfigTemplatesRootAction/index.js"));
+
     private static String read(File f) throws IOException {
         return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+    }
+
+    /** Marker comment prefix each JS_COPIES file uses to open the tableToolsBlock.jelly-derived
+     *  IIFE (see the comment on JS_COPIES) - used to scope guards to just that block instead of
+     *  the whole host-page script, which also contains unrelated page-specific table-rendering
+     *  code (e.g. building the version-history/secrets-manifest rows) that legitimately DOES
+     *  add/remove tbody rows and is out of scope for this guard. */
+    private static final String TABLE_TOOLS_BLOCK_MARKER =
+            "/* ---- SharedBlocks/tableToolsBlock.jelly";
+
+    private static String extractTableToolsBlock(String jsFile) {
+        int start = jsFile.indexOf(TABLE_TOOLS_BLOCK_MARKER);
+        assertTrue(start >= 0, "expected the tableToolsBlock.jelly-derived IIFE marker comment to be present");
+        int iifeEnd = jsFile.indexOf("\n})();", start);
+        assertTrue(iifeEnd >= 0, "expected the tableToolsBlock.jelly-derived IIFE to close with '})();'");
+        return jsFile.substring(start, iifeEnd);
     }
 
     private static List<File> jellyFiles() throws IOException {
@@ -100,7 +129,6 @@ public class TableFilterMarkupTest {
 
     @Test
     public void filterControlsAreSkippedForColumnsThatDeclareThemselvesUnsortable() throws Exception {
-        String block = read(BLOCK);
         // Regression guard for the defect the skeptic review caught on 2026-09-21: the skip rule
         // only tested for an empty caption, so the version-history "Actions" column - captioned,
         // but data-sort-disable - got a text filter. Every one of its cells renders the same
@@ -108,10 +136,15 @@ public class TableFilterMarkupTest {
         // rows match" for data that was plainly there.
         // Asserting the token merely exists would pass on `caption === '' && th.dataset.sortDisable`
         // - an AND, which reintroduces the exact bug while keeping the token. Pin the whole
-        // condition, so the logic itself is what is guarded.
-        assertTrue(skipCondition(block).matches(
-                        "caption\\s*===\\s*''\\s*\\|\\|\\s*th\\.dataset\\.sortDisable"),
-                "the skip rule must be an OR over both signals, found: " + skipCondition(block));
+        // condition, so the logic itself is what is guarded, in each of the three byte-identical
+        // copies this logic now lives in (see JS_COPIES).
+        for (File copy : JS_COPIES) {
+            String block = read(copy);
+            assertTrue(skipCondition(block).matches(
+                            "caption\\s*===\\s*''\\s*\\|\\|\\s*th\\.dataset\\.sortDisable"),
+                    "the skip rule must be an OR over both signals in " + copy.getName() + ", found: "
+                            + skipCondition(block));
+        }
     }
 
     @Test
@@ -136,36 +169,44 @@ public class TableFilterMarkupTest {
 
     @Test
     public void theStatusLineIsPlacedOutsideTheScrollingWrapper() throws Exception {
-        String block = read(BLOCK);
         // Second defect from the same review: the line was inserted as the table's next sibling,
         // which is inside .ctsync-scroll-table - the element that caps height and scrolls. The
         // count and the "no rows match" message then sat below the fold of the very box they
         // describe, which is exactly what keeping them out of tbody was meant to avoid.
         // Checking only that closest(...) appears would pass on an insertion that puts the line
         // BEFORE the wrapper, or next to the table again - both of which look right in a diff and
-        // are wrong on screen. Pin the anchor resolution and the insertion point together.
-        assertTrue(block.contains("var anchor = scrollWrap || table;"),
-                "the anchor must resolve to the scroll wrapper, falling back to the table: " + block);
-        assertTrue(block.contains("anchor.parentNode.insertBefore(status, anchor.nextSibling);"),
-                "the status line must be inserted AFTER that anchor");
-        assertFalse(block.contains("table.parentNode.insertBefore(status, table.nextSibling)"),
-                "the status line must not be inserted next to the table itself");
+        // are wrong on screen. Pin the anchor resolution and the insertion point together, in each
+        // of the three byte-identical copies this logic now lives in (see JS_COPIES).
+        for (File copy : JS_COPIES) {
+            String block = read(copy);
+            assertTrue(block.contains("var anchor = scrollWrap || table;"),
+                    "the anchor must resolve to the scroll wrapper, falling back to the table, in "
+                            + copy.getName());
+            assertTrue(block.contains("anchor.parentNode.insertBefore(status, anchor.nextSibling);"),
+                    "the status line must be inserted AFTER that anchor, in " + copy.getName());
+            assertFalse(block.contains("table.parentNode.insertBefore(status, table.nextSibling)"),
+                    "the status line must not be inserted next to the table itself, in " + copy.getName());
+        }
     }
 
     @Test
     public void theBlockNeverAddsOrRemovesRowsInTheTableBody() throws Exception {
-        String block = read(BLOCK);
         // Third defect: a "no matches" row appended to tbody retriggered the block's own
         // MutationObserver. The callback is delivered as a microtask, so an "applying" flag was
         // already cleared by the time it ran and each pass queued the next - the tab froze. The
         // structural fix is that nothing here touches the row set at all; filtering only toggles
-        // display. These calls are what would reintroduce it.
-        for (String forbidden : List.of("tbody.appendChild", "tbody.removeChild",
-                                        "ctsync-no-match-row")) {
-            assertFalse(block.contains(forbidden),
-                    "the filter block must not manipulate tbody rows (found: " + forbidden
-                            + ") - core treats every tbody row as sortable data, and mutating the "
-                            + "row set retriggers this block's own observer");
+        // display. These calls are what would reintroduce it, in each of the three byte-identical
+        // copies this logic now lives in (see JS_COPIES).
+        for (File copy : JS_COPIES) {
+            String block = extractTableToolsBlock(read(copy));
+            for (String forbidden : List.of("tbody.appendChild", "tbody.removeChild",
+                                            "ctsync-no-match-row")) {
+                assertFalse(block.contains(forbidden),
+                        "the filter block must not manipulate tbody rows (found: " + forbidden
+                                + ") in " + copy.getName() + " - core treats every tbody row as "
+                                + "sortable data, and mutating the row set retriggers this block's "
+                                + "own observer");
+            }
         }
     }
 
