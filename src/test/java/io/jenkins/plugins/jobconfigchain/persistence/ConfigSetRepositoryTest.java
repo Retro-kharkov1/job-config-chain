@@ -4,25 +4,24 @@ import io.jenkins.plugins.jobconfigchain.model.ConfigSet;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
 import java.util.List;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConfigSetRepositoryTest {
 
-    @Rule
-    public TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @TempDir
+    File temporaryFolder;
 
     @Test
     public void savesAndLoadsByProjectKey() throws Exception {
@@ -30,7 +29,7 @@ public class ConfigSetRepositoryTest {
         // on ConfigSetRepository — only findCommon survives. The multi-Config-Set-per-projectKey
         // shape this test proved (repository never confuses two persisted documents) is preserved by
         // saving two DIFFERENT common Config Sets and confirming each loads independently instead.
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
 
         ConfigSet common = new ConfigSet("sample-app", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         common.addVersion("{\"a\":1}", "initial", "alice", 1L);
@@ -53,14 +52,14 @@ public class ConfigSetRepositoryTest {
 
     @Test
     public void findReturnsNullWhenNoSuchConfigSetPersisted() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         assertNull(repository.findCommon("does-not-exist"));
     }
 
     @Test
     public void projectKeyPairingIsStructuralNotFreeTextMatching() throws Exception {
         // OQ-2: two different projectKeys never collide, even with similar names.
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
 
         ConfigSet projA = new ConfigSet("proj-a", ConfigSetRole.COMMON, null, "A Common", ContentType.JSON);
         projA.addVersion("{\"a\":1}", "init", "alice", 1L);
@@ -84,7 +83,7 @@ public class ConfigSetRepositoryTest {
      */
     @Test
     public void oldShapeFixtureWithNoContentTypeElementDefaultsToJson() throws Exception {
-        File baseDir = temporaryFolder.newFolder();
+        File baseDir = temporaryFolder;
         ConfigSetRepository repository = new ConfigSetRepository(baseDir);
 
         ConfigSet common = new ConfigSet("legacy-app", ConfigSetRole.COMMON, null, "Legacy Common", ContentType.JSON);
@@ -118,30 +117,30 @@ public class ConfigSetRepositoryTest {
 
     @Test
     public void softDeleteKeepsEveryVersionAndSecretOnDisk() throws Exception {
-        File baseDir = temporaryFolder.newFolder();
+        File baseDir = temporaryFolder;
         ConfigSetRepository repository = new ConfigSetRepository(baseDir);
         seed(repository, "withdrawn-app", "{\"a\":1}");
 
         repository.softDeleteCommon("withdrawn-app", "carol", 4242L);
 
-        assertTrue("the file must stay on disk - a soft delete destroys nothing",
-                new File(baseDir, "withdrawn-app--common.xml").isFile());
+        assertTrue(new File(baseDir, "withdrawn-app--common.xml").isFile(),
+                "the file must stay on disk - a soft delete destroys nothing");
 
         ConfigSet reloaded = repository.findCommonIncludingDeleted("withdrawn-app");
         assertNotNull(reloaded);
         assertTrue(reloaded.isDeleted());
         assertEquals("carol", reloaded.getDeletion().getDeletedBy());
         assertEquals(4242L, reloaded.getDeletion().getDeletedAtEpochMillis());
-        assertEquals("the whole version history must survive a withdrawal",
-                2, reloaded.getVersions().size());
-        assertEquals("the active pointer must survive it too", 1, reloaded.getActiveVersionNumber());
-        assertEquals("and so must the secrets manifest",
-                "cred-id", reloaded.getSecretsManifest().get("db.password"));
+        assertEquals(2, reloaded.getVersions().size(),
+                "the whole version history must survive a withdrawal");
+        assertEquals(1, reloaded.getActiveVersionNumber(), "the active pointer must survive it too");
+        assertEquals("cred-id", reloaded.getSecretsManifest().get("db.password"),
+                "and so must the secrets manifest");
     }
 
     @Test
     public void aDeletedConfigSetReadsAsMissingToEveryOrdinaryLookup() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         seed(repository, "withdrawn-app", "{\"a\":1}");
         repository.softDeleteCommon("withdrawn-app", "carol", 1L);
 
@@ -149,13 +148,13 @@ public class ConfigSetRepositoryTest {
         // null here, so none of them needed changing to stop consuming a withdrawn Config Set.
         assertNull(repository.findCommon("withdrawn-app"));
         assertNull(repository.find("withdrawn-app", ConfigSetRole.COMMON, null));
-        assertNotNull("but the record itself is still reachable where it is the subject",
-                repository.findCommonIncludingDeleted("withdrawn-app"));
+        assertNotNull(repository.findCommonIncludingDeleted("withdrawn-app"),
+                "but the record itself is still reachable where it is the subject");
     }
 
     @Test
     public void listingsSeparateLiveFromDeleted() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         seed(repository, "live-app", "{\"a\":1}");
         seed(repository, "withdrawn-app", "{\"a\":2}");
         repository.softDeleteCommon("withdrawn-app", "carol", 1L);
@@ -168,13 +167,13 @@ public class ConfigSetRepositoryTest {
         assertEquals(1, deleted.size());
         assertEquals("withdrawn-app", deleted.get(0).getProjectKey());
 
-        assertTrue("a deleted key stays taken, which is what reserves the name",
-                repository.listProjectKeys().contains("withdrawn-app"));
+        assertTrue(repository.listProjectKeys().contains("withdrawn-app"),
+                "a deleted key stays taken, which is what reserves the name");
     }
 
     @Test
     public void savingOverADeletedRecordIsRefusedAndItsHistorySurvives() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         seed(repository, "withdrawn-app", "{\"a\":1}");
         repository.softDeleteCommon("withdrawn-app", "carol", 1L);
 
@@ -191,20 +190,20 @@ public class ConfigSetRepositoryTest {
         }
 
         ConfigSet survivor = repository.findCommonIncludingDeleted("withdrawn-app");
-        assertEquals("the archived history must be untouched", 2, survivor.getVersions().size());
+        assertEquals(2, survivor.getVersions().size(), "the archived history must be untouched");
         assertTrue(survivor.isDeleted());
     }
 
     @Test
     public void restoreBringsItBackWholeAndItsNameWorksAgain() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         seed(repository, "withdrawn-app", "{\"a\":1}");
         repository.softDeleteCommon("withdrawn-app", "carol", 1L);
 
         repository.restoreCommon("withdrawn-app");
 
         ConfigSet restored = repository.findCommon("withdrawn-app");
-        assertNotNull("restore must make it resolvable again", restored);
+        assertNotNull(restored, "restore must make it resolvable again");
         assertFalse(restored.isDeleted());
         assertEquals(2, restored.getVersions().size());
         assertEquals(1, restored.getActiveVersionNumber());
@@ -214,7 +213,7 @@ public class ConfigSetRepositoryTest {
 
     @Test
     public void purgeRemovesOnlyItsOwnFile() throws Exception {
-        File baseDir = temporaryFolder.newFolder();
+        File baseDir = temporaryFolder;
         ConfigSetRepository repository = new ConfigSetRepository(baseDir);
         seed(repository, "withdrawn-app", "{\"a\":1}");
         seed(repository, "innocent-app", "{\"a\":2}");
@@ -228,16 +227,16 @@ public class ConfigSetRepositoryTest {
         assertTrue(repository.purgeCommon("withdrawn-app"));
 
         assertFalse(new File(baseDir, "withdrawn-app--common.xml").exists());
-        assertTrue("a sibling Config Set must survive",
-                new File(baseDir, "innocent-app--common.xml").isFile());
-        assertTrue("deployment-bindings.xml must survive", bindings.isFile());
+        assertTrue(new File(baseDir, "innocent-app--common.xml").isFile(),
+                "a sibling Config Set must survive");
+        assertTrue(bindings.isFile(), "deployment-bindings.xml must survive");
         assertNotNull(repository.findCommon("innocent-app"));
         assertNull(repository.findCommonIncludingDeleted("withdrawn-app"));
     }
 
     @Test
     public void purgeRefusesALiveConfigSet() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         seed(repository, "live-app", "{\"a\":1}");
 
         try {
@@ -251,7 +250,7 @@ public class ConfigSetRepositoryTest {
 
     @Test
     public void purgingSomethingAlreadyGoneIsNotAnError() throws Exception {
-        File baseDir = temporaryFolder.newFolder();
+        File baseDir = temporaryFolder;
         ConfigSetRepository repository = new ConfigSetRepository(baseDir);
         seed(repository, "withdrawn-app", "{\"a\":1}");
         repository.softDeleteCommon("withdrawn-app", "carol", 1L);
@@ -269,7 +268,7 @@ public class ConfigSetRepositoryTest {
 
     @Test
     public void aRecordPersistedBeforeThisFeatureReadsBackAsLive() throws Exception {
-        File baseDir = temporaryFolder.newFolder();
+        File baseDir = temporaryFolder;
         ConfigSetRepository repository = new ConfigSetRepository(baseDir);
         seed(repository, "legacy-live", "{\"a\":1}");
 
@@ -279,8 +278,8 @@ public class ConfigSetRepositoryTest {
         // a boolean whose default would be equally right but whose absence would be untestable.
         File xmlFile = new File(baseDir, "legacy-live--common.xml");
         String xml = new String(Files.readAllBytes(xmlFile.toPath()), StandardCharsets.UTF_8);
-        assertFalse("a live record must not even write a deletion element",
-                xml.contains("<deletion>"));
+        assertFalse(xml.contains("<deletion>"),
+                "a live record must not even write a deletion element");
 
         ConfigSet reloaded = repository.findCommon("legacy-live");
         assertNotNull(reloaded);
