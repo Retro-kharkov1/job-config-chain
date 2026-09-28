@@ -729,8 +729,33 @@ function saveClicked(activate) {
     renderVersionHistoryRows(r.versions);
     if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
     if (r.contentTypeLocked) { applyContentTypeLocked(r.contentTypeValue); }
+    if (r.exists) { applyConfigSetNowExists(); }
     document.getElementById('noteField').value = '';
   });
+}
+
+// Bug fix (2026-09-28): a Common page's very first successful save also flips the record from
+// "does not exist yet" to existing — without a page reload, the stale "does not exist yet" banner
+// and the still-absent Delete button must be brought in line with that. deleteConfigSetBtn is
+// never pre-rendered while !it.exists (see index.jelly) — a live Config Set with nothing to
+// delete yet must not offer a Delete button in the DOM at all, only hidden by style, per this
+// project's own pre-existing, deliberate contract
+// (theDeleteButtonRendersOnALiveConfigSetAndNotOnAnAbsentOne) — so this clones
+// #deleteConfigSetBtnTemplate to BUILD it, the same in-place-update templating technique
+// buildHistoryRowElement/buildSecretRowElement below already use, rather than
+// location.reload()-ing the whole page.
+function applyConfigSetNowExists() {
+  var banner = document.getElementById('notExistYetBanner');
+  if (banner) { banner.style.display = 'none'; }
+  if (document.getElementById('deleteConfigSetBtn')) { return; }
+  var row = document.getElementById('pageHeaderBtnRow');
+  var tpl = document.getElementById('deleteConfigSetBtnTemplate');
+  if (!row || !tpl) { return; }
+  var deleteBtn = tpl.content.firstElementChild.cloneNode(true);
+  // CSP migration convention (matches every other in-place-update template on this page): no
+  // inline onclick — wired here via addEventListener instead.
+  deleteBtn.addEventListener('click', deleteConfigSetClicked);
+  row.appendChild(deleteBtn);
 }
 
 // In-place-update row templating (2026-09-02): clones #historyRowTemplate (its static

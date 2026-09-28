@@ -28,7 +28,10 @@
       <div class="ctsync-page">
 
       <j:if test="${!it.exists}">
-        <div class="alert alert-info">${%notExistYet}</div>
+        <!-- Bug fix (2026-09-28): id added so the first Save's in-place-update response (see
+             index.js's saveClicked) can hide this banner without a page reload — mirrors the
+             identical fix on CommonConfigSetPage/index.jelly. -->
+        <div id="notExistYetBanner" class="alert alert-info">${%notExistYet}</div>
       </j:if>
 
       <!-- Same four shared fragments EnvConfigSetPage/index.jelly renders — see this project's
