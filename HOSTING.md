@@ -53,9 +53,13 @@ Sources verified current as of 2026-09 (fetched directly, not from training-data
    above this project's previous `2.426.3` / Java 11, so `jenkins.version` was bumped to `2.555.3`
    (per <https://www.jenkins.io/doc/developer/plugin-development/choosing-jenkins-baseline/>'s
    current recommendation, not the parent's bare minimum, and not the newest LTS `2.568.3` either)
-   and the matching `io.jenkins.tools.bom:bom-2.555.x:7020.vf38cb_40380d1` BOM. `java.level` /
+   and the matching `io.jenkins.tools.bom:bom-2.555.x` BOM (now pinned at `7046.v43536164769c`,
+   bumped 2026-09-28 per a Jenkins Hosting Checker finding). `jenkins.version` is now derived from a
+   `jenkins.baseline` property (`2.555`) rather than hardcoded, per that same pass. `java.level` /
    `maven.compiler.source` / `maven.compiler.target` were bumped from `11` to `17` to satisfy the
-   parent's own compiler-release requirement. Docker build images pinned to `eclipse-temurin-11`
+   parent's own compiler-release requirement, then removed outright on 2026-09-28 (another Hosting
+   Checker finding: the parent POM already declares them). Docker build images pinned to
+   `eclipse-temurin-11`
    (`docker-build.sh`, `docker-build.cmd`, `docker/test-jenkins/Dockerfile`,
    `docker-compose.override.yml`) were bumped to `eclipse-temurin-21` — not 17 — because the new
    parent's managed `maven-hpi-plugin` version fails its own `validate` goal with "Java 21 or
