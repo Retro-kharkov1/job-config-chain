@@ -498,6 +498,87 @@ public class ConfigTemplatesUiTest {
         assertFalse(js.contains("function showSaveBanner"), "the old showSaveBanner helper must be gone");
     }
 
+    // ---- Bug fix regression guard (2026-09-28) ---------------------------------------------------
+    //
+    // Live-browser QA: after a brand-new Config Set's first Save, the page kept showing the "does
+    // not exist yet" banner and kept hiding the Delete button, both stale, until a full page reload
+    // — the in-place-update save handler updated the version-history table but never told either of
+    // these two elements the record now exists. jsSave_onAConfigSetsFirstSave_reportsExistsTrueIn-
+    // TheResponse in ConfigSetLifecycleUiTest proves the server-side half of the fix (the new
+    // "exists" field). These two tests prove the two client-side halves: the Delete button is now
+    // always present in the DOM (only hidden by style, not conditionally rendered), and the actual
+    // shipped index.js both defines the reveal function and wires it into the save success path.
+
+    @Test
+    public void commonEditPage_neverSaved_bannerCarriesAnIdAndTheBuildTemplateIsPresent() throws Exception {
+        // Never seeded — this project key does not exist yet. theDeleteButtonRendersOnALiveConfigSet-
+        // AndNotOnAnAbsentOne (ConfigSetLifecycleUiTest) already pins the pre-existing, deliberate
+        // contract that deleteConfigSetBtn itself must be genuinely ABSENT here, not merely hidden —
+        // this test only adds the two things the fix needed on top of that: an id on the banner, and
+        // the in-place-update template applyConfigSetNowExists clones to BUILD the button later.
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest-exists-fix-1/");
+        String html = page.getWebResponse().getContentAsString();
+
+        assertTrue(html.contains("id=\"notExistYetBanner\""), "the \"does not exist yet\" banner "
+                + "must carry an id so the first Save's in-place-update response can hide it");
+        assertFalse(html.contains("id=\"deleteConfigSetBtn\""), "the Delete button must still be "
+                + "genuinely absent before the first Save — the pre-existing "
+                + "theDeleteButtonRendersOnALiveConfigSetAndNotOnAnAbsentOne contract, unchanged");
+        assertTrue(html.contains("id=\"deleteConfigSetBtnTemplate\""), "the hidden <template> "
+                + "applyConfigSetNowExists clones to build the button in place must be rendered, "
+                + "even though the button itself is not");
+    }
+
+    @Test
+    public void commonEditPage_saveSuccessHandler_revealsExistenceInPlace() throws Exception {
+        seedCommon("uitest-exists-fix-2", "{\"a\":1}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest-exists-fix-2/");
+        String html = page.getWebResponse().getContentAsString();
+        String js = fetchExternalScripts(wc, html);
+
+        assertTrue(js.contains("function applyConfigSetNowExists"), "the reveal function must be "
+                + "defined in the external index.js (CSP migration - no inline handlers)");
+        assertTrue(js.contains("if (r.exists) { applyConfigSetNowExists(); }"), "saveClicked's "
+                + "success handler must actually call the reveal function when the server reports "
+                + "the Config Set now exists");
+        assertTrue(js.contains("getElementById('deleteConfigSetBtnTemplate')"), "the function must "
+                + "BUILD the Delete button from the in-place-update template, not merely un-hide a "
+                + "pre-rendered one — deleteConfigSetBtn is never pre-rendered while !it.exists");
+        assertTrue(js.contains("deleteBtn.addEventListener('click', deleteConfigSetClicked);"),
+                "the freshly built button must be wired to the same click handler the "
+                + "server-rendered one uses, not left dead");
+        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (exists-reveal JS)", wc, html);
+    }
+
+    @Test
+    public void commonEditPage_confirmByNameGateFix_isShippedInThisPagesOwnCopy() throws Exception {
+        // Bug fix regression guard (2026-09-28): the confirm-by-name dialog's OK button used to
+        // become clickable on ANY typed text, not just a match — see
+        // ConfirmDialogMessageTest#confirmByNameDialog_okButtonStaysDisabledUntilTheTypedNameMatches
+        // for the live-DOM functional proof of the actual gating logic (run against
+        // ConfigTemplatesRootAction's copy). This page carries a byte-identical duplicate of the
+        // same confirmByNameBlock code (see that block's own comment for why it can't be factored
+        // into one shared file) — this test proves THIS page's copy actually shipped the fix too,
+        // rather than trusting the duplication was kept in sync by eye.
+        seedCommon("uitest-confirm-gate-fix", "{\"a\":1}", "seed");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("configTemplates/uitest-confirm-gate-fix/");
+        String html = page.getWebResponse().getContentAsString();
+        String js = fetchExternalScripts(wc, html);
+
+        assertTrue(js.contains("function enforceNameMatchOnOpenDialog"), "the dialog-gate wiring function must ship in this page's own index.js copy");
+        assertTrue(js.contains("function findDialogOkButton"), "the OK-button lookup must ship in this page's own index.js copy");
+        assertTrue(js.contains("function wireDialogNameInput"), "the per-keystroke gate must ship in this page's own index.js copy");
+        assertTrue(js.contains("enforceNameMatchOnOpenDialog(opts.expectedName, s.cancel);"), "confirmByName must actually call the gate, not just define it unreferenced");
+    }
+
     // --- Real-JS-engine regression guard --------------------------------------------------
     //
     // Bug history: CommonConfigSetPage/EnvConfigSetPage's inline Monaco-seed <script> blocks
