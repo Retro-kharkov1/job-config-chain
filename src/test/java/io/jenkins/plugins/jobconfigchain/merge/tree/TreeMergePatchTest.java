@@ -1,9 +1,9 @@
 package io.jenkins.plugins.jobconfigchain.merge.tree;
 
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * RFC 7396 semantics over the JSON adapter — a behavior-neutral refactor check against the exact

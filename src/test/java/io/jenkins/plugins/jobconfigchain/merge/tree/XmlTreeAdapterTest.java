@@ -1,14 +1,14 @@
 package io.jenkins.plugins.jobconfigchain.merge.tree;
 
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class XmlTreeAdapterTest {
 
@@ -104,14 +104,14 @@ public class XmlTreeAdapterTest {
         String firstPass = XML.serialize(XML.parse(alreadyIndented));
         String secondPass = XML.serialize(XML.parse(firstPass));
 
-        assertEquals("second format pass must be a no-op", firstPass, secondPass);
+        assertEquals(firstPass, secondPass, "second format pass must be a no-op");
 
         String[] lines = firstPass.split("\n", -1);
         // The very last split segment may be an empty string from a trailing newline — that's not
         // a "blank line between elements", so it's excluded from the check.
         for (int i = 0; i < lines.length - 1; i++) {
-            assertFalse("no blank/whitespace-only line should appear between elements: " + firstPass,
-                    lines[i].trim().isEmpty());
+            assertFalse(lines[i].trim().isEmpty(),
+                    "no blank/whitespace-only line should appear between elements: " + firstPass);
         }
     }
 

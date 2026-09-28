@@ -3,11 +3,11 @@ package io.jenkins.plugins.jobconfigchain.merge;
 import io.jenkins.plugins.jobconfigchain.merge.tree.TreeNode;
 import io.jenkins.plugins.jobconfigchain.merge.tree.TreePaths;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for {@link TemplateGenerator} (FR-15/FR-16). Covers: nested objects, empty objects
@@ -85,9 +85,9 @@ public class TemplateGeneratorTest {
         TreeNode result = TemplateGenerator.fromEffective(ContentType.JSON, common, envPatch);
 
         TreeNode database = result.getChild("database");
-        assertFalse("null in the env overlay must remove the key from the effective config (RFC 7396) "
-                        + "before tokenization ever sees it",
-                database.hasChild("host"));
+        assertFalse(database.hasChild("host"),
+                "null in the env overlay must remove the key from the effective config (RFC 7396) "
+                        + "before tokenization ever sees it");
         assertEquals("#{database.port}#", at(result, "database.port"));
         assertEquals("#{database.password}#", at(result, "database.password"));
     }

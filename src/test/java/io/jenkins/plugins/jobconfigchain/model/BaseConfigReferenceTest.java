@@ -1,10 +1,10 @@
 package io.jenkins.plugins.jobconfigchain.model;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class BaseConfigReferenceTest {
 
@@ -36,7 +36,7 @@ public class BaseConfigReferenceTest {
     @Test
     public void activeReferenceNormalizesPinnedVersionNumberToZero() {
         BaseConfigReference ref = new BaseConfigReference("team-a-common", PinMode.ACTIVE, 99);
-        assertEquals("stray pinnedVersionNumber must be normalized away for ACTIVE", 0, ref.getPinnedVersionNumber());
+        assertEquals(0, ref.getPinnedVersionNumber(), "stray pinnedVersionNumber must be normalized away for ACTIVE");
     }
 
     @Test
