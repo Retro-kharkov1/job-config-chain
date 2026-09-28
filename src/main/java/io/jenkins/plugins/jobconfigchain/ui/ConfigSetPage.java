@@ -28,8 +28,8 @@ import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.Stapler;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.kohsuke.stapler.bind.JavaScriptMethod;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 
@@ -219,7 +219,7 @@ public abstract class ConfigSetPage {
         if (isExists()) {
             return getContentTypeValue();
         }
-        StaplerRequest req = Stapler.getCurrentRequest();
+        StaplerRequest2 req = Stapler.getCurrentRequest2();
         String requested = req == null ? null : req.getParameter("contentType");
         if (requested != null) {
             try {
@@ -376,7 +376,7 @@ public abstract class ConfigSetPage {
      * collision matters.</p>
      */
     @RequirePOST
-    public void doSubmitSave(StaplerResponse rsp,
+    public void doSubmitSave(StaplerResponse2 rsp,
                               @QueryParameter String content,
                               @QueryParameter String note,
                               @QueryParameter(fixEmpty = true) String activate,

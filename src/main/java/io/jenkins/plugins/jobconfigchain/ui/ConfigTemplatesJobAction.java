@@ -29,7 +29,7 @@ import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.kohsuke.stapler.bind.JavaScriptMethod;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 
@@ -382,7 +382,7 @@ public class ConfigTemplatesJobAction implements Action {
     }
 
     @RequirePOST
-    public void doSubmitSave(StaplerResponse rsp,
+    public void doSubmitSave(StaplerResponse2 rsp,
                               @QueryParameter String content,
                               @QueryParameter String note,
                               @QueryParameter(fixEmpty = true) String activate,
