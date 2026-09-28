@@ -153,12 +153,14 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
+        // CSP migration: this logic now lives in the external index.js, not inline.
+        String js = fetchExternalScripts(wc, html);
         assertTrue("save success/error must go through the native notificationBar toast",
-                html.contains("window.notificationBar.show("));
+                js.contains("window.notificationBar.show("));
         assertFalse("the old shared inline save banner element must be removed, not just unused",
                 html.contains("id=\"saveBanner\""));
         assertFalse("the old showSaveBanner helper must be gone",
-                html.contains("function showSaveBanner"));
+                js.contains("function showSaveBanner"));
     }
 
     @Test
@@ -370,30 +372,118 @@ public class ConfigTemplatesJobActionTest {
     private static final Pattern INLINE_SCRIPT =
             Pattern.compile("<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>", Pattern.CASE_INSENSITIVE);
 
+    private static final Pattern EXTERNAL_SCRIPT_SRC =
+            Pattern.compile("<script src=\"([^\"]+)\"");
+
+    /**
+     * CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): every
+     * plugin-authored {@code <script>} on this page is now external ({@code <script src="...">},
+     * loaded via {@code h.getViewResource}) rather than inline. Mirrors
+     * ConfigTemplatesUiTest's own identically-named helper — fetches and concatenates every such
+     * external script's content (skipping the vendored Monaco loader under {@code /monaco/}, which
+     * is not plugin-authored and uses ES2015+ syntax the same Nashorn engine used here cannot parse
+     * either).
+     */
+    private String fetchExternalScripts(JenkinsRule.WebClient wc, String html) throws Exception {
+        Matcher m = EXTERNAL_SCRIPT_SRC.matcher(html);
+        StringBuilder combined = new StringBuilder();
+        while (m.find()) {
+            String src = m.group(1);
+            if (src.contains("/monaco/")) {
+                continue; // vendored AMD loader — not plugin-authored, not in scope for this guard
+            }
+            URL url = new URL(new URL(wc.getContextPath()), src);
+            combined.append(wc.getPage(url).getWebResponse().getContentAsString()).append('\n');
+        }
+        return combined.toString();
+    }
+
+    private static final Pattern EXTERNAL_STYLESHEET_HREF =
+            Pattern.compile("<link rel=\"stylesheet\" href=\"([^\"]+)\"");
+
+    /**
+     * CSP migration counterpart to {@link #fetchExternalScripts} for this page's own inline
+     * &lt;style&gt;, which moved to an external index.css (skipping the vendored Monaco
+     * editor.main.css, which is not plugin-authored).
+     */
+    private String fetchExternalStylesheets(JenkinsRule.WebClient wc, String html) throws Exception {
+        Matcher m = EXTERNAL_STYLESHEET_HREF.matcher(html);
+        StringBuilder combined = new StringBuilder();
+        while (m.find()) {
+            String href = m.group(1);
+            if (href.contains("/monaco/")) {
+                continue;
+            }
+            URL url = new URL(new URL(wc.getContextPath()), href);
+            combined.append(wc.getPage(url).getWebResponse().getContentAsString()).append('\n');
+        }
+        return combined.toString();
+    }
+
+    /**
+     * Minimal DOM/AMD stub for evaluating the external index.js (CSP migration — this script now
+     * reads its seed data via document.getElementById('ctsyncJobSeed').dataset.* at top-level
+     * script-evaluation time, rather than the server interpolating literal values straight into the
+     * script text — so unlike the pre-migration harness, getElementById must special-case that one
+     * id and hand back a working dataset; every other id falls back to the same generic
+     * addEventListener-capable stub the pre-migration harness already used. Seed values are computed
+     * with the engine's own JSON.stringify rather than hand-escaped Java string literals, so the
+     * double-JSON-encoding index.js expects (see that file's own "Seed data" comment) is always
+     * correct regardless of how the encoding scheme evolves.
+     */
+    private static final String JOB_SEED_STUB_HARNESS =
+            "var __ctsyncSeedDataset = { "
+                    + "editorSeed: JSON.stringify('{}'), "
+                    + "availableProjectKeys: JSON.stringify('[]'), "
+                    + "baseChainSeed: JSON.stringify('[]'), "
+                    + "commonVersionCatalog: JSON.stringify(JSON.stringify("
+                    + "{versionsByProject:{}, typeByProject:{}})), "
+                    + "contentTypeValue: 'JSON', rootUrl: '', monacoBase: '', "
+                    + "emptyVersions: '', emptySecrets: '', emptyBasechain: '' };"
+                    + "var document = { getElementById: function(id) {"
+                    + "  if (id === 'ctsyncJobSeed') { return { dataset: __ctsyncSeedDataset }; }"
+                    + "  return { addEventListener: function(){}, style:{}, "
+                    + "    classList:{add:function(){},remove:function(){}} };"
+                    + "}, "
+                    + "querySelectorAll: function() { return []; }, "
+                    + "querySelector: function() { return null; } };"
+                    + "var require = function(){}; require.config = function(){};"
+                    + "var monaco = undefined;"
+                    + "function makeStaplerProxy() { return {}; }";
+
     /** Mirrors ConfigTemplatesUiTest's own identically-named real-JS-engine syntax guard. */
-    private void assertAllInlineScriptsAreSyntacticallyValidJs(String pageLabel, String html) throws ScriptException {
+    private void assertAllInlineScriptsAreSyntacticallyValidJs(String pageLabel, JenkinsRule.WebClient wc,
+                                                                String html) throws Exception {
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
         assertNotNull("Nashorn JS engine must be resolvable on the test classpath "
                 + "(org.openjdk.nashorn:nashorn-core test dependency)", engine);
         Compilable compilable = (Compilable) engine;
 
+        List<String> blocks = new ArrayList<>();
         Matcher matcher = INLINE_SCRIPT.matcher(html);
-        int nonEmptyBlockCount = 0;
-        List<String> failures = new ArrayList<>();
         while (matcher.find()) {
             String js = matcher.group(1);
-            if (js == null || js.trim().isEmpty()) {
-                continue;
+            if (js != null && !js.trim().isEmpty()) {
+                blocks.add(js);
             }
+        }
+        String external = fetchExternalScripts(wc, html);
+        if (!external.trim().isEmpty()) {
+            blocks.add(external);
+        }
+
+        int nonEmptyBlockCount = 0;
+        List<String> failures = new ArrayList<>();
+        for (String js : blocks) {
             nonEmptyBlockCount++;
             try {
                 compilable.compile(js);
             } catch (ScriptException e) {
-                failures.add("Inline <script> block on " + pageLabel + " is not valid JS: " + e.getMessage());
+                failures.add("<script> block on " + pageLabel + " is not valid JS: " + e.getMessage());
             }
         }
-        assertTrue("expected at least one non-empty inline <script> block to check on " + pageLabel,
-                nonEmptyBlockCount > 0);
+        assertTrue("expected at least one non-empty <script> block (inline or external) to check on "
+                + pageLabel, nonEmptyBlockCount > 0);
         assertTrue(String.join("\n", failures), failures.isEmpty());
     }
 
@@ -443,8 +533,9 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue(html.contains("function removeSecret"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (remove-secret JS)", html);
+        assertTrue("removeSecret is now defined in the external index.js, not inline (CSP migration)",
+                fetchExternalScripts(wc, html).contains("function removeSecret"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (remove-secret JS)", wc, html);
     }
 
     @Test
@@ -468,7 +559,7 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         assertAllInlineScriptsAreSyntacticallyValidJs(
-                "job Config Templates page", page.getWebResponse().getContentAsString());
+                "job Config Templates page", wc, page.getWebResponse().getContentAsString());
     }
 
     @Test
@@ -487,7 +578,7 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         assertAllInlineScriptsAreSyntacticallyValidJs(
-                "job Config Templates page (multiline JSON seed)", page.getWebResponse().getContentAsString());
+                "job Config Templates page (multiline JSON seed)", wc, page.getWebResponse().getContentAsString());
     }
 
     @Test
@@ -529,9 +620,10 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue(html.contains("showGeneratedTemplateView"));
-        assertTrue(html.contains("backTo3PanelView"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (generate-template JS)", html);
+        String js = fetchExternalScripts(wc, html);
+        assertTrue(js.contains("showGeneratedTemplateView"));
+        assertTrue(js.contains("backTo3PanelView"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (generate-template JS)", wc, html);
     }
 
     @Test
@@ -543,8 +635,10 @@ public class ConfigTemplatesJobActionTest {
         String html = page.getWebResponse().getContentAsString();
         assertTrue("job compare banner must render an explicit 'Back to editing' button (FR-45a)",
                 html.contains("id=\"backToEditingBtn\""));
+        // CSP migration: no inline onclick attribute any more — backToEditingBtn is wired to
+        // switchToEditMode() in the external index.js instead; see that file's wiring block.
         assertTrue("'Back to editing' must be wired to switchToEditMode() (FR-45b)",
-                html.contains("onclick=\"switchToEditMode();\""));
+                fetchExternalScripts(wc, html).contains("on('backToEditingBtn', 'click', switchToEditMode)"));
         assertTrue("'Load into editor' must remain present and distinct (FR-45c)",
                 html.contains("id=\"loadComparedBtn\""));
     }
@@ -580,11 +674,12 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
+        String js = fetchExternalScripts(wc, html);
         assertTrue("prepareSubmit must disable both save buttons (FR-46)",
-                html.contains("document.getElementById('saveBtn').disabled = true"));
+                js.contains("document.getElementById('saveBtn').disabled = true"));
         assertTrue("activateVersion must disable every Activate button, not just the clicked one (FR-46)",
-                html.contains("function setActivateButtonsDisabled"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (busy-disable-guard JS)", html);
+                js.contains("function setActivateButtonsDisabled"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (busy-disable-guard JS)", wc, html);
     }
 
     @Test
@@ -606,8 +701,11 @@ public class ConfigTemplatesJobActionTest {
                 html.contains("id=\"discardAllBtn\""));
         assertTrue("job page must render the hidden baseChainJson field",
                 html.contains("id=\"baseChainField\""));
+        // CSP migration: the seed value now rides on #ctsyncJobSeed's data-available-project-keys
+        // attribute, read via JSON.parse(...) in the external index.js — no longer a bare
+        // __availableProjectKeys token in the HTML itself.
         assertTrue("job page must expose the available common project keys as row-picker seed data",
-                html.contains("__availableProjectKeys"));
+                html.contains("data-available-project-keys="));
     }
 
     @Test
@@ -637,9 +735,10 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue(html.contains("function addBaseChainRow"));
-        assertTrue(html.contains("function toggleBaseChainRowExpanded"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (base-chain editor JS)", html);
+        String js = fetchExternalScripts(wc, html);
+        assertTrue(js.contains("function addBaseChainRow"));
+        assertTrue(js.contains("function toggleBaseChainRowExpanded"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (base-chain editor JS)", wc, html);
     }
 
     @Test
@@ -754,7 +853,7 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         assertAllInlineScriptsAreSyntacticallyValidJs(
-                "job Config Templates page (post section-reorg)", page.getWebResponse().getContentAsString());
+                "job Config Templates page (post section-reorg)", wc, page.getWebResponse().getContentAsString());
     }
 
     @Test
@@ -764,10 +863,11 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
+        String js = fetchExternalScripts(wc, html);
         assertTrue("activateVersion must reload the editor state from the newly-activated version",
-                html.contains("function reloadEditorStateFromActivatedVersion"));
-        assertTrue(html.contains("reloadEditorStateFromActivatedVersion(r)"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (activate-reload JS)", html);
+                js.contains("function reloadEditorStateFromActivatedVersion"));
+        assertTrue(js.contains("reloadEditorStateFromActivatedVersion(r)"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (activate-reload JS)", wc, html);
     }
 
     @Test
@@ -788,8 +888,9 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
+        // CSP migration: this rule now lives in the external index.css, not an inline <style>.
         assertTrue("the base-chain table must scope a compact max-width rule to its own selects",
-                html.contains(".ctsync-basechain-table select.jenkins-select__input"));
+                fetchExternalStylesheets(wc, html).contains(".ctsync-basechain-table select.jenkins-select__input"));
     }
 
     @Test
@@ -804,8 +905,11 @@ public class ConfigTemplatesJobActionTest {
         assertTrue("job page must render the Merged-bases pane (FR-73)", html.contains("id=\"mergedBasesEditor\""));
         assertTrue("job page must render the Discard-all-changes button (FR-74)",
                 html.contains("id=\"discardAllBtn\""));
+        // CSP migration: both the class name (assigned at runtime) and the builder function now
+        // live in the external index.css/index.js rather than inline.
         assertTrue("the base-chain accordion toggle column must render per row (FR-71)",
-                html.contains("ctsync-basechain-row-toggle") || html.contains("buildBaseChainRowElement"));
+                fetchExternalStylesheets(wc, html).contains("ctsync-basechain-row-toggle")
+                        || fetchExternalScripts(wc, html).contains("buildBaseChainRowElement"));
     }
 
     @Test
@@ -817,10 +921,11 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue(html.contains("function discardAllChangesClicked"));
-        assertTrue(html.contains("function projectOptionsForRow"));
-        assertTrue(html.contains("monaco.editor.createDiffEditor"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (discard JS)", html);
+        String js = fetchExternalScripts(wc, html);
+        assertTrue(js.contains("function discardAllChangesClicked"));
+        assertTrue(js.contains("function projectOptionsForRow"));
+        assertTrue(js.contains("monaco.editor.createDiffEditor"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (discard JS)", wc, html);
     }
 
     @Test
@@ -868,10 +973,11 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue(html.contains("function onContentTypeChange"));
-        assertTrue(html.contains("function applyContentTypeLocked"));
-        assertTrue(html.contains("function updateContentTypeRowVisibility"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (content-type picker JS)", html);
+        String js = fetchExternalScripts(wc, html);
+        assertTrue(js.contains("function onContentTypeChange"));
+        assertTrue(js.contains("function applyContentTypeLocked"));
+        assertTrue(js.contains("function updateContentTypeRowVisibility"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (content-type picker JS)", wc, html);
     }
 
     @Test
@@ -948,23 +1054,13 @@ public class ConfigTemplatesJobActionTest {
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
 
-        Matcher matcher = INLINE_SCRIPT.matcher(html);
-        StringBuilder allScripts = new StringBuilder();
-        while (matcher.find()) {
-            if (matcher.group(1) != null) { allScripts.append(matcher.group(1)).append('\n'); }
-        }
+        // CSP migration: the functions under test now live in the external index.js, not inline —
+        // fetch it instead of extracting an inline <script> body (see fetchExternalScripts).
+        String allScripts = fetchExternalScripts(wc, html);
 
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
         assertNotNull(engine);
-        String harness =
-                "var document = { getElementById: function() { return { addEventListener: function(){}, "
-                        + "style:{}, classList:{add:function(){},remove:function(){}} }; }, "
-                        + "querySelectorAll: function() { return []; } };"
-                        + "var require = function(){}; require.config = function(){};"
-                        + "var monaco = undefined;"
-                        + "function makeStaplerProxy() { return {}; }"
-                        + allScripts;
-        engine.eval(harness);
+        engine.eval(JOB_SEED_STUB_HARNESS + allScripts);
 
         engine.eval("baseChainRows = [{projectKey:'a',pinMode:'ACTIVE',pinnedVersionNumber:0},"
                 + "{projectKey:'b',pinMode:'ACTIVE',pinnedVersionNumber:0}];"
@@ -996,21 +1092,13 @@ public class ConfigTemplatesJobActionTest {
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
 
-        Matcher matcher = INLINE_SCRIPT.matcher(html);
-        StringBuilder allScripts = new StringBuilder();
-        while (matcher.find()) {
-            if (matcher.group(1) != null) { allScripts.append(matcher.group(1)).append('\n'); }
-        }
+        // CSP migration: the functions under test now live in the external index.js, not inline —
+        // fetch it instead of extracting an inline <script> body (see fetchExternalScripts).
+        String allScripts = fetchExternalScripts(wc, html);
 
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
         assertNotNull(engine);
-        engine.eval("var document = { getElementById: function() { return { addEventListener: function(){}, "
-                + "style:{}, classList:{add:function(){},remove:function(){}} }; }, "
-                + "querySelectorAll: function() { return []; } };"
-                + "var require = function(){}; require.config = function(){};"
-                + "var monaco = undefined;"
-                + "function makeStaplerProxy() { return {}; }"
-                + allScripts);
+        engine.eval(JOB_SEED_STUB_HARNESS + allScripts);
 
         // A note short enough to read in the select must come back byte-for-byte. The info icon's
         // visibility is derived from exactly this equality, so an over-eager truncation here would

@@ -442,8 +442,9 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest35/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue(html.contains("function removeSecret"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (remove-secret JS)", html);
+        assertTrue("removeSecret is now defined in the external index.js, not inline (CSP migration)",
+                fetchExternalScripts(wc, html).contains("function removeSecret"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (remove-secret JS)", wc, html);
     }
 
     @Test
@@ -460,12 +461,15 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest131/");
         String html = page.getWebResponse().getContentAsString();
+        // CSP migration: this logic now lives in the external index.js, not inline — see
+        // fetchExternalScripts.
+        String js = fetchExternalScripts(wc, html);
         assertTrue("save success/error must go through the native notificationBar toast",
-                html.contains("window.notificationBar.show("));
+                js.contains("window.notificationBar.show("));
         assertFalse("the old inline save banner element must be removed, not just unused",
                 html.contains("id=\"saveBanner\""));
         assertFalse("the old showSaveBanner helper must be gone",
-                html.contains("function showSaveBanner"));
+                js.contains("function showSaveBanner"));
     }
 
     // --- Real-JS-engine regression guard --------------------------------------------------
@@ -485,35 +489,70 @@ public class ConfigTemplatesUiTest {
     private static final Pattern INLINE_SCRIPT =
             Pattern.compile("<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>", Pattern.CASE_INSENSITIVE);
 
+    private static final Pattern EXTERNAL_SCRIPT_SRC =
+            Pattern.compile("<script src=\"([^\"]+)\"");
+
     /**
-     * Extracts every inline (non-{@code src=}) {@code <script>} body from rendered HTML and
-     * compiles each with a real JS engine, failing with a clear message per broken block if any
-     * fails to parse. Asserts at least one non-empty inline script was actually found, so this
-     * guard cannot silently pass by finding nothing to check.
+     * CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): every
+     * plugin-authored {@code <script>} on these pages is now external ({@code <script src="...">},
+     * loaded via {@code h.getViewResource}) rather than inline — this fleet's own inline-script
+     * syntax guard now also fetches and concatenates the content of every such external script
+     * (skipping the vendored Monaco loader under {@code /monaco/}, which is not plugin-authored and
+     * uses ES2015+ syntax the same Nashorn engine used here cannot parse either).
      */
-    private void assertAllInlineScriptsAreSyntacticallyValidJs(String pageLabel, String html) throws ScriptException {
+    private String fetchExternalScripts(JenkinsRule.WebClient wc, String html) throws Exception {
+        Matcher m = EXTERNAL_SCRIPT_SRC.matcher(html);
+        StringBuilder combined = new StringBuilder();
+        while (m.find()) {
+            String src = m.group(1);
+            if (src.contains("/monaco/")) {
+                continue; // vendored AMD loader — not plugin-authored, not in scope for this guard
+            }
+            URL url = new URL(new URL(wc.getContextPath()), src);
+            combined.append(wc.getPage(url).getWebResponse().getContentAsString()).append('\n');
+        }
+        return combined.toString();
+    }
+
+    /**
+     * Extracts every inline (non-{@code src=}) {@code <script>} body from rendered HTML PLUS the
+     * fetched content of every external, plugin-authored {@code <script src="...">} it references
+     * (see {@link #fetchExternalScripts}), and compiles each with a real JS engine, failing with a
+     * clear message per broken block if any fails to parse. Asserts at least one non-empty script
+     * was actually found, so this guard cannot silently pass by finding nothing to check.
+     */
+    private void assertAllInlineScriptsAreSyntacticallyValidJs(String pageLabel, JenkinsRule.WebClient wc,
+                                                                String html) throws Exception {
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
         assertNotNull("Nashorn JS engine must be resolvable on the test classpath "
                 + "(org.openjdk.nashorn:nashorn-core test dependency)", engine);
         Compilable compilable = (Compilable) engine;
 
+        List<String> blocks = new ArrayList<>();
         Matcher matcher = INLINE_SCRIPT.matcher(html);
-        int nonEmptyBlockCount = 0;
-        List<String> failures = new ArrayList<>();
         while (matcher.find()) {
             String js = matcher.group(1);
-            if (js == null || js.trim().isEmpty()) {
-                continue; // an external `<script src="...">` tag, nothing inline to check here
+            if (js != null && !js.trim().isEmpty()) {
+                blocks.add(js);
             }
+        }
+        String external = fetchExternalScripts(wc, html);
+        if (!external.trim().isEmpty()) {
+            blocks.add(external);
+        }
+
+        int nonEmptyBlockCount = 0;
+        List<String> failures = new ArrayList<>();
+        for (String js : blocks) {
             nonEmptyBlockCount++;
             try {
                 compilable.compile(js);
             } catch (ScriptException e) {
-                failures.add("Inline <script> block on " + pageLabel + " is not valid JS: " + e.getMessage());
+                failures.add("<script> block on " + pageLabel + " is not valid JS: " + e.getMessage());
             }
         }
-        assertTrue("expected at least one non-empty inline <script> block to check on " + pageLabel,
-                nonEmptyBlockCount > 0);
+        assertTrue("expected at least one non-empty <script> block (inline or external) to check on "
+                + pageLabel, nonEmptyBlockCount > 0);
         assertTrue(String.join("\n", failures), failures.isEmpty());
     }
 
@@ -525,7 +564,7 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest16/");
         assertAllInlineScriptsAreSyntacticallyValidJs(
-                "common edit page", page.getWebResponse().getContentAsString());
+                "common edit page", wc, page.getWebResponse().getContentAsString());
     }
 
     @Test
@@ -547,7 +586,7 @@ public class ConfigTemplatesUiTest {
 
         HtmlPage commonPage = wc.goTo("configTemplates/uitest18/");
         assertAllInlineScriptsAreSyntacticallyValidJs(
-                "common edit page (multiline JSON seed)", commonPage.getWebResponse().getContentAsString());
+                "common edit page (multiline JSON seed)", wc, commonPage.getWebResponse().getContentAsString());
     }
 
     // --- Generate Template (FR-15/16, FR-40-44) -------------------------------------------
@@ -619,8 +658,9 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest29/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue(html.contains("switchToGenerateMode"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (generate-template JS)", html);
+        assertTrue("switchToGenerateMode is now defined in the external index.js (CSP migration)",
+                fetchExternalScripts(wc, html).contains("switchToGenerateMode"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (generate-template JS)", wc, html);
     }
 
     // --- Compare-mode state machine and busy/disabled states (FR-45/46/47, 2026-09-01 audit) ----
@@ -638,9 +678,12 @@ public class ConfigTemplatesUiTest {
         String html = page.getWebResponse().getContentAsString();
         assertTrue("compare banner must render an explicit 'Back to editing' button (FR-45a)",
                 html.contains("id=\"backToEditingBtn\""));
+        // CSP migration: no inline onclick attribute any more — backToEditingBtn is wired to
+        // switchToEditMode() in the external index.js instead (same function the re-click-same-row
+        // path already calls); see CommonConfigSetPage/index.js's wiring block.
         assertTrue("'Back to editing' must be wired to switchToEditMode(), the same no-op-exit "
                 + "function the re-click-same-row path already calls (FR-45b)",
-                html.contains("onclick=\"switchToEditMode();\""));
+                fetchExternalScripts(wc, html).contains("on('backToEditingBtn', 'click', switchToEditMode)"));
         assertTrue("'Load into editor' must remain present and distinct (FR-45c)",
                 html.contains("id=\"loadComparedBtn\""));
     }
@@ -691,11 +734,12 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest44/");
         String html = page.getWebResponse().getContentAsString();
+        String js = fetchExternalScripts(wc, html);
         assertTrue("prepareSubmit must disable both save buttons (FR-46)",
-                html.contains("document.getElementById('saveBtn').disabled = true"));
+                js.contains("document.getElementById('saveBtn').disabled = true"));
         assertTrue("activateVersion must disable every Activate button, not just the clicked one (FR-46)",
-                html.contains("function setActivateButtonsDisabled"));
-        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (busy-disable-guard JS)", html);
+                js.contains("function setActivateButtonsDisabled"));
+        assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (busy-disable-guard JS)", wc, html);
     }
 
     @Test
@@ -719,7 +763,7 @@ public class ConfigTemplatesUiTest {
         // actually gating it instead of this class silently never having covered list pages.
         if (anyNonEmpty) {
             assertAllInlineScriptsAreSyntacticallyValidJs(
-                    "common list page", page.getWebResponse().getContentAsString());
+                    "common list page", wc, page.getWebResponse().getContentAsString());
         }
     }
 
