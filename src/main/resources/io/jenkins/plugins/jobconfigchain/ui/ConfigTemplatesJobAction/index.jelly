@@ -40,9 +40,14 @@
       <st:include class="${it.sharedBlocksClass}" page="baseChainBlock.jelly" it="${it}"/>
       <st:include class="${it.sharedBlocksClass}" page="editorBlock.jelly" it="${it}"/>
 
-      <script src="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/loader.js"/>
+      <!-- HTML5 parsing note: <script> is never a void element - a self-closed <script .../>
+           is NOT closed by a real browser's HTML parser, which instead keeps consuming markup
+           as this element's (unexecuted, since src is set) text content until it finds the next
+           literal </script> anywhere later in the document, silently swallowing whatever real
+           HTML sits in between. Every script tag here must have an explicit closing tag. -->
+      <script src="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/loader.js"></script>
       <link rel="stylesheet" href="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/editor/editor.main.css"/>
-      <script src="${h.getViewResource(it, 'index.js')}"/>
+      <script src="${h.getViewResource(it, 'index.js')}"></script>
 
       </div>
     </l:main-panel>
