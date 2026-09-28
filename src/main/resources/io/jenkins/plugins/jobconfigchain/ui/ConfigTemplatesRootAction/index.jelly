@@ -3,143 +3,18 @@
   <l:layout title="${%title}">
     <l:main-panel>
       <st:bind var="proxy" value="${it}"/>
-      <style>
-        /* Scoped to this page only (never a global Jenkins style override) — same
-           ".ctsync-page" scoping + bordered jenkins-section card convention already applied to
-           CommonConfigSetPage/EnvConfigSetPage (owner-directed consistency pass, 2026-09-04). This
-           page previously had no f:section on it at all — this is the first one, brought in
-           purely to frame "New Config Set" the same way the other two pages frame their own
-           sections, not a general redesign of this page. */
-        .ctsync-page .jenkins-button { margin: 4px 6px 4px 0; }
-        .ctsync-btn-row { margin: 12px 0 0; }
-        .ctsync-btn-row--right { text-align: right; }
-        /* Opacity alone is not an accessible signal, which is why the Status column carries the
-           word as well - this only keeps the eye on the live inventory. */
-        .ctsync-row--deleted { opacity: 0.62; }
-        .ctsync-row--deleted td:first-child a { text-decoration: line-through; }
-        /* Bordered-card framing for f:section — identical rule, identical reasoning, and the
-           identical (already-fixed) color token as CommonConfigSetPage/EnvConfigSetPage's own
-           "Bordered-card framing for f:section" comment: Jenkins core's own jenkins-section only
-           draws a top rule via --panel-border-color, which resolves to an all-but-invisible
-           #f4f4f8 on a white page background (confirmed live, then fixed, on those two pages
-           earlier the same day) — --table-border-color is the token already proven to render as a
-           clearly visible line elsewhere on this plugin's own pages, so it is reused here rather
-           than reintroducing the same invisible-border mistake a third time. */
-        .ctsync-page .jenkins-section,
-        .ctsync-page .jenkins-section:first-of-type,
-        .ctsync-page .jenkins-section:last-child {
-          border: 1px solid var(--table-border-color, #ddd);
-          border-radius: var(--form-input-border-radius, 6px);
-          padding: 1.25rem;
-          margin: 28px 0 0;
-        }
-/* Section headings (owner report, 2026-09-05): Jenkins core renders jenkins-section__title
-           at normal weight, so inside a bordered card the section's topic carried no more visual
-           weight than the body text under it and the cards read as undifferentiated blocks. Bolded
-           and slightly enlarged, with breathing room below it, so each card's topic reads as a
-           heading at a glance. Scoped to this page's own container — never a global core override. */
-        .ctsync-page .jenkins-section__title {
-          font-weight: 700;
-          font-size: 1.15em;
-          margin-bottom: 14px;
-        }
-        /* New Config Set form (owner report, 2026-09-04): the projectKey input, content-type
-           radio group and its info hint were previously one cramped inline row (".ctsync-inline-form",
-           now removed) — stacked into a column instead, capped at a comfortable reading width
-           rather than stretching the full page width on desktop. The Create button is deliberately
-           OUTSIDE this rule/the frame (see the markup below) — it lives in its own ".ctsync-btn-row"
-           beneath the bordered card, mirroring how Jenkins core itself typically separates an
-           input-group card from its primary action (e.g. a job configuration page's own
-           Save/Apply row sitting below, not inside, its settings fieldsets). */
-        .ctsync-newconfig-form { display: flex; flex-direction: column; gap: 14px; max-width: 480px; }
-        .ctsync-newconfig-form .setting-input { width: 100% !important; }
-        /* Content-type group gets its own micro-label now that it is a stacked block in its own
-           right rather than an inline afterthought — same visual weight/typography as the
-           "Content type:" label CommonConfigSetPage/EnvConfigSetPage already use for their own
-           (locked-after-first-save) content-type rows, reusing the same ${%contentType.label}
-           bundle key so the wording stays identical everywhere it appears in this plugin. The info
-           hint sits directly below that label and ABOVE the radios themselves (owner report,
-           2026-09-04) — read order becomes label, then "why this choice matters", then the actual
-           choice, instead of the hint trailing after the radios where it previously read as a
-           squeezed-in afterthought. */
-        .ctsync-content-type-label { font-weight: 600; display: block; margin-bottom: 4px; }
-        .ctsync-content-type-hint { color: #666; margin-bottom: 8px; }
-        .ctsync-content-type-radios label { margin-right: 12px; }
-        /* Table-scroll behavior (same plan as CommonConfigSetPage/EnvConfigSetPage/SharedBlocks):
-           contain a long table's growth so page buttons/sections below it stay reachable, without
-           requiring the whole page to scroll. Applied to the wrapper div, never the table element
-           itself — overflow on a table element directly has known sticky-header/border quirks. */
-        /* Contained-scrollbar fix (ux-ui-designer spec, 2026-09-11): the wrapper div — not the
-           table — owns overflow-y:auto and is therefore what the browser paints the native
-           scrollbar against. Previously only the inner table.jenkins-table had a radius, so the
-           scrollbar rendered as a square-edged strip outside the table's rounded frame (confirmed
-           live). Border+radius now live on this wrapper itself; overflow-x:hidden is required
-           alongside overflow-y:auto so the box reliably clips its own scrollbar to the radius in
-           all evergreen browsers, not just Chrome. */
-        .ctsync-scroll-table {
-          max-height: 50vh;
-          overflow-y: auto;
-          overflow-x: hidden;
-          width: fit-content;
-          max-width: 100%;
-          border: 1px solid var(--table-border-color, #ddd);
-          border-radius: var(--form-input-border-radius, 6px);
-          /* Phantom-overflow fix (owner report, 2026-09-11): explicit border-box, never relying on
-             inherited box-sizing — the wrapper's own border (added by the Fix-A change above)
-             combined with a content-box ancestor could otherwise make scrollHeight compute a few
-             px larger than clientHeight even for a single-row table, spuriously flirting with
-             overflow:auto's scrollbar for content that doesn't actually overflow. */
-          box-sizing: border-box;
-        }
-        /* The inner table's own border/radius is now redundant (and would visually double up
-           against the wrapper's frame) — stripped here. */
-        .ctsync-scroll-table table.jenkins-table {
-          border: none;
-          border-radius: 0;
-          margin: 0;
-          border-spacing: 0;
-        }
-        .ctsync-scroll-table {
-          scrollbar-width: thin;
-          scrollbar-color: var(--text-color-secondary, #8c8c8c) transparent;
-        }
-        .ctsync-scroll-table::-webkit-scrollbar { width: 10px; }
-        .ctsync-scroll-table::-webkit-scrollbar-track { background: transparent; }
-        .ctsync-scroll-table::-webkit-scrollbar-thumb {
-          background-color: var(--text-color-secondary, #8c8c8c);
-          border-radius: var(--form-input-border-radius, 6px);
-          border: 2px solid var(--table-background, #fff);
-        }
-        .ctsync-scroll-table::-webkit-scrollbar-thumb:hover {
-          background-color: var(--table-hover-color, #f0f6ff);
-        }
-        /* Sticky header keeps the column labels visible while only the body rows scroll inside
-           this fixed-height wrapper; position: sticky targets the header cells directly (not the
-           header row/group element) for the most reliable cross-browser support, since this
-           wrapper div is each header cell's own nearest scrolling ancestor. */
-        .ctsync-scroll-table thead th {
-          position: sticky;
-          top: 0;
-          z-index: 1;
-          background-color: var(--table-background, #fff);
-          /* Phantom-scrollbar fix (owner report, 2026-09-11) — see CommonConfigSetPage's
-             identical comment: box-shadow replaces border-bottom to avoid the sticky-cell
-             border/content-height double-counting quirk. */
-          box-shadow: 0 2px 0 0 var(--table-border-color, #ddd);
-        }
-        /* Empty-state row (ux-ui-designer correction, 2026-09-11): a zero-row table keeps its own
-           header and renders ONE spanning row in its body instead of the whole table being
-           replaced by a separate placeholder div (the original design lost the column header,
-           e.g. "Name | Type | ..." entirely on an empty list — confirmed live). Plain cell
-           styling, no border of its own — it lives inside the already-framed .ctsync-scroll-table. */
-        .ctsync-empty-state-row td {
-          padding: 32px 16px;
-          text-align: center;
-          color: var(--text-color-secondary, #666);
-          font-size: 0.95em;
-          border: none;
-        }
-      </style>
+
+      <!-- CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): this page's own
+           inline <style>/<script> were extracted verbatim into index.css/index.js, sibling files
+           to this index.jelly, loaded via h.getViewResource(it, ...) (resolves relative to this
+           view class — see https://www.jenkins.io/doc/developer/views/exposing-bundled-resources/).
+           Every former inline onXxx="..." attribute below is now wired in index.js via
+           addEventListener; server-side values it needs (rootURL/urlName) ride on data-*
+           attributes instead of being interpolated into script text. -->
+      <link rel="stylesheet" href="${h.getViewResource(it, 'index.css')}"/>
+
+      <div id="ctsyncPageSeed" data-root-url="${rootURL}" data-url-name="${it.urlName}" style="display:none"/>
+
       <div class="ctsync-page">
 
       <h1>${%title}</h1>
@@ -166,7 +41,7 @@
       <j:if test="${!it.deletedConfigSets.isEmpty()}">
         <div class="ctsync-btn-row">
           <label>
-            <input type="checkbox" id="showDeletedToggle" onclick="toggleDeletedRows(this.checked);"/>
+            <input type="checkbox" id="showDeletedToggle"/>
             ${%showDeleted.label} (${it.deletedConfigSets.size()})
           </label>
         </div>
@@ -262,11 +137,9 @@
             <td>
               <button type="button" class="jenkins-button ctsync-restore-btn"
                       data-project-key="${cs.projectKey}" title="${%restore.title}"
-                      onclick="restoreDeleted(this.getAttribute('data-project-key'));"
                       >${%restore.label}</button>
               <button type="button" class="jenkins-button jenkins-button--destructive ctsync-purge-btn"
                       data-project-key="${cs.projectKey}" title="${%purge.title}"
-                      onclick="purgeDeleted(this.getAttribute('data-project-key'));"
                       >&#128465; ${%purge.label}</button>
             </td>
           </tr>
@@ -302,145 +175,19 @@
       </f:section>
 
       <!-- Create button lives OUTSIDE/below the bordered card on purpose — see the
-           ".ctsync-newconfig-form" CSS comment above for the reasoning. -->
+           ".ctsync-newconfig-form" CSS comment above for the reasoning. data-root-url/data-url-name
+           carry what the removed inline onclick="..." used to read straight out of ${rootURL}/
+           ${it.urlName} — see index.js's newConfigSetCreate wiring. -->
       <div class="ctsync-btn-row ctsync-btn-row--right">
         <button type="button" id="newConfigSetCreate" class="jenkins-button jenkins-button--primary"
                 title="${%newConfigSet.buttonTitle}"
-                onclick="var k = document.getElementById('newProjectKey').value; var t = document.querySelector('input[name=newContentTypeRadio]:checked').value; window.location.href = '${rootURL}/${it.urlName}/' + encodeURIComponent(k) + '/?contentType=' + encodeURIComponent(t);">${%newConfigSet.buttonLabel}</button>
+                data-root-url="${rootURL}" data-url-name="${it.urlName}"
+                >${%newConfigSet.buttonLabel}</button>
       </div>
 
       </div>
 
-      <script>
-        // Phantom-scroll reconciliation (owner report, 2026-09-11): see CommonConfigSetPage/index.jelly's
-        // identical comment/helper for the full rationale.
-        // ---- Deleted Config Sets ---------------------------------------------------------------
-        // The rows are cloned out of an inert template into the tbody and removed again, rather
-        // than hidden in place. See the template's own comment for why - in short, the filter block
-        // rewrites display on every data row, counts them, and derives the Type options from them,
-        // so a row hidden inside the table is not actually hidden for long.
-
-        function listStrings() {
-          var tpl = document.getElementById('ctsyncListStrings');
-          return tpl ? tpl.dataset : {};
-        }
-
-        function announceRowsChanged() {
-          // The published contract of the filter block: whoever rebuilds a table body says so, and
-          // the block re-derives its enum options and re-applies any active filter. Without this a
-          // filter would keep matching the rows it was given and quietly ignore the new ones.
-          if (typeof window !== 'undefined'
-              &amp;&amp; typeof window.ctsyncRefreshTableFilters === 'function') {
-            window.ctsyncRefreshTableFilters();
-          }
-        }
-
-        function toggleDeletedRows(show) {
-          var table = document.querySelector('table.ctsync-filterable');
-          var tbody = table.tBodies[0];
-          if (show) {
-            var template = document.getElementById('deletedRowsTemplate');
-            var rows = template.content.querySelectorAll('tr');
-            for (var i = 0; i &lt; rows.length; i++) {
-              tbody.appendChild(document.importNode(rows[i], true));
-            }
-          } else {
-            var present = tbody.querySelectorAll('tr.ctsync-row--deleted');
-            for (var j = 0; j &lt; present.length; j++) {
-              present[j].parentNode.removeChild(present[j]);
-            }
-          }
-          announceRowsChanged();
-        }
-
-        function lifecycleButtons(projectKey, disabled) {
-          var buttons = document.querySelectorAll('[data-project-key="' + projectKey + '"]');
-          for (var i = 0; i &lt; buttons.length; i++) {
-            buttons[i].disabled = disabled;
-          }
-        }
-
-        function restoreDeleted(projectKey) {
-          // No typed-name confirmation: restoring is fully reversible, and asking for the same
-          // ceremony as a purge would train the operator to type through both without reading.
-          lifecycleButtons(projectKey, true);
-          proxy.restoreConfigSet(JSON.stringify({ projectKey: projectKey }), function (t) {
-            var r = t.responseObject();
-            if (!r.ok) {
-              lifecycleButtons(projectKey, false);
-              window.ctsyncNotify(r.error, true);
-              return;
-            }
-            window.location.href = '${rootURL}/manage/${it.urlName}/?restored='
-                + encodeURIComponent(projectKey);
-          });
-        }
-
-        function purgeJobItems(entries) {
-          var items = [];
-          for (var i = 0; i &lt; entries.length; i++) {
-            items.push({
-              text: window.ctsyncFormatMessage(listStrings().jobRow, entries[i].fullName,
-                  entries[i].versions.join(', ')),
-              url: entries[i].url
-            });
-          }
-          return items;
-        }
-
-        function purgeDeleted(projectKey) {
-          var d = listStrings();
-          lifecycleButtons(projectKey, true);
-          window.ctsyncHideBlocked('purgeBlockedBanner');
-          proxy.purgePreflight(JSON.stringify({ projectKey: projectKey }), function (t) {
-            lifecycleButtons(projectKey, false);
-            var r = t.responseObject();
-            if (r.blocked) {
-              // Purge is refused for ANY reference, including one only an old job version names:
-              // there is no restore afterwards to repair a rollback this would have broken.
-              window.ctsyncShowBlocked('purgeBlockedBanner',
-                  window.ctsyncFormatMessage(d.purgeDialogTitle, projectKey),
-                  [{ intro: d.purgeBlockedIntro,
-                     items: purgeJobItems(r.activeJobs.concat(r.historicalJobs)) }]);
-              return;
-            }
-            if (!r.ok) { window.ctsyncNotify(r.error, true); return; }
-            window.ctsyncConfirmByName({
-              expectedName: projectKey,
-              title: window.ctsyncFormatMessage(d.purgeDialogTitle, projectKey),
-              message: window.ctsyncFormatMessage(d.purgeDialogMessage, projectKey),
-              okLabel: d.purgeOkLabel,
-              onConfirm: function (typed) {
-                proxy.purgeConfigSet(JSON.stringify({ projectKey: projectKey, confirmName: typed }),
-                    function (t2) {
-                      var r2 = t2.responseObject();
-                      if (!r2.ok) { window.ctsyncNotify(r2.error, true); return; }
-                      window.location.href = '${rootURL}/manage/${it.urlName}/?purged='
-                          + encodeURIComponent(projectKey);
-                    });
-              }
-            });
-          });
-        }
-
-        function reconcilePhantomScroll(wrapEl) {
-          if (!wrapEl) { return; }
-          var realOverflow = wrapEl.scrollHeight - wrapEl.clientHeight;
-          wrapEl.style.overflowY = (realOverflow > 4) ? 'auto' : 'hidden';
-        }
-
-        function reconcilePhantomScrollSoon(wrapEl) {
-          reconcilePhantomScroll(wrapEl);
-          // Nashorn-based JS-engine unit tests (ConfigTemplatesUiTest) run this same script without
-          // a setTimeout global — guard it so those tests keep exercising the immediate reconcile
-          // pass without needing a timer shim.
-          if (typeof setTimeout === 'function') {
-            setTimeout(function () { reconcilePhantomScroll(wrapEl); }, 50);
-          }
-        }
-
-        reconcilePhantomScrollSoon(document.getElementById('commonConfigSetsTableWrap'));
-      </script>
+      <script src="${h.getViewResource(it, 'index.js')}"/>
     </l:main-panel>
   </l:layout>
 </j:jelly>
