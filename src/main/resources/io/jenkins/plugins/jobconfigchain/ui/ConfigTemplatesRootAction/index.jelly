@@ -187,7 +187,12 @@
 
       </div>
 
-      <script src="${h.getViewResource(it, 'index.js')}"/>
+      <!-- HTML5 parsing note: <script> is never a void element - a self-closed <script .../>
+           is NOT closed by a real browser's HTML parser, which instead keeps consuming markup
+           as this element's (unexecuted, since src is set) text content until it finds the next
+           literal </script> anywhere later in the document, silently swallowing whatever real
+           HTML sits in between. Every script tag here must have an explicit closing tag. -->
+      <script src="${h.getViewResource(it, 'index.js')}"></script>
     </l:main-panel>
   </l:layout>
 </j:jelly>
