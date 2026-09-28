@@ -264,15 +264,20 @@
   }
 
   function findDialogOkButton(dlg, cancelLabel) {
-    // type:'destructive' is the only type this codebase ever asks core's dialog.prompt for, so
-    // its rendered OK button always carries this same modifier class Jenkins' own design language
-    // (and this plugin's own markup, e.g. deleteConfigSetBtn) already uses for destructive
-    // actions elsewhere on these pages.
-    var destructive = dlg.querySelector('button.jenkins-button--destructive');
-    if (destructive) { return destructive; }
-    // Fallback for a future core version that renders this differently: whichever dialog button
-    // is not labelled exactly like the Cancel button we asked for (matched by its own rendered
-    // text, so this stays correct under localization instead of guessing an English word).
+    // Verified against a live Jenkins 2.568.3 controller (2026-09-28): core's dialog.prompt()
+    // never renders a "...--destructive" class - the OK button's actual class string is
+    // 'jenkins-button jenkins-button--primary jenkins-!-destructive-color' even for
+    // type:'destructive', and that combination is theming, not addressing (it can change with
+    // dialog type or a future skin). What core DOES render consistently is a data-id attribute
+    // pairing each control with its role - data-id="ok", data-id="cancel", data-id="input" - so
+    // that is the hook used here.
+    var byDataId = dlg.querySelector('button[data-id="ok"]');
+    if (byDataId) { return byDataId; }
+    // Defensive fallback only: not known to be exercised against any real Jenkins core dialog
+    // markup (data-id="ok" has matched on every version checked so far). Kept in case a future
+    // core version drops data-id entirely - picks whichever dialog button is not labelled exactly
+    // like the Cancel button we asked for (matched by its own rendered text, so this stays correct
+    // under localization instead of guessing an English word).
     var buttons = Array.prototype.slice.call(dlg.querySelectorAll('button'));
     for (var i = 0; i < buttons.length; i++) {
       if (buttons[i].textContent.replace(/^\s+|\s+$/g, '') !== cancelLabel) { return buttons[i]; }
