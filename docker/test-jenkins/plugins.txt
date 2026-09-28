@@ -1,3 +1,4 @@
 workflow-aggregator
 credentials-binding
 plain-credentials
+gson-api
