@@ -1,3 +1,6 @@
-# Satisfies the Plugin Health Score's `code-ownership` probe and makes review routing explicit
-# once the repository is hosted under the jenkinsci organization.
-* @Retro-kharkov1
+# Satisfies the Plugin Health Score's `code-ownership` probe and the Jenkins Hosting Checker's
+# CODEOWNERS requirement, once the repository is hosted under the jenkinsci organization as
+# jenkinsci/job-config-chain-plugin. The named team (jenkinsci/job-config-chain-plugin-developers)
+# does not exist yet — it is created by Jenkins infra as part of the hosting transfer, per
+# HOSTING.md; this file is prepared ahead of that transfer per the hosting submission requirement.
+* @jenkinsci/job-config-chain-plugin-developers
