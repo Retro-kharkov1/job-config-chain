@@ -474,6 +474,7 @@ public class ConfigTemplatesJobAction implements Action {
 
     // ---- Activate (mirrors ConfigSetPage#doActivateVersion/#jsActivate) ----
 
+    @RequirePOST
     public JSONObject doActivateVersion(@QueryParameter int version) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         job.checkPermission(Job.CONFIGURE);
@@ -531,6 +532,7 @@ public class ConfigTemplatesJobAction implements Action {
 
     // ---- Secrets manifest (mirrors ConfigSetPage#doRegisterSecret/#doUnbindSecret) ----
 
+    @RequirePOST
     public JSONObject doRegisterSecret(@QueryParameter String path, @QueryParameter String credentialId) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         job.checkPermission(Job.CONFIGURE);
@@ -592,6 +594,7 @@ public class ConfigTemplatesJobAction implements Action {
         return result;
     }
 
+    @RequirePOST
     public JSONObject doUnbindSecret(@QueryParameter String path) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         job.checkPermission(Job.CONFIGURE);
