@@ -9,15 +9,16 @@ import io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty;
 import hudson.model.Result;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@code configTemplateValidate} end-to-end pipeline tests against the job-scoped resolution
@@ -29,10 +30,15 @@ import static org.junit.Assert.assertTrue;
  * resolution code — see pipeline-steps.md §4, "confirmed untouched" for why validate needs no
  * separate binding-related treatment).
  */
+@WithJenkins
 public class ConfigTemplateValidateStepTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
+    private JenkinsRule jenkins;
+
+    @BeforeEach
+    public void setUp(JenkinsRule rule) {
+        jenkins = rule;
+    }
 
     private void seedCommon(String projectKey, String commonJson) throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository();
