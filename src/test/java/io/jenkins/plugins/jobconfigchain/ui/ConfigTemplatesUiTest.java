@@ -215,6 +215,7 @@ public class ConfigTemplatesUiTest {
         repository.save(reloaded);
         assertEquals(1, reloaded.getActiveVersionNumber());
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL activateUrl = new URL(wc.getContextPath() + "configTemplates/uitest5/activateVersion");
         WebRequest activateRequest = new WebRequest(activateUrl, HttpMethod.POST);
@@ -249,6 +250,7 @@ public class ConfigTemplatesUiTest {
         // ES2015+ syntax the embedded legacy HtmlUnit JS engine can't run (same limitation already
         // documented on editPage_loadsActiveVersionContent above) — this test instead proves the
         // exact data contract the client-side diff view is wired to.
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL diffUrl = new URL(wc.getContextPath() + "configTemplates/uitest8/diffVersions");
         WebRequest diffRequest = new WebRequest(diffUrl, HttpMethod.POST);
@@ -266,6 +268,7 @@ public class ConfigTemplatesUiTest {
     public void doCompareVersions_reportsErrorForMissingVersionWithoutThrowing() throws Exception {
         seedCommon("uitest9", "{\"a\":1}", "v1");
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL diffUrl = new URL(wc.getContextPath() + "configTemplates/uitest9/diffVersions");
         WebRequest diffRequest = new WebRequest(diffUrl, HttpMethod.POST);
@@ -315,6 +318,7 @@ public class ConfigTemplatesUiTest {
     public void doAddSecret_rejectsACredentialIdThatDoesNotExist() throws Exception {
         seedCommon("uitest10", "{\"database\":{\"password\":\"" + SecretPlaceholder.VALUE + "\"}}", "seed");
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL registerUrl = new URL(wc.getContextPath() + "configTemplates/uitest10/registerSecret");
         WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
@@ -336,6 +340,7 @@ public class ConfigTemplatesUiTest {
         seedRealCredential("uitest11-real-cred");
         seedCommon("uitest11", "{\"database\":{\"password\":\"" + SecretPlaceholder.VALUE + "\"}}", "seed");
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL registerUrl = new URL(wc.getContextPath() + "configTemplates/uitest11/registerSecret");
         WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
@@ -360,6 +365,7 @@ public class ConfigTemplatesUiTest {
         seedRealCredential("uitest13-real-cred");
         seedCommon("uitest13", "{\"database\":{\"password\":\"a-real-plaintext-password\"}}", "seed");
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL registerUrl = new URL(wc.getContextPath() + "configTemplates/uitest13/registerSecret");
         WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
@@ -381,6 +387,7 @@ public class ConfigTemplatesUiTest {
         seedRealCredential("uitest14-real-cred");
         seedCommon("uitest14", "{\"database\":{\"password\":\"" + SecretPlaceholder.VALUE + "\"}}", "seed");
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL registerUrl = new URL(wc.getContextPath() + "configTemplates/uitest14/registerSecret");
         WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
@@ -407,6 +414,7 @@ public class ConfigTemplatesUiTest {
         common.putSecretManifestEntry("database.password", "uitest31-real-cred");
         new ConfigSetRepository().save(common);
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL unbindUrl = new URL(wc.getContextPath() + "configTemplates/uitest31/unbindSecret");
         WebRequest unbindRequest = new WebRequest(unbindUrl, HttpMethod.POST);
@@ -425,6 +433,7 @@ public class ConfigTemplatesUiTest {
     public void doUnbindSecret_reportsErrorForAPathNeverBoundWithoutThrowing() throws Exception {
         seedCommon("uitest32", "{\"a\":1}", "seed");
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL unbindUrl = new URL(wc.getContextPath() + "configTemplates/uitest32/unbindSecret");
         WebRequest unbindRequest = new WebRequest(unbindUrl, HttpMethod.POST);
@@ -622,6 +631,7 @@ public class ConfigTemplatesUiTest {
         seedCommon("uitest20", "{\"database\":{\"host\":\"db.internal\",\"password\":\""
                 + SecretPlaceholder.VALUE + "\"}}", "seed");
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL renderUrl = new URL(wc.getContextPath() + "configTemplates/uitest20/renderTemplate");
         Page result = wc.getPage(new WebRequest(renderUrl, HttpMethod.POST));
@@ -640,6 +650,7 @@ public class ConfigTemplatesUiTest {
         // A Config Set that has never been created/activated: getConfigSet() is null, so
         // getActiveVersion() is null — must return a structured ok:false error, never
         // throw an exception page (FR-40's "disabled-state message, not an exception page").
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL renderUrl = new URL(wc.getContextPath() + "configTemplates/uitest21-nonexistent/renderTemplate");
         Page result = wc.getPage(new WebRequest(renderUrl, HttpMethod.POST));
@@ -879,6 +890,7 @@ public class ConfigTemplatesUiTest {
     public void doCheckContentSyntax_and_doReformatContent_noCollisionWithExistingEndpoints() throws Exception {
         seedCommon("uitest64", "{\"a\":1}", "seed");
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
         URL checkSyntaxUrl = new URL(wc.getContextPath() + "configTemplates/uitest64/checkContentSyntax");
