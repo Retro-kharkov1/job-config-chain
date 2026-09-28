@@ -191,12 +191,17 @@ public class ConfirmDialogMessageTest {
     //
     // This test runs the ACTUAL shipped window.ctsyncConfirmByName in this page's REAL DOM (scripting
     // enabled, unlike every other test in this class) - not a syntax check, not a string-content
-    // assertion. It stands in for core's real dialog.prompt() with a fixture that mirrors this
-    // plugin's own documented assumption about its shape (a native &lt;dialog&gt; element, one text
-    // input, one Cancel button, one type:'destructive' OK button carrying the
-    // jenkins-button--destructive class - see findDialogOkButton's own comment) and models core's
-    // documented allowEmpty:false contract (disable exactly when the field is empty, re-evaluated on
-    // every keystroke - the same mechanism the live QA report observed). It proves this plugin's own
+    // assertion. It stands in for core's real dialog.prompt() with a fixture that mirrors the ACTUAL
+    // markup a live Jenkins 2.568.3 controller renders (captured 2026-09-28: a native &lt;dialog&gt;
+    // element, one data-id="input" text input, one data-id="cancel" button, one data-id="ok" button
+    // carrying the class string 'jenkins-button jenkins-button--primary jenkins-!-destructive-color'
+    // - see findDialogOkButton's own comment). An earlier version of this fixture instead modelled
+    // this plugin's own UNVERIFIED assumption about that shape (a bare 'jenkins-button--destructive'
+    // class, no data-id at all) - core never renders that, so the fix's primary selector silently
+    // never matched in production, and this fixture could not have caught it because it matched the
+    // wrong, hand-guessed shape rather than reality. It also models core's documented
+    // allowEmpty:false contract (disable exactly when the field is empty, re-evaluated on every
+    // keystroke - the same mechanism the live QA report observed). It proves this plugin's own
     // gating logic is correct given that shape; it cannot prove a live Jenkins controller's dialog
     // actually renders that exact shape - only a real browser against a live controller can do that,
     // which is exactly the kind of check that found this defect in the first place.
@@ -206,10 +211,14 @@ public class ConfirmDialogMessageTest {
         HtmlPage page = listPageWithScripting();
 
         String script =
-                "  var dlg = document.createElement('dialog');"
+                "  var dlg = document.createElement('dialog'); dlg.className = 'jenkins-dialog';"
                         + "  var input = document.createElement('input'); input.type = 'text';"
+                        + "  input.className = 'jenkins-input'; input.setAttribute('data-id', 'input');"
                         + "  var cancelBtn = document.createElement('button'); cancelBtn.textContent = 'Cancel';"
-                        + "  var okBtn = document.createElement('button'); okBtn.className = 'jenkins-button--destructive';"
+                        + "  cancelBtn.className = 'jenkins-button'; cancelBtn.setAttribute('data-id', 'cancel');"
+                        + "  var okBtn = document.createElement('button'); okBtn.textContent = 'Delete';"
+                        + "  okBtn.className = 'jenkins-button jenkins-button--primary jenkins-!-destructive-color';"
+                        + "  okBtn.setAttribute('data-id', 'ok');"
                         + "  okBtn.disabled = true;"
                         // Models core's own allowEmpty:false contract, independently of this
                         // plugin's fix under test - re-evaluated on every keystroke, exactly the
@@ -239,5 +248,63 @@ public class ConfirmDialogMessageTest {
         assertEquals("[true,false,true]", result, "the OK button must stay disabled for a "
                 + "mismatched name, become enabled the instant the typed value exactly matches, "
                 + "and go back to disabled the instant it stops matching again: " + result);
+    }
+
+    // ---- Bug fix regression guard (2026-09-28), part 2: primary selector, not positional luck ----
+    //
+    // The test above would ALSO pass if findDialogOkButton fell through to its text-based fallback
+    // and happened to land on the right button by position - it proves the gating logic works given
+    // SOME correct button reference, not that data-id="ok" is what supplied it. This test makes that
+    // distinguishable: a decoy button (no data-id, a label that is not the Cancel label, positioned
+    // BEFORE the real OK button) is exactly what the old "first button whose label isn't Cancel"
+    // fallback would seize on. If findDialogOkButton ever regresses to picking by position instead
+    // of by data-id, this fixture makes it grab the decoy - and the assertions below would fail
+    // because the real OK button would never be re-locked on a mismatched name.
+    @Test
+    public void confirmByNameDialog_findsTheOkButtonByDataIdNotByPositionAmongNonCancelButtons()
+            throws Exception {
+        seed("dialogmsg-gate-demo-2");
+        HtmlPage page = listPageWithScripting();
+
+        String script =
+                "  var dlg = document.createElement('dialog'); dlg.className = 'jenkins-dialog';"
+                        + "  var input = document.createElement('input'); input.type = 'text';"
+                        + "  input.className = 'jenkins-input'; input.setAttribute('data-id', 'input');"
+                        + "  var cancelBtn = document.createElement('button'); cancelBtn.textContent = 'Cancel';"
+                        + "  cancelBtn.className = 'jenkins-button'; cancelBtn.setAttribute('data-id', 'cancel');"
+                        // Decoy: not Cancel-labelled, no data-id, rendered before the real OK button
+                        // - a positional ("first non-Cancel button") fallback would return this one.
+                        + "  var decoyBtn = document.createElement('button'); decoyBtn.textContent = 'Learn more';"
+                        + "  decoyBtn.className = 'jenkins-button';"
+                        + "  var okBtn = document.createElement('button'); okBtn.textContent = 'Delete';"
+                        + "  okBtn.className = 'jenkins-button jenkins-button--primary jenkins-!-destructive-color';"
+                        + "  okBtn.setAttribute('data-id', 'ok');"
+                        + "  okBtn.disabled = true;"
+                        + "  input.addEventListener('input', function () { okBtn.disabled = (input.value.length === 0); });"
+                        + "  dlg.appendChild(input); dlg.appendChild(cancelBtn); dlg.appendChild(decoyBtn);"
+                        + "  dlg.appendChild(okBtn);"
+                        + "  document.body.appendChild(dlg);"
+                        + "  window.dialog = { prompt: function () {"
+                        + "    return { then: function () { return this; }, catch: function () { return this; } };"
+                        + "  } };"
+                        + "  window.ctsyncConfirmByName({ expectedName: 'dialogmsg-gate-demo-2', title: 't', "
+                        + "      message: 'm', okLabel: 'Delete', onConfirm: function () {} });"
+                        + "  function fireInput() {"
+                        + "    var evt;"
+                        + "    try { evt = new Event('input', { bubbles: true }); }"
+                        + "    catch (e) { evt = document.createEvent('Event'); evt.initEvent('input', true, true); }"
+                        + "    input.dispatchEvent(evt);"
+                        + "  }"
+                        + "  var results = [];"
+                        + "  input.value = 'wrong-name'; fireInput(); results.push(okBtn.disabled);"
+                        + "  input.value = 'dialogmsg-gate-demo-2'; fireInput(); results.push(okBtn.disabled);"
+                        + "  input.value = 'wrong-again'; fireInput(); results.push(okBtn.disabled);"
+                        + "  results.push(decoyBtn.disabled);"
+                        + "  return JSON.stringify(results);";
+
+        String result = js(page, script);
+        assertEquals("[true,false,true,false]", result, "the real OK button (data-id=\"ok\") must "
+                + "be the one gated on the typed name even with a non-Cancel decoy button rendered "
+                + "earlier in the dialog, and the decoy must never be touched: " + result);
     }
 }
