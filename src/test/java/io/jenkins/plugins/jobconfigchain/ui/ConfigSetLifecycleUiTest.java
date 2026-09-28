@@ -213,6 +213,47 @@ public class ConfigSetLifecycleUiTest {
         assertEquals(2, repository().findCommonIncludingDeleted("withdrawn-app").getVersions().size());
     }
 
+    // ---- Bug fix regression guard (2026-09-28) ---------------------------------------------------
+    //
+    // Live-browser QA found that a Config Set's very first successful Save left the page's "does
+    // not exist yet" banner and Delete button stale (both still reflected the pre-save state) until
+    // a full page reload — the in-place-update save handler applied the returned version list, but
+    // never told the client the record had just started existing. This test proves the ROOT CAUSE
+    // fix at the source: jsSave's JSON response now carries an "exists" field the client can act on
+    // (see CommonConfigSetPage/index.js's applyConfigSetNowExists, wired into saveClicked). The
+    // client-side reveal-the-banner/button behavior itself is covered separately, by content
+    // assertions on the served index.js/index.jelly in ConfigTemplatesUiTest — HtmlUnit cannot
+    // reliably drive this page's live Monaco-editor-backed save button, exactly as this project's
+    // other UI tests already document for comparable in-place-update flows.
+
+    @Test
+    public void jsSave_onAConfigSetsFirstSave_reportsExistsTrueInTheResponse() throws Exception {
+        CommonConfigSetPage page = page("first-save-exists-check");
+        assertFalse(page.isExists(), "must start unsaved for this test to be meaningful");
+
+        JSONObject result = page.jsSave("{\"content\":\"{}\",\"note\":\"first\",\"activate\":false}");
+
+        assertTrue(result.getBoolean("ok"));
+        assertTrue(result.getBoolean("exists"), "the very first successful save must report that "
+                + "the Config Set now exists, so the client can reveal the Delete button and hide "
+                + "the \"does not exist yet\" banner without a page reload");
+        assertTrue(page("first-save-exists-check").isExists(), "and the record must actually exist "
+                + "server-side, confirming this isn't a client-only flag");
+    }
+
+    @Test
+    public void jsSave_onASubsequentSave_stillReportsExistsTrue() throws Exception {
+        seed("already-exists-check");
+
+        JSONObject result = page("already-exists-check")
+                .jsSave("{\"content\":\"{\\\"a\\\":9}\",\"note\":\"second\",\"activate\":false}");
+
+        assertTrue(result.getBoolean("ok"));
+        assertTrue(result.getBoolean("exists"), "a save on an already-existing Config Set must "
+                + "still report exists:true - the client's reveal logic is a harmless no-op the "
+                + "second time, but the field itself must stay accurate");
+    }
+
     // ---- Happy paths ----------------------------------------------------------------------------
 
     @Test

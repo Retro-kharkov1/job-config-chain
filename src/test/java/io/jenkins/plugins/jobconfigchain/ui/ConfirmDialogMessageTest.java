@@ -177,4 +177,67 @@ public class ConfirmDialogMessageTest {
         String rendered = js(page, "  return window.ctsyncFormatMessage('{0} then {1}', 'only');");
         assertEquals("only then {1}", rendered);
     }
+
+    // ---- Bug fix regression guard (2026-09-28) ---------------------------------------------------
+    //
+    // Live-browser QA: the Delete/Purge confirm-by-name dialog's OK button was correctly disabled
+    // while the input was empty, but became clickable the instant ANY text was typed - including
+    // text that did not match the required Config Set name. requireConfirmedName (server side)
+    // already refuses a mismatch unconditionally, so this was never a data-safety hole, but it broke
+    // the disabled-until-correct promise the button visually makes. The fix (confirmByName's
+    // enforceNameMatchOnOpenDialog/findDialogOkButton/wireDialogNameInput, duplicated identically in
+    // all three host index.js files) re-disables the OK button on every keystroke that does not
+    // exactly match, on top of (never instead of) core's own allowEmpty:false gate.
+    //
+    // This test runs the ACTUAL shipped window.ctsyncConfirmByName in this page's REAL DOM (scripting
+    // enabled, unlike every other test in this class) - not a syntax check, not a string-content
+    // assertion. It stands in for core's real dialog.prompt() with a fixture that mirrors this
+    // plugin's own documented assumption about its shape (a native &lt;dialog&gt; element, one text
+    // input, one Cancel button, one type:'destructive' OK button carrying the
+    // jenkins-button--destructive class - see findDialogOkButton's own comment) and models core's
+    // documented allowEmpty:false contract (disable exactly when the field is empty, re-evaluated on
+    // every keystroke - the same mechanism the live QA report observed). It proves this plugin's own
+    // gating logic is correct given that shape; it cannot prove a live Jenkins controller's dialog
+    // actually renders that exact shape - only a real browser against a live controller can do that,
+    // which is exactly the kind of check that found this defect in the first place.
+    @Test
+    public void confirmByNameDialog_okButtonStaysDisabledUntilTheTypedNameMatches() throws Exception {
+        seed("dialogmsg-gate-demo");
+        HtmlPage page = listPageWithScripting();
+
+        String script =
+                "  var dlg = document.createElement('dialog');"
+                        + "  var input = document.createElement('input'); input.type = 'text';"
+                        + "  var cancelBtn = document.createElement('button'); cancelBtn.textContent = 'Cancel';"
+                        + "  var okBtn = document.createElement('button'); okBtn.className = 'jenkins-button--destructive';"
+                        + "  okBtn.disabled = true;"
+                        // Models core's own allowEmpty:false contract, independently of this
+                        // plugin's fix under test - re-evaluated on every keystroke, exactly the
+                        // mechanism the live QA report observed ("enabled as soon as any text is
+                        // typed").
+                        + "  input.addEventListener('input', function () { okBtn.disabled = (input.value.length === 0); });"
+                        + "  dlg.appendChild(input); dlg.appendChild(cancelBtn); dlg.appendChild(okBtn);"
+                        + "  document.body.appendChild(dlg);"
+                        + "  window.dialog = { prompt: function () {"
+                        + "    return { then: function () { return this; }, catch: function () { return this; } };"
+                        + "  } };"
+                        + "  window.ctsyncConfirmByName({ expectedName: 'dialogmsg-gate-demo', title: 't', "
+                        + "      message: 'm', okLabel: 'Delete', onConfirm: function () {} });"
+                        + "  function fireInput() {"
+                        + "    var evt;"
+                        + "    try { evt = new Event('input', { bubbles: true }); }"
+                        + "    catch (e) { evt = document.createEvent('Event'); evt.initEvent('input', true, true); }"
+                        + "    input.dispatchEvent(evt);"
+                        + "  }"
+                        + "  var results = [];"
+                        + "  input.value = 'wrong-name'; fireInput(); results.push(okBtn.disabled);"
+                        + "  input.value = 'dialogmsg-gate-demo'; fireInput(); results.push(okBtn.disabled);"
+                        + "  input.value = 'wrong-again'; fireInput(); results.push(okBtn.disabled);"
+                        + "  return JSON.stringify(results);";
+
+        String result = js(page, script);
+        assertEquals("[true,false,true]", result, "the OK button must stay disabled for a "
+                + "mismatched name, become enabled the instant the typed value exactly matches, "
+                + "and go back to disabled the instant it stops matching again: " + result);
+    }
 }

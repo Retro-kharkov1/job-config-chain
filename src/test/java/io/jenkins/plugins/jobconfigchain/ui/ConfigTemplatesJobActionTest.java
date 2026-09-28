@@ -112,6 +112,32 @@ public class ConfigTemplatesJobActionTest {
         assertEquals(1, jobAction.getVersions().size());
     }
 
+    // ---- Bug fix regression guard (2026-09-28) -----------------------------------------------
+    //
+    // Live-browser QA found that a job's very first successful Save left the page's "does not
+    // exist yet" banner stale (still shown) until a full page reload — the in-place-update save
+    // handler applied the returned version list, but never told the client the property had just
+    // started existing. This proves the root-cause fix at the source: jsSave's JSON response now
+    // carries an "exists" field (mirroring ConfigSetPage#jsSave's identically-named field), which
+    // the client acts on via applyConfigSetNowExists — see the dedicated functional-JS test below
+    // (jobPage_applyConfigSetNowExists_hidesTheNotExistYetBanner) for that half of the fix.
+
+    @Test
+    public void jsSave_onAJobsFirstSave_reportsExistsTrueInTheResponse() throws Exception {
+        FreeStyleProject project = jenkins.createFreeStyleProject("job-first-save-exists-check");
+        ConfigTemplatesJobAction jobAction = findJobAction(project);
+        assertFalse(jobAction.isExists(), "must start unsaved for this test to be meaningful");
+
+        JSONObject result = jobAction.jsSave("{\"content\":\"{}\",\"note\":\"first\",\"activate\":false}");
+
+        assertTrue(result.getBoolean("ok"));
+        assertTrue(result.getBoolean("exists"), "the very first successful save must report that "
+                + "the property now exists, so the client can hide the \"does not exist yet\" "
+                + "banner without a page reload");
+        assertTrue(findJobAction(project).isExists(), "and the property must actually exist "
+                + "server-side, confirming this isn't a client-only flag");
+    }
+
     // ---- State 1: nothing configured ----
 
     @Test
@@ -154,6 +180,47 @@ public class ConfigTemplatesJobActionTest {
         assertTrue(js.contains("window.notificationBar.show("), "save success/error must go through the native notificationBar toast");
         assertFalse(html.contains("id=\"saveBanner\""), "the old shared inline save banner element must be removed, not just unused");
         assertFalse(js.contains("function showSaveBanner"), "the old showSaveBanner helper must be gone");
+    }
+
+    @Test
+    public void jobPage_neverSaved_notExistYetBannerCarriesAnId() throws Exception {
+        // Bug fix regression guard (2026-09-28): mirrors CommonConfigSetPage's identical fix -
+        // see jobPage_applyConfigSetNowExists_hidesTheNotExistYetBanner for the functional half.
+        FreeStyleProject project = jenkins.createFreeStyleProject("job-exists-fix-markup-check");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/");
+        String html = page.getWebResponse().getContentAsString();
+
+        assertTrue(html.contains("id=\"notExistYetBanner\""), "the \"does not exist yet\" banner "
+                + "must carry an id so the first Save's in-place-update response can hide it");
+        String js = fetchExternalScripts(wc, html);
+        assertTrue(js.contains("function applyConfigSetNowExists"), "the reveal function must be "
+                + "defined in the external index.js (CSP migration - no inline handlers)");
+        assertTrue(js.contains("if (r.exists) { applyConfigSetNowExists(); }"), "saveClicked's "
+                + "success handler must actually call the reveal function when the server reports "
+                + "the property now exists");
+    }
+
+    @Test
+    public void jobPage_confirmByNameGateFix_isShippedInThisPagesOwnCopy() throws Exception {
+        // Bug fix regression guard (2026-09-28): see ConfirmDialogMessageTest#confirmByNameDialog_
+        // okButtonStaysDisabledUntilTheTypedNameMatches for the live-DOM functional proof of the
+        // actual gating logic. This page carries a byte-identical duplicate of the same
+        // confirmByNameBlock code — this test proves THIS page's copy actually shipped the fix too.
+        FreeStyleProject project = jenkins.createFreeStyleProject("job-confirm-gate-fix-check");
+
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/");
+        String html = page.getWebResponse().getContentAsString();
+        String js = fetchExternalScripts(wc, html);
+
+        assertTrue(js.contains("function enforceNameMatchOnOpenDialog"), "the dialog-gate wiring function must ship in this page's own index.js copy");
+        assertTrue(js.contains("function findDialogOkButton"), "the OK-button lookup must ship in this page's own index.js copy");
+        assertTrue(js.contains("function wireDialogNameInput"), "the per-keystroke gate must ship in this page's own index.js copy");
+        assertTrue(js.contains("enforceNameMatchOnOpenDialog(opts.expectedName, s.cancel);"), "confirmByName must actually call the gate, not just define it unreferenced");
     }
 
     @Test
@@ -458,10 +525,22 @@ public class ConfigTemplatesJobActionTest {
                     + "{versionsByProject:{}, typeByProject:{}})), "
                     + "contentTypeValue: 'JSON', rootUrl: '', monacoBase: '', "
                     + "emptyVersions: '', emptySecrets: '', emptyBasechain: '' };"
+                    // Bug fix (2026-09-28): elements are now memoized by id, one object per id for
+                    // the life of this engine instance, instead of a fresh throwaway object per
+                    // getElementById() call — the throwaway form made it impossible for a test to
+                    // observe a mutation a script-under-test made to "the same" element (e.g.
+                    // applyConfigSetNowExists() setting style.display), since the test's own
+                    // getElementById() call would always hand back a different object. Existing
+                    // tests above this one never depended on distinct object identity per call, so
+                    // this is a strictly more capable stand-in, not a behavior change for them.
+                    + "var __ctsyncElements = {};"
                     + "var document = { getElementById: function(id) {"
                     + "  if (id === 'ctsyncJobSeed') { return { dataset: __ctsyncSeedDataset }; }"
-                    + "  return { addEventListener: function(){}, style:{}, "
-                    + "    classList:{add:function(){},remove:function(){}} };"
+                    + "  if (!__ctsyncElements[id]) {"
+                    + "    __ctsyncElements[id] = { addEventListener: function(){}, style:{}, "
+                    + "      classList:{add:function(){},remove:function(){}} };"
+                    + "  }"
+                    + "  return __ctsyncElements[id];"
                     + "}, "
                     + "querySelectorAll: function() { return []; }, "
                     + "querySelector: function() { return null; } };"
@@ -1125,6 +1204,40 @@ public class ConfigTemplatesJobActionTest {
                         + "actually identifies the row: " + truncated);
         assertEquals(Boolean.TRUE, engine.eval("longLabel !== truncateVersionLabel(longLabel)"), "truncation must not mutate the source label - the untruncated text is what "
                         + "the info tooltip shows");
+    }
+
+    /**
+     * Bug fix regression guard (2026-09-28): runs the ACTUAL shipped {@code applyConfigSetNowExists}
+     * function (index.js's client-side reaction to jsSave's new {@code exists} field — see
+     * {@link #jsSave_onAJobsFirstSave_reportsExistsTrueInTheResponse} for the server-side half of
+     * this fix) in a real JS engine against the job page's own DOM stub, rather than only asserting
+     * the source text contains the right call. {@link #JOB_SEED_STUB_HARNESS} now memoizes elements
+     * by id specifically so this test can observe the SAME banner object the function under test
+     * mutates.
+     */
+    @Test
+    public void jobPage_applyConfigSetNowExists_hidesTheNotExistYetBanner() throws Exception {
+        FreeStyleProject project = jenkins.createFreeStyleProject("job-exists-banner-check");
+        JenkinsRule.WebClient wc = jenkins.createWebClient();
+        wc.getOptions().setJavaScriptEnabled(false);
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        String html = page.getWebResponse().getContentAsString();
+        String allScripts = fetchExternalScripts(wc, html);
+
+        ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
+        assertNotNull(engine);
+        engine.eval(JOB_SEED_STUB_HARNESS + allScripts);
+
+        Object beforeDisplay = engine.eval("document.getElementById('notExistYetBanner').style.display");
+        assertTrue(beforeDisplay == null || "".equals(String.valueOf(beforeDisplay))
+                        || "undefined".equals(String.valueOf(beforeDisplay)),
+                "banner must start unhidden in this stub for the assertion below to be meaningful: " + beforeDisplay);
+
+        engine.eval("applyConfigSetNowExists();");
+
+        Object afterDisplay = engine.eval("document.getElementById('notExistYetBanner').style.display");
+        assertEquals("none", afterDisplay, "the very first successful save must hide the stale "
+                + "\"does not exist yet\" banner in place, without a page reload");
     }
 
     private int saveViaJsProxyLikeCall(FreeStyleProject project, JenkinsRule.WebClient wc, String content,
