@@ -35,6 +35,7 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -516,6 +517,17 @@ public class ConfigTemplatesUiTest {
         // contract that deleteConfigSetBtn itself must be genuinely ABSENT here, not merely hidden —
         // this test only adds the two things the fix needed on top of that: an id on the banner, and
         // the in-place-update template applyConfigSetNowExists clones to BUILD the button later.
+        //
+        // Bug fix (2026-09-29): a raw HTML substring check cannot tell "the button is live in the
+        // DOM" apart from "the button's markup sits inert inside <template id=
+        // deleteConfigSetBtnTemplate>" - a <template>'s content lives in a separate
+        // DocumentFragment (template.content), never the main document tree, so it is NOT rendered,
+        // not query-selectable, and not in the accessibility tree, but html.contains(...) still
+        // finds its text. The absence claim and the template-presence claim are two DISTINCT things
+        // and are now asserted through two different, correctly-scoped mechanisms: the live PARSED
+        // DOM (HtmlPage#getElementById, exactly like the pre-existing contract test) for absence,
+        // and the raw markup for the template's own presence (a <template> tag has no "live"
+        // meaning to assert against - it is markup by definition).
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest-exists-fix-1/");
@@ -523,12 +535,17 @@ public class ConfigTemplatesUiTest {
 
         assertTrue(html.contains("id=\"notExistYetBanner\""), "the \"does not exist yet\" banner "
                 + "must carry an id so the first Save's in-place-update response can hide it");
-        assertFalse(html.contains("id=\"deleteConfigSetBtn\""), "the Delete button must still be "
-                + "genuinely absent before the first Save — the pre-existing "
-                + "theDeleteButtonRendersOnALiveConfigSetAndNotOnAnAbsentOne contract, unchanged");
+        assertNull(page.getElementById("deleteConfigSetBtn"), "the Delete button must still be "
+                + "genuinely absent from the LIVE DOM before the first Save — the pre-existing "
+                + "theDeleteButtonRendersOnALiveConfigSetAndNotOnAnAbsentOne contract, unchanged. "
+                + "Checked via the parsed document, not a raw-HTML substring search, precisely "
+                + "because the template below legitimately carries this same id in its inert markup.");
+        assertNotNull(page.getElementById("deleteConfigSetBtnTemplate"), "the <template> element "
+                + "itself (not its inert content) IS part of the live document and must be present, "
+                + "so applyConfigSetNowExists has something to clone");
         assertTrue(html.contains("id=\"deleteConfigSetBtnTemplate\""), "the hidden <template> "
-                + "applyConfigSetNowExists clones to build the button in place must be rendered, "
-                + "even though the button itself is not");
+                + "applyConfigSetNowExists clones to build the button in place must be rendered "
+                + "into the page source, even though the button itself is not live");
     }
 
     @Test
