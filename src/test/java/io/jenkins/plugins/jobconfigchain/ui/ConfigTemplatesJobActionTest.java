@@ -167,6 +167,7 @@ public class ConfigTemplatesJobActionTest {
         assertFalse(action.isExists(), "this job must never have been saved for this test to be meaningful");
 
         String overlayJson = "{\"database\":{\"host\":\"db.internal\"}}";
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL renderUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/renderTemplate");
         WebRequest renderRequest = new WebRequest(renderUrl, HttpMethod.POST);
@@ -189,6 +190,7 @@ public class ConfigTemplatesJobActionTest {
         // sensible (non-error) template, matching whatever previewMergeImpl already does for the
         // same empty-chain/empty-overlay input (an empty object, no substitutions to tokenize).
         FreeStyleProject project = jenkins.createFreeStyleProject("generate-from-draft-empty-job");
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL renderUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/renderTemplate");
         WebRequest renderRequest = new WebRequest(renderUrl, HttpMethod.POST);
@@ -222,6 +224,7 @@ public class ConfigTemplatesJobActionTest {
         String overlayJson = "{\"b\":2}";
 
         FreeStyleProject project = jenkins.createFreeStyleProject("state2-job");
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
         URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
@@ -247,6 +250,7 @@ public class ConfigTemplatesJobActionTest {
     @Test
     public void overrideOnly_zeroChain_contentUsedVerbatim() throws Exception {
         FreeStyleProject project = jenkins.createFreeStyleProject("state3-job");
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
         String overlayJson = "{\"solo\":true}";
@@ -494,6 +498,7 @@ public class ConfigTemplatesJobActionTest {
                 "seed", "seed-author", 1L, java.util.Collections.emptyList(), null);
         project.addProperty(property);
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL registerUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/registerSecret");
         WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
@@ -519,6 +524,7 @@ public class ConfigTemplatesJobActionTest {
         property.putSecretManifestEntry("database.password", "job-unbind-real-cred");
         project.addProperty(property);
 
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL unbindUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/unbindSecret");
         WebRequest unbindRequest = new WebRequest(unbindUrl, HttpMethod.POST);
@@ -738,6 +744,7 @@ public class ConfigTemplatesJobActionTest {
                 + "{\"projectKey\":\"job-multi-base-b\",\"pinMode\":\"ACTIVE\"}]";
 
         FreeStyleProject project = jenkins.createFreeStyleProject("job-multi-base-merge");
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
         WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
@@ -770,6 +777,7 @@ public class ConfigTemplatesJobActionTest {
     public void jobPage_doComputeMerge_unresolvableChainReferenceReportsErrorWithoutThrowing() throws Exception {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-unresolvable-chain");
         String baseChainJson = "[{\"projectKey\":\"no-such-common-project\",\"pinMode\":\"ACTIVE\"}]";
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
         WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
@@ -1000,6 +1008,7 @@ public class ConfigTemplatesJobActionTest {
         String baseChainJson = "[{\"projectKey\":\"job-recompute-common\",\"pinMode\":\"ACTIVE\"}]";
 
         FreeStyleProject project = jenkins.createFreeStyleProject("job-recompute-merge");
+        jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
 
