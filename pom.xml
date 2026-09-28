@@ -70,18 +70,23 @@
          (.github/workflows/cd.yaml + .mvn/extensions.xml's git-changelist-maven-extension), that
          extension computes a real value for `changelist` from the git tag being released. -->
     <changelist>999999-SNAPSHOT</changelist>
-    <!-- Bumped 2026-09-16 alongside the parent POM bump: the new parent
-         (org.jenkins-ci.plugins:plugin 6.2236.v12dd4c483242) itself declares
-         <jenkins.version>2.479</jenkins.version> as its own minimum baseline and
-         <maven.compiler.release>17</maven.compiler.release> as its Java baseline -
-         both strictly above this project's previous 2.426.3 / Java 11. jenkins.baseline
-         is set to 2.555 (not the parent's bare minimum, and not the newest LTS 2.568
-         either) per the official baseline-selection guidance at
-         https://www.jenkins.io/doc/developer/plugin-development/choosing-jenkins-baseline/,
-         which names 2.541/2.555 as the currently recommended "good core dependencies"
-         choices; jenkins.version and the imported bom's artifactId are both derived from
-         it below (Jenkins Hosting Checker requirement) so the two never drift apart. -->
-    <jenkins.baseline>2.555</jenkins.baseline>
+    <!-- Bumped 2026-09-28 in response to the Jenkins Security Advisory of 2026-09-02
+         (https://www.jenkins.io/security/advisory/2026-09-02/), which names fixed
+         core version "Jenkins 2.580, LTS 2.568.3" for 13 CVEs (CVE-2026-84645 through
+         84657), including unsafe deserialization (84645/84646/84647), stored XSS in
+         the system log viewer (84648), CSRF-crumb disclosure via generated JS (84649)
+         and session fixation on remember-me auth (84652). The previous baseline 2.555
+         (jenkins.version 2.555.3) predates that fix line. Verified no later advisory
+         raises the required core line further: the next advisory
+         (https://www.jenkins.io/security/advisory/2026-09-16/) affects only plugins
+         (Bitbucket/GitLab/Gradle/Pipeline-Groovy-Libraries/Script-Security/etc.), none
+         of which this project depends on, and names no new Jenkins core fix version.
+         jenkins.baseline is kept in the `${jenkins.baseline}.N` form required by the
+         Jenkins Hosting Checker (see the original 2026-09-16 comment history for that
+         requirement, and https://www.jenkins.io/doc/developer/plugin-development/choosing-jenkins-baseline/
+         for baseline selection generally); jenkins.version and the imported bom's
+         artifactId are both derived from it below so the two never drift apart. -->
+    <jenkins.baseline>2.568</jenkins.baseline>
     <jenkins.version>${jenkins.baseline}.3</jenkins.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- maven.compiler.source/target/release and java.level are intentionally NOT redeclared
@@ -119,9 +124,15 @@
   <dependencyManagement>
     <dependencies>
       <dependency>
-        <groupId>io.jenkins.tools.bom</groupId>
+        <!-- Latest published version of bom-2.568.x as of 2026-09-28, confirmed against
+             https://repo.jenkins-ci.org/public/io/jenkins/tools/bom/bom-2.568.x/maven-metadata.xml
+             (17 releases listed, <latest>/<release> both 7093.v37de7b_4a_8a_4f). Both
+             io.jenkins.plugins:gson-api and io.jenkins.plugins:snakeyaml-api (used below
+             with no explicit <version>) remain managed through this bom's inherited
+             dependencyManagement chain (bom-2.568.x -> bom-2.580.x -> bom-weekly),
+             confirmed by reading jenkinsci/bom's bom-weekly/pom.xml on GitHub master. -->
         <artifactId>bom-${jenkins.baseline}.x</artifactId>
-        <version>7046.v43536164769c</version>
+        <version>7093.v37de7b_4a_8a_4f</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
