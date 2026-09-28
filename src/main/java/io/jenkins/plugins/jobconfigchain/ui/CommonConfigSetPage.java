@@ -10,6 +10,7 @@ import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.bind.JavaScriptMethod;
+import org.kohsuke.stapler.interceptor.RequirePOST;
 
 /**
  * The global Config Set edit page (see admin-ui.md's "Global level" section), served directly at
@@ -65,6 +66,7 @@ public class CommonConfigSetPage extends ConfigSetPage {
         return !isDeleted() && getActiveVersion() != null;
     }
 
+    @RequirePOST
     @jenkins.security.stapler.StaplerDispatchable
     public JSONObject doRenderTemplate() {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);

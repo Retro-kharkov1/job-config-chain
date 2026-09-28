@@ -921,6 +921,7 @@ public abstract class ConfigSetPage {
      * {@code @JavaScriptMethod(name = "compareVersions")} sibling below — see
      * {@link #doActivateVersion(int)}'s javadoc for the full root-cause chain.</p>
      */
+    @RequirePOST
     public JSONObject doDiffVersions(@QueryParameter int version) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         return compareVersionsImpl(version);
@@ -1052,6 +1053,7 @@ public abstract class ConfigSetPage {
      * bound name ({@code validateContent}) is unaffected, since {@code index.jelly} calls
      * {@code proxy.validateContent(...)}, never the classic method's Java name.</p>
      */
+    @RequirePOST
     public JSONObject doCheckContentSyntax(@QueryParameter String content, @QueryParameter String contentType) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         return validateContentImpl(content, ContentType.valueOf(contentType));
@@ -1111,6 +1113,7 @@ public abstract class ConfigSetPage {
      * {@code reformatContent}) — distinct from every other segment/name on this class and its
      * subclasses; the JS-proxy sibling's bound name ({@code formatContent}) is unaffected.</p>
      */
+    @RequirePOST
     public JSONObject doReformatContent(@QueryParameter String content, @QueryParameter String contentType) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         return formatContentImpl(content, ContentType.valueOf(contentType));

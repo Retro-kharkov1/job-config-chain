@@ -669,6 +669,7 @@ public class ConfigTemplatesJobAction implements Action {
 
     // ---- Compare (mirrors ConfigSetPage#doDiffVersions/#jsCompareVersions) ----
 
+    @RequirePOST
     public JSONObject doDiffVersions(@QueryParameter int version) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         return compareVersionsImpl(version);
@@ -787,6 +788,7 @@ public class ConfigTemplatesJobAction implements Action {
      * "Generate Template" must work before this job has ever saved a version). Reuses
      * {@link #resolveChain} rather than a second, divergent chain-resolution implementation.
      */
+    @RequirePOST
     @jenkins.security.stapler.StaplerDispatchable
     public JSONObject doRenderTemplate(@QueryParameter String overlayJson, @QueryParameter String baseChainJson,
                                         @QueryParameter(fixEmpty = true) String standaloneContentType) {
@@ -846,6 +848,7 @@ public class ConfigTemplatesJobAction implements Action {
 
     // ---- Live merge preview (mirrors EnvConfigSetPage#doComputeMerge/#jsPreviewMerge) ----
 
+    @RequirePOST
     public JSONObject doComputeMerge(@QueryParameter String overlayJson, @QueryParameter String baseChainJson,
                                       @QueryParameter(fixEmpty = true) String standaloneContentType) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
@@ -931,6 +934,7 @@ public class ConfigTemplatesJobAction implements Action {
 
     // ---- Syntax check / reformat (reuses ConfigSetPage's shared static helpers directly) ----
 
+    @RequirePOST
     public JSONObject doCheckContentSyntax(@QueryParameter String content, @QueryParameter String contentType) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         return validateContentImpl(content, ContentType.valueOf(contentType));
@@ -972,6 +976,7 @@ public class ConfigTemplatesJobAction implements Action {
         }
     }
 
+    @RequirePOST
     public JSONObject doReformatContent(@QueryParameter String content, @QueryParameter String contentType) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         return formatContentImpl(content, ContentType.valueOf(contentType));
