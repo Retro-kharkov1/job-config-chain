@@ -438,6 +438,13 @@ public abstract class ConfigSetPage {
         result.put("contentTypeValue", getContentTypeValue());
         result.put("contentTypeLocked", isContentTypeLocked());
         result.put("versions", versionsAsJsonArray());
+        // A successful save always creates the record if it did not already exist — carried
+        // explicitly (rather than left for the client to infer from outcome.ok) so the in-place
+        // update path can flip the "does not exist yet" banner and reveal the Delete button
+        // without a page reload, mirroring contentTypeLocked's own already-established pattern.
+        // Bug fix (2026-09-28): before this field existed, the client had no way to notice this
+        // state change at all on a Config Set's very first Save.
+        result.put("exists", isExists());
         return result;
     }
 

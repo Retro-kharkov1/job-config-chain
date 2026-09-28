@@ -26,7 +26,15 @@
 
       <div class="ctsync-page-header">
         <h1>${it.displayName}</h1>
-        <div class="ctsync-btn-row">
+        <!-- id added (bug fix, 2026-09-28): a first Save's in-place-update response (see
+             index.js's applyConfigSetNowExists) builds and inserts deleteConfigSetBtn into this
+             row without a page reload. The button itself stays absent from the DOM entirely
+             (never merely hidden) while !it.exists, matching the pre-existing, deliberate
+             "there is nothing to delete before the first save" contract
+             (theDeleteButtonRendersOnALiveConfigSetAndNotOnAnAbsentOne) — it is BUILT, not
+             revealed, exactly like applyContentTypeLocked below already does for the content-type
+             picker's own locked/unlocked swap. -->
+        <div class="ctsync-btn-row" id="pageHeaderBtnRow">
           <j:choose>
             <j:when test="${it.deleted}">
               <button type="button" id="restoreConfigSetBtn" class="jenkins-button"
@@ -64,6 +72,18 @@
                 data-purge-ok-label="${%purge.okLabel}"
                 data-purge-blocked-intro="${%purge.blockedIntro}"/>
 
+      <!-- In-place-update template (bug fix, 2026-09-28): applyConfigSetNowExists clones this to
+           build deleteConfigSetBtn the first time a Save makes it.exists true, instead of
+           location.reload()-ing the whole page — same technique historyRowTemplate/
+           secretRowTemplate already use below, so the button's localized label/title/icon are
+           correctly rendered once by Jelly rather than re-implemented in JS (which would also
+           have to fight JS-string-literal encoding of the wastebasket icon for no benefit). -->
+      <template id="deleteConfigSetBtnTemplate">
+        <button type="button" id="deleteConfigSetBtn"
+                class="jenkins-button jenkins-button--destructive"
+                title="${%deleteConfigSet.title}">&#128465; ${%deleteConfigSet.label}</button>
+      </template>
+
       <j:choose>
         <j:when test="${it.deleted}">
           <!-- Never the "does not exist yet - Save creates it" notice below: a deleted Config Set
@@ -77,7 +97,9 @@
           </div>
         </j:when>
         <j:when test="${!it.exists}">
-          <div class="alert alert-info">${%notExistYet}</div>
+          <!-- Bug fix (2026-09-28): id added so the first Save's in-place-update response (see
+               index.js's saveClicked) can hide this banner without a page reload. -->
+          <div id="notExistYetBanner" class="alert alert-info">${%notExistYet}</div>
         </j:when>
       </j:choose>
 

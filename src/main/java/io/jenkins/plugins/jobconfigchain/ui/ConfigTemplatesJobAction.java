@@ -432,6 +432,10 @@ public class ConfigTemplatesJobAction implements Action {
         result.put("contentTypeValue", getContentTypeValue());
         result.put("contentTypeLocked", isContentTypeLocked());
         result.put("versions", versionsAsJsonArray());
+        // Mirrors ConfigSetPage#jsSave's identically-named field (bug fix, 2026-09-28): a
+        // successful save always creates the property if it did not already exist, and the client
+        // needs this to flip the "does not exist yet" banner in place, without a page reload.
+        result.put("exists", isExists());
         return result;
     }
 

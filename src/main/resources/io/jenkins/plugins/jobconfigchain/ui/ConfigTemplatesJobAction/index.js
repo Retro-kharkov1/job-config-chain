@@ -1208,10 +1208,22 @@ function saveClicked(activate) {
     if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
     document.getElementById('noteField').value = '';
     if (r.contentTypeLocked) { applyContentTypeLocked(r.contentTypeValue); }
+    if (r.exists) { applyConfigSetNowExists(); }
     lastSavedOverrideContent = content;
     lastSavedBaseChainJson = JSON.stringify(baseChainRows);
     lastSavedContentType = currentContentType;
   });
+}
+
+// Bug fix (2026-09-28): this job's very first successful save also flips the record from "does
+// not exist yet" to existing — without a page reload, the stale "does not exist yet" banner must
+// be brought in line with that, exactly mirroring CommonConfigSetPage/index.js's identical fix.
+// This page has no Delete button to reveal (job-scoped Config Templates content is deleted by
+// clearing the base chain and override, not through a standalone lifecycle action), so this only
+// ever touches the banner.
+function applyConfigSetNowExists() {
+  var banner = document.getElementById('notExistYetBanner');
+  if (banner) { banner.style.display = 'none'; }
 }
 
 function discardAllChangesClicked() {
