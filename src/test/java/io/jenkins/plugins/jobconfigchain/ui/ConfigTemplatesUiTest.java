@@ -534,8 +534,24 @@ public class ConfigTemplatesUiTest {
             if (src.contains("/monaco/")) {
                 continue; // vendored AMD loader — not plugin-authored, not in scope for this guard
             }
+            if (!src.contains("jobconfigchain")) {
+                // Not one of THIS plugin's own <script src="${h.getViewResource(it, 'index.js')}">
+                // resources (whose resolved path always contains this plugin's package segment,
+                // e.g. .../io/jenkins/plugins/jobconfigchain/ui/.../index.js) — every rendered
+                // Jenkins page also loads core's own external bundles (behavior.js/prototype.js
+                // etc. via <script src="...">), and gluing an unrelated multi-hundred-KB core
+                // bundle onto our own script text before parsing produced spurious "invalid JS"
+                // failures with no real defect behind them. Only this plugin's own script is in
+                // scope for this guard.
+                continue;
+            }
             URL url = new URL(new URL(wc.getContextPath()), src);
-            combined.append(wc.getPage(url).getWebResponse().getContentAsString()).append('\n');
+            // Force UTF-8 rather than trusting the server-declared/default charset: static .js
+            // resources served this way don't reliably get an explicit charset in their
+            // Content-Type, and this plugin's own JS source is UTF-8 (e.g. the em dash in
+            // baseChainVersionLabel), so the untyped overload silently mojibake'd it.
+            combined.append(wc.getPage(url).getWebResponse()
+                    .getContentAsString(java.nio.charset.StandardCharsets.UTF_8)).append('\n');
         }
         return combined.toString();
     }
