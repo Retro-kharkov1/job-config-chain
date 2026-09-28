@@ -8,22 +8,22 @@ import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSetVersion;
 import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StepSupportTest {
 
-    @Rule
-    public TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @TempDir
+    File temporaryFolder;
 
     @Test
     public void effectiveBaseChainDefaultsToOwnProjectActiveWhenEnvVersionHasNoDeclaredChain() throws Exception {
@@ -50,7 +50,7 @@ public class StepSupportTest {
 
     @Test
     public void resolveEffectiveFoldsMultiEntryChainAndReturnsResolvedVersions() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
 
         ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         int aV = teamA.addVersion("{\"a\":1}", "seed", "test", 1L);
@@ -79,7 +79,7 @@ public class StepSupportTest {
 
     @Test
     public void resolveEffectiveThrowsAbortExceptionForMissingProject() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         List<BaseConfigReference> chain = Collections.singletonList(BaseConfigReference.active("no-such-project"));
 
         AbortException ex = assertThrows(AbortException.class,
@@ -89,7 +89,7 @@ public class StepSupportTest {
 
     @Test
     public void resolveEffectiveThrowsAbortExceptionForMissingPinnedVersion() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         teamA.addVersion("{\"a\":1}", "seed", "test", 1L);
         repository.save(teamA);
@@ -105,7 +105,7 @@ public class StepSupportTest {
     @Test
     public void resolveEffectiveThrowsAbortExceptionForMismatchedContentTypesInChain() throws Exception {
         // FR-62: pipeline-path half of the cross-chain type-consistency invariant.
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
 
         ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         teamA.addVersion("{\"a\":1}", "seed", "test", 1L);
@@ -130,7 +130,7 @@ public class StepSupportTest {
 
     @Test
     public void resolveEffectiveThrowsAbortExceptionForMissingActiveVersion() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         // no version added, never activated -> getActiveVersion() is null
         repository.save(teamA);
@@ -161,7 +161,7 @@ public class StepSupportTest {
         // parameter is role-agnostic (it only ever reads getContentType(), never getRole()/
         // getEnvironment()) — a COMMON-role Config Set exercises the exact same fallback-content-type
         // code path the old ENV-role fixture did.
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         ConfigSet env = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Env", ContentType.XML);
         ConfigSetVersion standalone = new ConfigSetVersion(1, "<root><a>1</a></root>", "standalone", "test", 1L,
                 Collections.emptyList(), true);
@@ -174,7 +174,7 @@ public class StepSupportTest {
 
     @Test
     public void resolveUseBaseOnlyResolvesActiveCommonVersionDirectly() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         ConfigSet common = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         int v1 = common.addVersion("{\"a\":1}", "seed", "test", 1L);
         common.addVersion("{\"a\":2}", "second", "test", 2L);
@@ -189,7 +189,7 @@ public class StepSupportTest {
 
     @Test
     public void resolveUseBaseOnlyPinsExplicitVersion() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         ConfigSet common = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         common.addVersion("{\"a\":1}", "seed", "test", 1L);
         int v2 = common.addVersion("{\"a\":2}", "second", "test", 2L);
@@ -203,7 +203,7 @@ public class StepSupportTest {
 
     @Test
     public void resolveUseBaseOnlyThrowsAbortExceptionForMissingExplicitVersion() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         ConfigSet common = new ConfigSet("proj", ConfigSetRole.COMMON, null, "Common", ContentType.JSON);
         common.addVersion("{\"a\":1}", "seed", "test", 1L);
         repository.save(common);
@@ -218,7 +218,7 @@ public class StepSupportTest {
     public void resolveUseBaseOnlyThrowsAbortExceptionForUnknownConfigKey() throws Exception {
         // Matrix rows 6/7 miss (tech-lead scoping decision, 2026-09-14, pipeline-steps.md §3(b)):
         // configKey names a Config Set that does not exist as a global COMMON Config Set at all.
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
 
         AbortException ex = assertThrows(AbortException.class,
                 () -> StepSupport.resolveUseBaseOnly(repository, "no-such-key", null));

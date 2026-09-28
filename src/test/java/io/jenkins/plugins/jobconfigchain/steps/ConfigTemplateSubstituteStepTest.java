@@ -17,19 +17,20 @@ import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@code configTemplateSubstitute} end-to-end pipeline tests against the job-scoped resolution
@@ -40,10 +41,15 @@ import static org.junit.Assert.assertTrue;
  * {@code environment} call parameter — that calling form (and {@code ConfigSetRole.ENV}/
  * {@code EnvConfigSetPage} themselves) was retired in full, not deprecated.
  */
+@WithJenkins
 public class ConfigTemplateSubstituteStepTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
+    private JenkinsRule jenkins;
+
+    @BeforeEach
+    public void setUp(JenkinsRule rule) {
+        jenkins = rule;
+    }
 
     private ConfigSet seedCommon(String projectKey, String contentJson) throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository();
@@ -142,8 +148,8 @@ public class ConfigTemplateSubstituteStepTest {
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
         jenkins.assertLogContains("RESULT:password=S3cr3tDbPass!", run);
-        assertFalse("must never fall back to the raw placeholder text",
-                jenkins.getLog(run).contains("password=" + SecretPlaceholder.VALUE));
+        assertFalse(jenkins.getLog(run).contains("password=" + SecretPlaceholder.VALUE),
+                "must never fall back to the raw placeholder text");
     }
 
     @Test
@@ -164,8 +170,8 @@ public class ConfigTemplateSubstituteStepTest {
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
         jenkins.assertLogContains("does-not-exist-credential-id", run);
         jenkins.assertLogContains("Database.Password", run);
-        assertTrue("must not report success while silently substituting a placeholder",
-                run.getResult() == Result.FAILURE);
+        assertTrue(run.getResult() == Result.FAILURE,
+                "must not report success while silently substituting a placeholder");
     }
 
     @Test
@@ -189,8 +195,8 @@ public class ConfigTemplateSubstituteStepTest {
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
         jenkins.assertLogContains("RESULT:password=S3cr3tDbPass!", run);
-        assertFalse("must never fall back to the raw placeholder text",
-                jenkins.getLog(run).contains("password=" + SecretPlaceholder.VALUE));
+        assertFalse(jenkins.getLog(run).contains("password=" + SecretPlaceholder.VALUE),
+                "must never fall back to the raw placeholder text");
     }
 
     @Test
@@ -213,8 +219,8 @@ public class ConfigTemplateSubstituteStepTest {
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
         jenkins.assertLogContains("RESULT:password=S3cr3tDbPass!", run);
-        assertFalse("must never fall back to the raw placeholder text",
-                jenkins.getLog(run).contains("password=" + SecretPlaceholder.VALUE));
+        assertFalse(jenkins.getLog(run).contains("password=" + SecretPlaceholder.VALUE),
+                "must never fall back to the raw placeholder text");
     }
 
     @Test
@@ -234,8 +240,8 @@ public class ConfigTemplateSubstituteStepTest {
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
         jenkins.assertLogContains("does-not-exist-credential-id", run);
         jenkins.assertLogContains("Database.Password", run);
-        assertTrue("must not report success while silently substituting a placeholder",
-                run.getResult() == Result.FAILURE);
+        assertTrue(run.getResult() == Result.FAILURE,
+                "must not report success while silently substituting a placeholder");
     }
 
     @Test
@@ -254,8 +260,8 @@ public class ConfigTemplateSubstituteStepTest {
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
         jenkins.assertLogContains("does-not-exist-credential-id", run);
         jenkins.assertLogContains("Database.Password", run);
-        assertTrue("must not report success while silently substituting a placeholder",
-                run.getResult() == Result.FAILURE);
+        assertTrue(run.getResult() == Result.FAILURE,
+                "must not report success while silently substituting a placeholder");
     }
 
     // --- UF-7: matrix row 1, default call — own override AND folded base BOTH land in one call ----
@@ -510,12 +516,11 @@ public class ConfigTemplateSubstituteStepTest {
 
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
         ConfigDeploymentBinding binding = bindingRepository.find(run.getExternalizableId());
-        assertNotNull("a binding must exist under this run's own externalizableId with zero parameters",
-                binding);
-        assertEquals("ownConfigVersionNumber must be the job's own resolved version number",
-                1, binding.getOwnConfigVersionNumber());
-        assertEquals("the frozen chain must record the common project this job's own chain referenced",
-                1, binding.getResolvedBaseChain().size());
+        assertNotNull(binding, "a binding must exist under this run's own externalizableId with zero parameters");
+        assertEquals(1, binding.getOwnConfigVersionNumber(),
+                "ownConfigVersionNumber must be the job's own resolved version number");
+        assertEquals(1, binding.getResolvedBaseChain().size(),
+                "the frozen chain must record the common project this job's own chain referenced");
         assertEquals("subproj3", binding.getResolvedBaseChain().get(0).getProjectKey());
         assertEquals(1, binding.getResolvedBaseChain().get(0).getVersionNumber());
     }
@@ -536,8 +541,7 @@ public class ConfigTemplateSubstituteStepTest {
 
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
         ConfigDeploymentBinding binding = bindingRepository.find(run.getExternalizableId());
-        assertNotNull("a binding must exist under this run's own externalizableId with zero parameters",
-                binding);
+        assertNotNull(binding, "a binding must exist under this run's own externalizableId with zero parameters");
         assertEquals(1, binding.getOwnConfigVersionNumber());
     }
 
@@ -557,8 +561,7 @@ public class ConfigTemplateSubstituteStepTest {
 
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
         ConfigDeploymentBinding binding = bindingRepository.find(run.getExternalizableId());
-        assertNotNull("a binding must exist under this run's own externalizableId with zero parameters",
-                binding);
+        assertNotNull(binding, "a binding must exist under this run's own externalizableId with zero parameters");
         assertEquals(1, binding.getOwnConfigVersionNumber());
     }
 
@@ -577,8 +580,8 @@ public class ConfigTemplateSubstituteStepTest {
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
 
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
-        assertNull("an explicit 'version' must suppress the binding write entirely (FR-98)",
-                bindingRepository.find(run.getExternalizableId()));
+        assertNull(bindingRepository.find(run.getExternalizableId()),
+                "an explicit 'version' must suppress the binding write entirely (FR-98)");
     }
 
     @Test
@@ -596,8 +599,8 @@ public class ConfigTemplateSubstituteStepTest {
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
 
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
-        assertNull("an explicit 'version' must suppress the binding write entirely (FR-98)",
-                bindingRepository.find(run.getExternalizableId()));
+        assertNull(bindingRepository.find(run.getExternalizableId()),
+                "an explicit 'version' must suppress the binding write entirely (FR-98)");
     }
 
     @Test
@@ -615,8 +618,8 @@ public class ConfigTemplateSubstituteStepTest {
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
 
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
-        assertNull("an explicit 'version' must suppress the binding write entirely (FR-98)",
-                bindingRepository.find(run.getExternalizableId()));
+        assertNull(bindingRepository.find(run.getExternalizableId()),
+                "an explicit 'version' must suppress the binding write entirely (FR-98)");
     }
 
     @Test
@@ -685,8 +688,8 @@ public class ConfigTemplateSubstituteStepTest {
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
-        assertFalse("a Run's very first substitution under its own identity must not be a warned-about fallback",
-                jenkins.getLog(run).contains("falling back"));
+        assertFalse(jenkins.getLog(run).contains("falling back"),
+                "a Run's very first substitution under its own identity must not be a warned-about fallback");
     }
 
     @Test
@@ -702,8 +705,8 @@ public class ConfigTemplateSubstituteStepTest {
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
-        assertFalse("a Run's very first substitution under its own identity must not be a warned-about fallback",
-                jenkins.getLog(run).contains("falling back"));
+        assertFalse(jenkins.getLog(run).contains("falling back"),
+                "a Run's very first substitution under its own identity must not be a warned-about fallback");
     }
 
     @Test
@@ -719,8 +722,8 @@ public class ConfigTemplateSubstituteStepTest {
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
-        assertFalse("a Run's very first substitution under its own identity must not be a warned-about fallback",
-                jenkins.getLog(run).contains("falling back"));
+        assertFalse(jenkins.getLog(run).contains("falling back"),
+                "a Run's very first substitution under its own identity must not be a warned-about fallback");
     }
 
     @Test
@@ -948,16 +951,16 @@ public class ConfigTemplateSubstituteStepTest {
                 .filter(l -> l.contains("SECOND:"))
                 .findFirst().orElseThrow();
 
-        assertEquals("redeployFromRun must replay Run A's frozen chain byte-identically in Run B",
-                firstOutput.replace("FIRST:", ""), secondOutput.replace("SECOND:", ""));
+        assertEquals(firstOutput.replace("FIRST:", ""), secondOutput.replace("SECOND:", ""),
+                "redeployFromRun must replay Run A's frozen chain byte-identically in Run B");
         jenkins.assertLogContains("SECOND:x=v1-value", second);
 
         // FR-102: Run B's own successful substitution must ALSO forward-chain a fresh binding
         // keyed to ITS OWN identity, so a future redeploy could in turn target Run B.
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
         ConfigDeploymentBinding ownBindingForSecond = bindingRepository.find(second.getExternalizableId());
-        assertNotNull("FR-102: redeployFromRun must still forward-chain a binding under the CURRENT run",
-                ownBindingForSecond);
+        assertNotNull(ownBindingForSecond,
+                "FR-102: redeployFromRun must still forward-chain a binding under the CURRENT run");
         assertEquals(1, ownBindingForSecond.getOwnConfigVersionNumber());
     }
 
@@ -1002,14 +1005,14 @@ public class ConfigTemplateSubstituteStepTest {
                 .filter(l -> l.contains("SECOND:"))
                 .findFirst().orElseThrow();
 
-        assertEquals("redeployFromRun must replay Run A's frozen chain byte-identically in Run B",
-                firstOutput.replace("FIRST:", ""), secondOutput.replace("SECOND:", ""));
+        assertEquals(firstOutput.replace("FIRST:", ""), secondOutput.replace("SECOND:", ""),
+                "redeployFromRun must replay Run A's frozen chain byte-identically in Run B");
         jenkins.assertLogContains("SECOND:x=v1-value", second);
 
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
         ConfigDeploymentBinding ownBindingForSecond = bindingRepository.find(second.getExternalizableId());
-        assertNotNull("FR-102: redeployFromRun must still forward-chain a binding under the CURRENT run",
-                ownBindingForSecond);
+        assertNotNull(ownBindingForSecond,
+                "FR-102: redeployFromRun must still forward-chain a binding under the CURRENT run");
         assertEquals(1, ownBindingForSecond.getOwnConfigVersionNumber());
     }
 
@@ -1054,14 +1057,14 @@ public class ConfigTemplateSubstituteStepTest {
                 .filter(l -> l.contains("SECOND:"))
                 .findFirst().orElseThrow();
 
-        assertEquals("redeployFromRun must replay Run A's frozen chain byte-identically in Run B",
-                firstOutput.replace("FIRST:", ""), secondOutput.replace("SECOND:", ""));
+        assertEquals(firstOutput.replace("FIRST:", ""), secondOutput.replace("SECOND:", ""),
+                "redeployFromRun must replay Run A's frozen chain byte-identically in Run B");
         jenkins.assertLogContains("SECOND:x=v1-value", second);
 
         ConfigDeploymentBindingRepository bindingRepository = new ConfigDeploymentBindingRepository();
         ConfigDeploymentBinding ownBindingForSecond = bindingRepository.find(second.getExternalizableId());
-        assertNotNull("FR-102: redeployFromRun must still forward-chain a binding under the CURRENT run",
-                ownBindingForSecond);
+        assertNotNull(ownBindingForSecond,
+                "FR-102: redeployFromRun must still forward-chain a binding under the CURRENT run");
         assertEquals(1, ownBindingForSecond.getOwnConfigVersionNumber());
     }
 
@@ -1126,14 +1129,14 @@ public class ConfigTemplateSubstituteStepTest {
 
         // Sanity check first: A and B must genuinely differ, or the byte-identical assertion below
         // would be vacuous.
-        assertFalse("Configuration A and Configuration B outputs must differ, otherwise this test is vacuous",
-                build1Output.replace("BUILD1:", "").equals(build2Output.replace("BUILD2:", "")));
+        assertFalse(build1Output.replace("BUILD1:", "").equals(build2Output.replace("BUILD2:", "")),
+                "Configuration A and Configuration B outputs must differ, otherwise this test is vacuous");
 
         // The core assertion: rebuilding via redeployFromRun: '1' on build #3 must reproduce build #1's
         // ORIGINAL (Configuration A / v1) output byte-identically, not Configuration B / v2, even though
         // v2 is now the currently-active version.
-        assertEquals("build #3's redeployFromRun: '1' replay must be byte-identical to build #1's original output",
-                build1Output.replace("BUILD1:", ""), build3Output.replace("BUILD3:", ""));
+        assertEquals(build1Output.replace("BUILD1:", ""), build3Output.replace("BUILD3:", ""),
+                "build #3's redeployFromRun: '1' replay must be byte-identical to build #1's original output");
     }
 
     @Test
@@ -1187,11 +1190,11 @@ public class ConfigTemplateSubstituteStepTest {
         String build3Output = jenkins.getLog(build3).lines()
                 .filter(l -> l.contains("BUILD3:")).findFirst().orElseThrow();
 
-        assertFalse("Configuration A and Configuration B outputs must differ, otherwise this test is vacuous",
-                build1Output.replace("BUILD1:", "").equals(build2Output.replace("BUILD2:", "")));
+        assertFalse(build1Output.replace("BUILD1:", "").equals(build2Output.replace("BUILD2:", "")),
+                "Configuration A and Configuration B outputs must differ, otherwise this test is vacuous");
 
-        assertEquals("build #3's redeployFromRun: '1' replay must be byte-identical to build #1's original output",
-                build1Output.replace("BUILD1:", ""), build3Output.replace("BUILD3:", ""));
+        assertEquals(build1Output.replace("BUILD1:", ""), build3Output.replace("BUILD3:", ""),
+                "build #3's redeployFromRun: '1' replay must be byte-identical to build #1's original output");
     }
 
     @Test
@@ -1245,11 +1248,11 @@ public class ConfigTemplateSubstituteStepTest {
         String build3Output = jenkins.getLog(build3).lines()
                 .filter(l -> l.contains("BUILD3:")).findFirst().orElseThrow();
 
-        assertFalse("Configuration A and Configuration B outputs must differ, otherwise this test is vacuous",
-                build1Output.replace("BUILD1:", "").equals(build2Output.replace("BUILD2:", "")));
+        assertFalse(build1Output.replace("BUILD1:", "").equals(build2Output.replace("BUILD2:", "")),
+                "Configuration A and Configuration B outputs must differ, otherwise this test is vacuous");
 
-        assertEquals("build #3's redeployFromRun: '1' replay must be byte-identical to build #1's original output",
-                build1Output.replace("BUILD1:", ""), build3Output.replace("BUILD3:", ""));
+        assertEquals(build1Output.replace("BUILD1:", ""), build3Output.replace("BUILD3:", ""),
+                "build #3's redeployFromRun: '1' replay must be byte-identical to build #1's original output");
     }
 
     // --- Matrix rows 6/7 (useBase=true, configKey=X[, version]) -----------------------------
@@ -1587,8 +1590,8 @@ public class ConfigTemplateSubstituteStepTest {
         WorkflowRun runB = jenkins.assertBuildStatus(Result.SUCCESS, jobB.scheduleBuild2(0));
 
         jenkins.assertLogContains("B_RESULT:x=job-b-own-value", runB);
-        assertFalse("Job B's build must never resolve Job A's own local config content",
-                jenkins.getLog(runB).contains("JOB-A-OWN-SECRET-MUST-NEVER-LEAK-TO-JOB-B"));
+        assertFalse(jenkins.getLog(runB).contains("JOB-A-OWN-SECRET-MUST-NEVER-LEAK-TO-JOB-B"),
+                "Job B's build must never resolve Job A's own local config content");
     }
 
     @Test
@@ -1632,7 +1635,7 @@ public class ConfigTemplateSubstituteStepTest {
                         + "}", true));
         WorkflowRun runB = jenkins.assertBuildStatus(Result.SUCCESS, jobB.scheduleBuild2(0));
         jenkins.assertLogContains("B_RESULT:x=fromCommon", runB);
-        assertFalse("Job B's 'useBase: true' call must never resolve Job A's own pinned-version content",
-                jenkins.getLog(runB).contains("JOB-A-VERSION-PIN-SECRET-MUST-NEVER-LEAK-TO-JOB-B"));
+        assertFalse(jenkins.getLog(runB).contains("JOB-A-VERSION-PIN-SECRET-MUST-NEVER-LEAK-TO-JOB-B"),
+                "Job B's 'useBase: true' call must never resolve Job A's own pinned-version content");
     }
 }

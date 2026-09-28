@@ -9,9 +9,10 @@ import io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
 import java.util.Collections;
 
@@ -23,10 +24,15 @@ import java.util.Collections;
  * {@code projectKey}/{@code environment} parameter — only {@code file}, {@code useBase}, {@code
  * configKey}, {@code version}, {@code redeployFromRun}.
  */
+@WithJenkins
 public class SetupConfigTemplateStepTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
+    private JenkinsRule jenkins;
+
+    @BeforeEach
+    public void setUp(JenkinsRule rule) {
+        jenkins = rule;
+    }
 
     private void seedCommon(String configKey, String commonJson) throws Exception {
         ConfigSetRepository repository = new ConfigSetRepository();
