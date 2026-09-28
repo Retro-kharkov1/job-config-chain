@@ -626,6 +626,7 @@ public abstract class ConfigSetPage {
      * {@code previewMerge}'s).</li>
      * </ol>
      */
+    @RequirePOST
     public JSONObject doActivateVersion(@QueryParameter int version) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         return activateImpl(version);
@@ -726,6 +727,7 @@ public abstract class ConfigSetPage {
      * sibling below — see {@link #doActivateVersion(int)}'s javadoc for the full root-cause chain
      * behind why that collision matters and why the JS-facing sibling takes a single JSON string.</p>
      */
+    @RequirePOST
     public JSONObject doRegisterSecret(@QueryParameter String path, @QueryParameter String credentialId) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         return addSecretImpl(path, credentialId);
@@ -816,6 +818,7 @@ public abstract class ConfigSetPage {
      * collision matters (same reasoning that named the add pair {@code doRegisterSecret}/
      * {@code addSecret} rather than {@code doAddSecret}/{@code addSecret}).</p>
      */
+    @RequirePOST
     public JSONObject doUnbindSecret(@QueryParameter String path) {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         return removeSecretImpl(path);
