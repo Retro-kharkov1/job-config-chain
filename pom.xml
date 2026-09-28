@@ -131,6 +131,7 @@
              with no explicit <version>) remain managed through this bom's inherited
              dependencyManagement chain (bom-2.568.x -> bom-2.580.x -> bom-weekly),
              confirmed by reading jenkinsci/bom's bom-weekly/pom.xml on GitHub master. -->
+        <groupId>io.jenkins.tools.bom</groupId>
         <artifactId>bom-${jenkins.baseline}.x</artifactId>
         <version>7093.v37de7b_4a_8a_4f</version>
         <type>pom</type>
