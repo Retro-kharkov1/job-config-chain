@@ -12,6 +12,13 @@
   wiring and the doComputeMerge/jsPreviewMerge call shape genuinely differ between the two hosts
   (EnvConfigSetPage's explicitlyStandalone branch (see base-chains.md) vs. ConfigTemplatesJobAction's simpler
   empty-chain-resolves-to-{} contract), so the script itself is NOT shared, only this markup shell.
+
+  CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): every onclick="..."
+  that used to live on this markup is removed — the sole current consumer, ConfigTemplatesJobAction,
+  wires all of it in its own external index.js by id (generateTemplateBtn, backTo3PanelBtn,
+  copyTemplateBtn, loadComparedBtn, backToEditingBtn, modeEditBtn, saveBtn, saveActivateBtn,
+  discardAllBtn) or by `input[name=contentTypeRadio]` selector, exactly mirroring the removed
+  inline handlers.
 -->
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form">
   <div id="editorDetails">
@@ -39,10 +46,10 @@
       <div class="ctsync-btn-row" style="margin:0">
         <button type="button" id="generateTemplateBtn" class="jenkins-button"
                title="${%generateTemplate.title(it.ownScopeLabel)}"
-               onclick="showGeneratedTemplateView();">&#128203; ${%generateTemplate.label}</button>
+               >&#128203; ${%generateTemplate.label}</button>
         <button type="button" id="backTo3PanelBtn" class="jenkins-button" style="display:none"
                title="${%backTo3Panel.title}"
-               onclick="backTo3PanelView();">&#8592; ${%backTo3Panel.label}</button>
+               >&#8592; ${%backTo3Panel.label}</button>
       </div>
     </div>
 
@@ -57,7 +64,7 @@
       <div style="margin-top:4px">
         <button type="button" id="copyTemplateBtn" class="jenkins-button"
                 title="${%copyTemplate.title}"
-                onclick="copyGeneratedTemplate();">&#128203; ${%copyTemplate.label}</button>
+                >&#128203; ${%copyTemplate.label}</button>
       </div>
     </div>
 
@@ -77,10 +84,10 @@
         <span>
           <button type="button" id="loadComparedBtn" class="jenkins-button jenkins-button--primary"
                  title="${%loadIntoEditor.title}"
-                 onclick="loadComparedIntoEditor();">${%loadIntoEditor.label}</button>
+                 >${%loadIntoEditor.label}</button>
           <button type="button" id="backToEditingBtn" class="jenkins-button"
                  title="${%backToEditing.title}"
-                 onclick="switchToEditMode();">${%backToEditing.label}</button>
+                 >${%backToEditing.label}</button>
         </span>
       </div>
 
@@ -104,9 +111,9 @@
           <j:otherwise>
             <span id="contentTypeUnlockedGroup">
               <span style="color:#666;display:block;margin-bottom:4px">&#9432; choose once — locked forever after the first Save</span>
-              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="JSON" checked="checked" onclick="onContentTypeChange('JSON');"/> JSON</label>
-              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="XML" onclick="onContentTypeChange('XML');"/> XML</label>
-              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="YAML" onclick="onContentTypeChange('YAML');"/> YAML</label>
+              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="JSON" checked="checked"/> JSON</label>
+              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="XML"/> XML</label>
+              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="YAML"/> YAML</label>
             </span>
           </j:otherwise>
         </j:choose>
@@ -142,7 +149,7 @@
             <button type="button" id="modeEditBtn"
                    class="jenkins-button jenkins-button--primary" title="${%modeEdit.title}"
                    style="${it.versions.size() &lt; 2 ? 'display:none' : ''}"
-                   onclick="switchToEditMode();">&#9998; ${%modeEdit.label}</button>
+                   >&#9998; ${%modeEdit.label}</button>
             <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
           </div>
         </div>
@@ -163,12 +170,12 @@
 
     <div class="ctsync-btn-row">
       <button type="button" id="saveBtn" class="jenkins-button jenkins-button--primary"
-              title="${%save.title}" onclick="saveClicked(false);">${%save.label}</button>
+              title="${%save.title}">${%save.label}</button>
       <button type="button" id="saveActivateBtn"
               class="jenkins-button"
-              title="${%saveActivate.title}" onclick="saveClicked(true);">${%saveActivate.label}</button>
+              title="${%saveActivate.title}">${%saveActivate.label}</button>
       <button type="button" id="discardAllBtn" class="jenkins-button jenkins-button--destructive"
-              title="${%discardAll.title}" onclick="discardAllChangesClicked();">${%discardAll.label}</button>
+              title="${%discardAll.title}">${%discardAll.label}</button>
     </div>
   </section>
   </div>

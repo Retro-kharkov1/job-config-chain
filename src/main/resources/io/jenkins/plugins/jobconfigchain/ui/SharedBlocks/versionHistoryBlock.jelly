@@ -26,10 +26,12 @@
             <tr class="ctsync-empty-state-row"><td colspan="7">${%emptyState.noVersions}</td></tr>
           </j:if>
           <j:forEach var="v" items="${it.versions}">
+            <!-- CSP migration: onclick/onkeydown removed — ConfigTemplatesJobAction/index.js wires
+                 this via event delegation on #versionHistoryTbody, keyed off data-version-number
+                 (see that file's "Version history row delegation" section). -->
             <tr id="historyRow-${v.versionNumber}" class="ctsync-history-row"
-                tabindex="0" role="button"
-                onclick="selectHistoryRow(${v.versionNumber});"
-                onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectHistoryRow(${v.versionNumber}); }">
+                data-version-number="${v.versionNumber}"
+                tabindex="0" role="button">
               <td data-th="${%column.version}">v${v.versionNumber}</td>
               <td data-th="${%column.created}" class="ctsync-created-cell" data-epoch="${v.timestampEpochMillis}">${v.timestampEpochMillis}</td>
               <td data-th="${%column.createdBy}">${v.author}</td>
@@ -48,8 +50,7 @@
                     </span>
                   </j:when>
                   <j:otherwise>
-                    <a href="#" class="ctsync-basechain-toggle"
-                       onclick="event.stopPropagation(); event.preventDefault(); toggleBaseChainDetail(${v.versionNumber});">
+                    <a href="#" class="ctsync-basechain-toggle" data-version-number="${v.versionNumber}">
                       &#9656; ${v.baseChain.size()} <j:choose>
                         <j:when test="${v.baseChain.size() == 1}">base</j:when>
                         <j:otherwise>bases</j:otherwise>
@@ -87,8 +88,8 @@
                   </j:when>
                   <j:otherwise>
                     <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
-                            title="Activate version ${v.versionNumber} without changing the editor content"
-                            onclick="event.stopPropagation(); activateVersion(${v.versionNumber});">${%activate.label}</button>
+                            data-version-number="${v.versionNumber}"
+                            title="Activate version ${v.versionNumber} without changing the editor content">${%activate.label}</button>
                   </j:otherwise>
                 </j:choose>
               </td>

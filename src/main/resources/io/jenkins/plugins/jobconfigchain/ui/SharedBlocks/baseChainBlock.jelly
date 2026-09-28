@@ -27,8 +27,8 @@
       <j:if test="${it.explicitlyStandaloneSupported}">
         <div class="ctsync-standalone-row">
           <label>
-            <input type="checkbox" id="explicitlyStandaloneCheckbox"
-                   onchange="onExplicitlyStandaloneChange(this.checked);"/>
+            <!-- CSP migration: onchange removed — see this file's top-of-file note. -->
+            <input type="checkbox" id="explicitlyStandaloneCheckbox"/>
             ${%explicitlyStandalone.label}
           </label>
         </div>
@@ -67,8 +67,7 @@
       </div>
       <div class="ctsync-btn-row">
         <button type="button" id="addBaseChainRowBtn" class="jenkins-button"
-                title="${%addBase.title}"
-                onclick="addBaseChainRow();">&#10133; ${%addBase.label}</button>
+                title="${%addBase.title}">&#10133; ${%addBase.label}</button>
       </div>
     </div>
   </f:section>
