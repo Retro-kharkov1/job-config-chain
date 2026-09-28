@@ -34,7 +34,14 @@ The wrapper computes the plugin's version from git history via the
 delegating to Maven, and passes it as `-Drevision=<computed SemVer>` (Maven's
 [CI Friendly Versions](https://maven.apache.org/maven-ci-friendly.html) mechanism — see `pom.xml`).
 If `dotnet-gitversion` is not installed, the build still succeeds and falls back to the default
-`revision` in `pom.xml` (`0.0.0-SNAPSHOT`).
+`revision` in `pom.xml` (`0.0.0-SNAPSHOT`). The packaged `.hpi`'s full version is
+`${revision}-${changelist}` — `changelist` defaults to `999999-SNAPSHOT` for any build that isn't
+running through the official Jenkins CD pipeline (`.github/workflows/cd.yaml`), so a local/Docker
+build's version string looks like `<computed SemVer>-999999-SNAPSHOT` (or
+`0.0.0-SNAPSHOT-999999-SNAPSHOT` without GitVersion). This `changelist` property is the Jenkins
+Hosting Checker's / [official CD process](https://www.jenkins.io/doc/developer/publishing/releasing-cd/)'s
+required versioning hook, layered on top of this repo's own GitVersion-based `revision` rather than
+replacing it.
 
 ### Zero-host-tooling option: Docker build
 
