@@ -2,17 +2,17 @@ package io.jenkins.plugins.jobconfigchain.persistence;
 
 import io.jenkins.plugins.jobconfigchain.model.ConfigDeploymentBinding;
 import io.jenkins.plugins.jobconfigchain.model.ResolvedBaseVersion;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Re-keyed (tech-lead scoping decision, 2026-09-14, pipeline-steps.md §1) to a pure Run-identity
@@ -22,12 +22,12 @@ import static org.junit.Assert.assertNotNull;
  */
 public class ConfigDeploymentBindingRepositoryTest {
 
-    @Rule
-    public TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @TempDir
+    File temporaryFolder;
 
     @Test
     public void createsThenUpdatesInPlaceRatherThanDuplicating() throws Exception {
-        ConfigDeploymentBindingRepository repository = new ConfigDeploymentBindingRepository(temporaryFolder.newFolder());
+        ConfigDeploymentBindingRepository repository = new ConfigDeploymentBindingRepository(temporaryFolder);
 
         repository.save("proj#1.2.3", Collections.singletonList(new ResolvedBaseVersion("proj", 1)), 1, 1000L);
         repository.save("proj#1.2.3", Collections.singletonList(new ResolvedBaseVersion("proj", 2)), 3, 2000L);
@@ -42,13 +42,13 @@ public class ConfigDeploymentBindingRepositoryTest {
 
     @Test
     public void findReturnsNullWhenNoBindingExists() throws Exception {
-        ConfigDeploymentBindingRepository repository = new ConfigDeploymentBindingRepository(temporaryFolder.newFolder());
+        ConfigDeploymentBindingRepository repository = new ConfigDeploymentBindingRepository(temporaryFolder);
         assertNull(repository.find("proj#9.9.9"));
     }
 
     @Test
     public void distinctBuildVersionsProduceDistinctBindings() throws Exception {
-        ConfigDeploymentBindingRepository repository = new ConfigDeploymentBindingRepository(temporaryFolder.newFolder());
+        ConfigDeploymentBindingRepository repository = new ConfigDeploymentBindingRepository(temporaryFolder);
         repository.save("proj#1.0.0", Collections.singletonList(new ResolvedBaseVersion("proj", 1)), 1, 1000L);
         repository.save("proj#2.0.0", Collections.singletonList(new ResolvedBaseVersion("proj", 2)), 2, 2000L);
 
@@ -60,7 +60,7 @@ public class ConfigDeploymentBindingRepositoryTest {
 
     @Test
     public void multiEntryChainRoundTripsInOrderThroughRealXmlFile() throws Exception {
-        ConfigDeploymentBindingRepository repository = new ConfigDeploymentBindingRepository(temporaryFolder.newFolder());
+        ConfigDeploymentBindingRepository repository = new ConfigDeploymentBindingRepository(temporaryFolder);
         List<ResolvedBaseVersion> chain = Arrays.asList(
                 new ResolvedBaseVersion("team-a-common", 5),
                 new ResolvedBaseVersion("team-b-common", 2));
