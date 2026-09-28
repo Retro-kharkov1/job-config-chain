@@ -3,17 +3,17 @@ package io.jenkins.plugins.jobconfigchain.ui;
 import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
 import io.jenkins.plugins.jobconfigchain.model.SecretPlaceholder;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Plain JUnit unit tests for {@link JobConfigTemplateProperty} — no {@code JenkinsRule} needed for
@@ -28,7 +28,7 @@ public class JobConfigTemplatePropertyTest {
         assertTrue(property.getVersions().isEmpty());
         assertEquals(0, property.getActiveVersionNumber());
         assertNull(property.getActiveVersion());
-        assertNull("contentType is null until the first version exists", property.getContentType());
+        assertNull(property.getContentType(), "contentType is null until the first version exists");
         assertTrue(property.getSecretsManifest().isEmpty());
     }
 
@@ -69,8 +69,8 @@ public class JobConfigTemplatePropertyTest {
 
         // A second save's contentType parameter must be ignored — the committed type is immutable.
         property.addVersion("<b/>", "second, ignored param", "alice", 2L, Collections.emptyList(), "YAML");
-        assertEquals("contentType must remain locked to the first save's value",
-                ContentType.XML, property.getContentType());
+        assertEquals(ContentType.XML, property.getContentType(),
+                "contentType must remain locked to the first save's value");
     }
 
     @Test
@@ -118,8 +118,8 @@ public class JobConfigTemplatePropertyTest {
         assertTrue(removed);
         assertFalse(property.getSecretsManifest().containsKey("db.password"));
 
-        assertFalse("removing a never-bound path returns false",
-                property.removeSecretManifestEntry("never.bound"));
+        assertFalse(property.removeSecretManifestEntry("never.bound"),
+                "removing a never-bound path returns false");
     }
 
     @Test
@@ -129,11 +129,11 @@ public class JobConfigTemplatePropertyTest {
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         property.addVersion("{}", "v1", "alice", 1L, Collections.emptyList(), null);
         property.putSecretManifestEntry("a.b", "cred-1");
-        assertEquals("adding a manifest entry must not append a new version",
-                1, property.getVersions().size());
+        assertEquals(1, property.getVersions().size(),
+                "adding a manifest entry must not append a new version");
         property.removeSecretManifestEntry("a.b");
-        assertEquals("removing a manifest entry must not append a new version",
-                1, property.getVersions().size());
+        assertEquals(1, property.getVersions().size(),
+                "removing a manifest entry must not append a new version");
     }
 
     @Test
@@ -141,11 +141,11 @@ public class JobConfigTemplatePropertyTest {
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         property.putSecretManifestEntry("ConnectionStrings.Default", "my-credential-id");
 
-        assertThrows("a real value at a manifest-declared path must be rejected",
-                IllegalArgumentException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> property.addVersion(
                         "{\"ConnectionStrings\":{\"Default\":\"Server=prod;Password=hunter2\"}}",
-                        "oops, real secret", "alice", 1L, Collections.emptyList(), null));
+                        "oops, real secret", "alice", 1L, Collections.emptyList(), null),
+                "a real value at a manifest-declared path must be rejected");
 
         int version = property.addVersion(
                 "{\"ConnectionStrings\":{\"Default\":\"" + SecretPlaceholder.VALUE + "\"}}",

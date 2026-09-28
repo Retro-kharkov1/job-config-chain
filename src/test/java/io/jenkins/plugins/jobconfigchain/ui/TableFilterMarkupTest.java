@@ -1,6 +1,6 @@
 package io.jenkins.plugins.jobconfigchain.ui;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,9 +11,9 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Guards the contract between the table-filter block and the tables that opt into it.
@@ -73,8 +73,8 @@ public class TableFilterMarkupTest {
         }
         // The two are designed as one feature: filtering narrows a long table, sorting orders what
         // is left. A table offering only half of that is an oversight, not a decision.
-        assertTrue("a ctsync-filterable table must also carry the sortable class: " + offenders,
-                offenders.isEmpty());
+        assertTrue(offenders.isEmpty(),
+                "a ctsync-filterable table must also carry the sortable class: " + offenders);
     }
 
     @Test
@@ -85,10 +85,10 @@ public class TableFilterMarkupTest {
             // overlapping keys. Reordering it would misstate which value a build actually gets,
             // and hiding a row would make two rows look adjacent in the chain when a hidden row
             // between them is the one that wins.
-            assertFalse("the base chain table must never become sortable: " + tag,
-                    tag.contains("sortable"));
-            assertFalse("the base chain table must never become filterable: " + tag,
-                    tag.contains("ctsync-filterable"));
+            assertFalse(tag.contains("sortable"),
+                    "the base chain table must never become sortable: " + tag);
+            assertFalse(tag.contains("ctsync-filterable"),
+                    "the base chain table must never become filterable: " + tag);
         }
     }
 
@@ -109,9 +109,9 @@ public class TableFilterMarkupTest {
         // Asserting the token merely exists would pass on `caption === '' && th.dataset.sortDisable`
         // - an AND, which reintroduces the exact bug while keeping the token. Pin the whole
         // condition, so the logic itself is what is guarded.
-        assertTrue("the skip rule must be an OR over both signals, found: " + skipCondition(block),
-                skipCondition(block).matches(
-                        "caption\\s*===\\s*''\\s*\\|\\|\\s*th\\.dataset\\.sortDisable"));
+        assertTrue(skipCondition(block).matches(
+                        "caption\\s*===\\s*''\\s*\\|\\|\\s*th\\.dataset\\.sortDisable"),
+                "the skip rule must be an OR over both signals, found: " + skipCondition(block));
     }
 
     @Test
@@ -130,8 +130,8 @@ public class TableFilterMarkupTest {
                 offenders.add(f.getName() + ": " + m.group());
             }
         }
-        assertEquals("an actions column in a filterable table must carry data-sort-disable: "
-                + offenders, List.of(), offenders);
+        assertEquals(List.of(), offenders,
+                "an actions column in a filterable table must carry data-sort-disable: " + offenders);
     }
 
     @Test
@@ -144,12 +144,12 @@ public class TableFilterMarkupTest {
         // Checking only that closest(...) appears would pass on an insertion that puts the line
         // BEFORE the wrapper, or next to the table again - both of which look right in a diff and
         // are wrong on screen. Pin the anchor resolution and the insertion point together.
-        assertTrue("the anchor must resolve to the scroll wrapper, falling back to the table: "
-                        + block, block.contains("var anchor = scrollWrap || table;"));
-        assertTrue("the status line must be inserted AFTER that anchor",
-                block.contains("anchor.parentNode.insertBefore(status, anchor.nextSibling);"));
-        assertFalse("the status line must not be inserted next to the table itself",
-                block.contains("table.parentNode.insertBefore(status, table.nextSibling)"));
+        assertTrue(block.contains("var anchor = scrollWrap || table;"),
+                "the anchor must resolve to the scroll wrapper, falling back to the table: " + block);
+        assertTrue(block.contains("anchor.parentNode.insertBefore(status, anchor.nextSibling);"),
+                "the status line must be inserted AFTER that anchor");
+        assertFalse(block.contains("table.parentNode.insertBefore(status, table.nextSibling)"),
+                "the status line must not be inserted next to the table itself");
     }
 
     @Test
@@ -162,10 +162,10 @@ public class TableFilterMarkupTest {
         // display. These calls are what would reintroduce it.
         for (String forbidden : List.of("tbody.appendChild", "tbody.removeChild",
                                         "ctsync-no-match-row")) {
-            assertFalse("the filter block must not manipulate tbody rows (found: " + forbidden
+            assertFalse(block.contains(forbidden),
+                    "the filter block must not manipulate tbody rows (found: " + forbidden
                             + ") - core treats every tbody row as sortable data, and mutating the "
-                            + "row set retriggers this block's own observer",
-                    block.contains(forbidden));
+                            + "row set retriggers this block's own observer");
         }
     }
 
@@ -176,8 +176,8 @@ public class TableFilterMarkupTest {
         // come from the bundle, so all three locales stay in step.
         for (String key : List.of("filter.placeholder", "filter.count", "filter.noMatches",
                                   "filter.any")) {
-            assertTrue("the block must read " + key + " from its bundle",
-                    block.contains("${%" + key + "}"));
+            assertTrue(block.contains("${%" + key + "}"),
+                    "the block must read " + key + " from its bundle");
         }
     }
 }

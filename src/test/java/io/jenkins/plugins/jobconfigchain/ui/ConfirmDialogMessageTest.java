@@ -6,17 +6,18 @@ import io.jenkins.plugins.jobconfigchain.model.ContentType;
 import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
 import org.htmlunit.SilentCssErrorHandler;
 import org.htmlunit.html.HtmlPage;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
 import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Guards the text of the confirmation dialogs - the one surface in this plugin where a rendering
@@ -32,10 +33,15 @@ import static org.junit.Assert.assertTrue;
  * page script, so neither half of the pair can be quietly replaced by a convenient stand-in: a
  * hand-typed template here would test a string this plugin never renders.
  */
+@WithJenkins
 public class ConfirmDialogMessageTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
+    private JenkinsRule jenkins;
+
+    @BeforeEach
+    public void setUp(JenkinsRule rule) {
+        jenkins = rule;
+    }
 
     private static final String BUNDLE =
             "io.jenkins.plugins.jobconfigchain.ui.ConfigTemplatesRootAction.index";
@@ -111,14 +117,13 @@ public class ConfirmDialogMessageTest {
         String template = ResourceBundle.getBundle(BUNDLE, Locale.ENGLISH)
                 .getString("purge.dialogMessage");
         int expected = occurrences(template, "{0}");
-        assertTrue("purge.dialogMessage is expected to name the Config Set more than once - if it "
-                        + "no longer does, this test has stopped guarding what it was written for",
-                expected >= 2);
-        assertEquals("every {0} in the purge prompt must become the Config Set's name: "
-                        + rendered,
-                expected, occurrences(rendered, "dialogmsg-purge-demo"));
-        assertFalse("the purge prompt must not show a raw placeholder: " + rendered,
-                rendered.contains("{0}"));
+        assertTrue(expected >= 2,
+                "purge.dialogMessage is expected to name the Config Set more than once - if it "
+                        + "no longer does, this test has stopped guarding what it was written for");
+        assertEquals(expected, occurrences(rendered, "dialogmsg-purge-demo"),
+                "every {0} in the purge prompt must become the Config Set's name: " + rendered);
+        assertFalse(rendered.contains("{0}"),
+                "the purge prompt must not show a raw placeholder: " + rendered);
     }
 
     /**
@@ -141,10 +146,10 @@ public class ConfirmDialogMessageTest {
             }
             String rendered = js(page,
                     "  return window.ctsyncFormatMessage(" + jsLiteral(template) + ", 'x');");
-            assertFalse("locale '" + tag + "' leaves a placeholder unrendered: " + rendered,
-                    rendered.contains("{0}"));
-            assertEquals("locale '" + tag + "' must substitute every {0}",
-                    occurrences(template, "{0}"), occurrences(rendered, "x"));
+            assertFalse(rendered.contains("{0}"),
+                    "locale '" + tag + "' leaves a placeholder unrendered: " + rendered);
+            assertEquals(occurrences(template, "{0}"), occurrences(rendered, "x"),
+                    "locale '" + tag + "' must substitute every {0}");
         }
     }
 

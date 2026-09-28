@@ -2,16 +2,16 @@ package io.jenkins.plugins.jobconfigchain.ui;
 
 import hudson.model.FreeStyleProject;
 import hudson.model.JobPropertyDescriptor;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Proves {@link JobConfigTemplateProperty} works as a real, persisted {@link hudson.model.JobProperty}
@@ -20,13 +20,11 @@ import static org.junit.Assert.assertNotNull;
  * generic {@code /job/&lt;name&gt;/configure} form (mirrors the old {@code ConfigTemplatesJobProperty}'s
  * equivalent guarantee, which this class replaces).
  */
+@WithJenkins
 public class JobConfigTemplatePropertyPersistenceTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
-
     @Test
-    public void addedViaAddProperty_survivesAConfigXmlReloadRoundTrip() throws Exception {
+    public void addedViaAddProperty_survivesAConfigXmlReloadRoundTrip(JenkinsRule jenkins) throws Exception {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-config-template-round-trip");
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         property.putSecretManifestEntry("db.password", "cred-a");
@@ -37,11 +35,11 @@ public class JobConfigTemplatePropertyPersistenceTest {
 
         FreeStyleProject reloaded =
                 jenkins.jenkins.getItemByFullName(project.getFullName(), FreeStyleProject.class);
-        assertNotNull("job must still exist after save", reloaded);
+        assertNotNull(reloaded, "job must still exist after save");
 
         JobConfigTemplateProperty reloadedProperty = reloaded.getProperty(JobConfigTemplateProperty.class);
-        assertNotNull("JobConfigTemplateProperty must round-trip through config.xml via "
-                        + "Job#addProperty/XStream", reloadedProperty);
+        assertNotNull(reloadedProperty, "JobConfigTemplateProperty must round-trip through config.xml via "
+                        + "Job#addProperty/XStream");
         assertEquals(1, reloadedProperty.getVersions().size());
         assertEquals("{\"a\":1}", reloadedProperty.getVersion(v1).getContentJson());
         assertEquals(v1, reloadedProperty.getActiveVersionNumber());
@@ -52,13 +50,13 @@ public class JobConfigTemplatePropertyPersistenceTest {
     public void descriptorIsApplicable_alwaysReturnsFalse() {
         JobConfigTemplateProperty.DescriptorImpl descriptor = new JobConfigTemplateProperty.DescriptorImpl();
 
-        assertFalse("this descriptor must never be surfaced by Job/configure.jelly's f:descriptorList",
-                descriptor.isApplicable(FreeStyleProject.class));
+        assertFalse(descriptor.isApplicable(FreeStyleProject.class),
+                "this descriptor must never be surfaced by Job/configure.jelly's f:descriptorList");
         assertEquals("Config Templates", descriptor.getDisplayName());
     }
 
     @Test
-    public void descriptorIsNotInThePropertyDescriptorsJobConfigureRenders() throws Exception {
+    public void descriptorIsNotInThePropertyDescriptorsJobConfigureRenders(JenkinsRule jenkins) throws Exception {
         jenkins.createFreeStyleProject("job-config-template-not-offered-on-configure");
 
         List<JobPropertyDescriptor> descriptors =
@@ -66,8 +64,7 @@ public class JobConfigTemplatePropertyPersistenceTest {
 
         boolean present = descriptors.stream()
                 .anyMatch(JobConfigTemplateProperty.DescriptorImpl.class::isInstance);
-        assertFalse("JobConfigTemplateProperty's descriptor must not appear in the list "
-                        + "Job/configure.jelly's h.getJobPropertyDescriptors(it) iterates",
-                present);
+        assertFalse(present, "JobConfigTemplateProperty's descriptor must not appear in the list "
+                        + "Job/configure.jelly's h.getJobPropertyDescriptors(it) iterates");
     }
 }

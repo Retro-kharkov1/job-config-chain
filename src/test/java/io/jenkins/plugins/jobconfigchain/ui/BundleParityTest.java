@@ -1,6 +1,6 @@
 package io.jenkins.plugins.jobconfigchain.ui;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -14,9 +14,9 @@ import java.util.Properties;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Structural guard over every localization bundle in the UI package.
@@ -41,8 +41,8 @@ public class BundleParityTest {
     private static final List<String> REQUIRED_LOCALES = List.of("uk", "ru");
 
     private static List<File> baseBundles() throws IOException {
-        assertTrue("UI resource directory must exist: " + UI_RESOURCES.getAbsolutePath(),
-                UI_RESOURCES.isDirectory());
+        assertTrue(UI_RESOURCES.isDirectory(),
+                "UI resource directory must exist: " + UI_RESOURCES.getAbsolutePath());
         try (var paths = Files.walk(UI_RESOURCES.toPath())) {
             List<File> bases = paths
                     .map(java.nio.file.Path::toFile)
@@ -50,7 +50,7 @@ public class BundleParityTest {
                     .filter(f -> !f.getName().matches(".*_[a-z]{2}(_[A-Z]{2})?\\.properties"))
                     .sorted()
                     .collect(Collectors.toList());
-            assertFalse("expected to discover at least one base bundle", bases.isEmpty());
+            assertFalse(bases.isEmpty(), "expected to discover at least one base bundle");
             return bases;
         }
     }
@@ -78,8 +78,8 @@ public class BundleParityTest {
                 }
             }
         }
-        assertTrue("every base bundle must ship a translation for " + REQUIRED_LOCALES
-                + ", these are absent: " + String.join(" | ", missing), missing.isEmpty());
+        assertTrue(missing.isEmpty(), "every base bundle must ship a translation for " + REQUIRED_LOCALES
+                + ", these are absent: " + String.join(" | ", missing));
     }
 
     @Test
@@ -108,7 +108,7 @@ public class BundleParityTest {
                 }
             }
         }
-        assertTrue(String.join(" | ", problems), problems.isEmpty());
+        assertTrue(problems.isEmpty(), String.join(" | ", problems));
     }
 
     /**
@@ -135,8 +135,8 @@ public class BundleParityTest {
                 }
             }
         }
-        assertTrue("ru bundles must carry the Ukrainian text verbatim (owner rule, 2026-09-21): "
-                + String.join(" | ", drift), drift.isEmpty());
+        assertTrue(drift.isEmpty(), "ru bundles must carry the Ukrainian text verbatim (owner rule, 2026-09-21): "
+                + String.join(" | ", drift));
     }
 
     @Test
@@ -156,7 +156,7 @@ public class BundleParityTest {
                 }
             }
         }
-        assertEquals("a translated key with an empty value renders as blank UI, which is worse "
-                + "than falling back to English: " + empties, List.of(), empties);
+        assertEquals(List.of(), empties, "a translated key with an empty value renders as blank UI, which is worse "
+                + "than falling back to English: " + empties);
     }
 }

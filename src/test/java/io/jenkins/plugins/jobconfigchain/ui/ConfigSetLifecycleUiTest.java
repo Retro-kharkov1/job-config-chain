@@ -8,18 +8,19 @@ import io.jenkins.plugins.jobconfigchain.model.ContentType;
 import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
 import net.sf.json.JSONObject;
 import org.htmlunit.html.HtmlPage;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The delete / restore / purge lifecycle as it is actually reachable: through the page objects the
@@ -34,10 +35,15 @@ import static org.junit.Assert.assertTrue;
  * {@code @JavaScriptMethod}s with no classic {@code do*} sibling, so a direct call IS the
  * production path - the same code a proxy call reaches.</p>
  */
+@WithJenkins
 public class ConfigSetLifecycleUiTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
+    private JenkinsRule jenkins;
+
+    @BeforeEach
+    public void setUp(JenkinsRule rule) {
+        jenkins = rule;
+    }
 
     /**
      * Built on demand, never as a field initializer: the constructor runs before the JenkinsRule
@@ -110,7 +116,7 @@ public class ConfigSetLifecycleUiTest {
 
         assertFalse(result.getBoolean("ok"));
         assertEquals("NAME_MISMATCH", result.getString("errorCode"));
-        assertNotNull("nothing may have been withdrawn", repository().findCommon("typo-app"));
+        assertNotNull(repository().findCommon("typo-app"), "nothing may have been withdrawn");
     }
 
     @Test
@@ -122,8 +128,8 @@ public class ConfigSetLifecycleUiTest {
 
         assertFalse(result.getBoolean("ok"));
         assertEquals("REFERENCED", result.getString("errorCode"));
-        assertEquals("the operator must be told which job, not merely that something blocks it",
-                "uses-it", result.getJSONArray("activeJobs").getJSONObject(0).getString("fullName"));
+        assertEquals("uses-it", result.getJSONArray("activeJobs").getJSONObject(0).getString("fullName"),
+                "the operator must be told which job, not merely that something blocks it");
         assertNotNull(repository().findCommon("in-use-app"));
     }
 
@@ -135,10 +141,10 @@ public class ConfigSetLifecycleUiTest {
         jobReferencing("rolled-forward", java.util.Arrays.asList("historical-app", null), 1);
 
         JSONObject preflight = page("historical-app").jsDeletePreflight();
-        assertFalse("an old reference must not block a reversible withdrawal",
-                preflight.getBoolean("blocked"));
-        assertEquals("but it must still be reported, because a rollback would fail",
-                1, preflight.getJSONArray("historicalJobs").size());
+        assertFalse(preflight.getBoolean("blocked"),
+                "an old reference must not block a reversible withdrawal");
+        assertEquals(1, preflight.getJSONArray("historicalJobs").size(),
+                "but it must still be reported, because a rollback would fail");
 
         JSONObject result = page("historical-app").jsDeleteConfigSet(confirm("historical-app").toString());
         assertTrue(result.getBoolean("ok"));
@@ -157,8 +163,8 @@ public class ConfigSetLifecycleUiTest {
 
         assertFalse(result.getBoolean("ok"));
         assertEquals("REFERENCED", result.getString("errorCode"));
-        assertNotNull("the record must survive a refused purge",
-                repository().findCommonIncludingDeleted("historical-app"));
+        assertNotNull(repository().findCommonIncludingDeleted("historical-app"),
+                "the record must survive a refused purge");
     }
 
     @Test
@@ -189,7 +195,7 @@ public class ConfigSetLifecycleUiTest {
         assertEquals("DELETED", result.getString("errorCode"));
 
         ConfigSet survivor = repository().findCommonIncludingDeleted("withdrawn-app");
-        assertEquals("the archived history must be untouched", 2, survivor.getVersions().size());
+        assertEquals(2, survivor.getVersions().size(), "the archived history must be untouched");
         assertTrue(survivor.isDeleted());
     }
 
@@ -220,7 +226,7 @@ public class ConfigSetLifecycleUiTest {
         assertTrue(withdrawn.isDeleted());
         assertEquals(2, withdrawn.getVersions().size());
         assertEquals("cred-id", withdrawn.getSecretsManifest().get("db.password"));
-        assertNull("it must be gone from the live inventory", repository().findCommon("round-trip-app"));
+        assertNull(repository().findCommon("round-trip-app"), "it must be gone from the live inventory");
 
         assertTrue(page("round-trip-app").jsRestoreConfigSet().getBoolean("ok"));
 
@@ -252,12 +258,12 @@ public class ConfigSetLifecycleUiTest {
         seed("rendered-app");
 
         HtmlPage live = markupClient().goTo("manage/configTemplates/rendered-app/");
-        assertNotNull("a live Config Set offers the delete action",
-                live.getElementById("deleteConfigSetBtn"));
+        assertNotNull(live.getElementById("deleteConfigSetBtn"),
+                "a live Config Set offers the delete action");
 
         HtmlPage absent = markupClient().goTo("manage/configTemplates/never-created/");
-        assertNull("there is nothing to delete before the first save",
-                absent.getElementById("deleteConfigSetBtn"));
+        assertNull(absent.getElementById("deleteConfigSetBtn"),
+                "there is nothing to delete before the first save");
     }
 
     @Test
@@ -270,13 +276,13 @@ public class ConfigSetLifecycleUiTest {
 
         assertNotNull(rendered.getElementById("restoreConfigSetBtn"));
         assertNotNull(rendered.getElementById("purgeConfigSetBtn"));
-        assertNull("a withdrawn Config Set must not offer deletion again",
-                rendered.getElementById("deleteConfigSetBtn"));
+        assertNull(rendered.getElementById("deleteConfigSetBtn"),
+                "a withdrawn Config Set must not offer deletion again");
         // The important one: rendering "does not exist yet - Save creates it" over an archive is an
         // invitation to clobber it, which is exactly what reserving the name prevents.
-        assertFalse("the does-not-exist-yet notice must never appear on a withdrawn Config Set",
-                text.contains("Save creates it"));
-        assertTrue("and its history must still be visible", text.contains("initial"));
+        assertFalse(text.contains("Save creates it"),
+                "the does-not-exist-yet notice must never appear on a withdrawn Config Set");
+        assertTrue(text.contains("initial"), "and its history must still be visible");
     }
 
     @Test
@@ -285,8 +291,8 @@ public class ConfigSetLifecycleUiTest {
 
         HtmlPage rendered = markupClient().goTo("job/" + job.getName() + "/configTemplates/");
 
-        assertNull("deletion is a global Config Set action only",
-                rendered.getElementById("deleteConfigSetBtn"));
+        assertNull(rendered.getElementById("deleteConfigSetBtn"),
+                "deletion is a global Config Set action only");
     }
 
     @Test
@@ -297,10 +303,10 @@ public class ConfigSetLifecycleUiTest {
 
         HtmlPage list = markupClient().goTo("manage/configTemplates/");
 
-        assertNotNull("the toggle appears only when something is deleted",
-                list.getElementById("showDeletedToggle"));
-        assertNotNull("the deleted rows ride in an inert template, out of the sortable table",
-                list.getElementById("deletedRowsTemplate"));
+        assertNotNull(list.getElementById("showDeletedToggle"),
+                "the toggle appears only when something is deleted");
+        assertNotNull(list.getElementById("deletedRowsTemplate"),
+                "the deleted rows ride in an inert template, out of the sortable table");
         assertTrue(list.asXml().contains("withdrawn-app"));
     }
 
