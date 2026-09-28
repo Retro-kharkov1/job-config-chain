@@ -482,7 +482,7 @@ public class ConfigTemplatesJobActionTest {
         }
         assertTrue(nonEmptyBlockCount > 0, "expected at least one non-empty <script> block (inline or external) to check on "
                 + pageLabel);
-        assertTrue(String.join("\n", failures), failures.isEmpty());
+        assertTrue(failures.isEmpty(), String.join("\n", failures));
     }
 
     @Test

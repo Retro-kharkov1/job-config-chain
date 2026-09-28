@@ -560,17 +560,26 @@ public class ConfigTemplatesUiTest {
 
         int nonEmptyBlockCount = 0;
         List<String> failures = new ArrayList<>();
+        int blockIndex = 0;
         for (String js : blocks) {
             nonEmptyBlockCount++;
+            blockIndex++;
             try {
                 compilable.compile(js);
             } catch (ScriptException e) {
-                failures.add("<script> block on " + pageLabel + " is not valid JS: " + e.getMessage());
+                String[] jsLines = js.split("\n", -1);
+                String around = "";
+                if (e.getLineNumber() > 0 && e.getLineNumber() <= jsLines.length) {
+                    around = " | offending line " + e.getLineNumber() + ": [" + jsLines[e.getLineNumber() - 1] + "]";
+                }
+                failures.add("<script> block #" + blockIndex + "/" + blocks.size() + " (length " + js.length()
+                        + " chars, starts with [" + js.substring(0, Math.min(80, js.length())).replace("\n", "\\n")
+                        + "]) on " + pageLabel + " is not valid JS: " + e.getMessage() + around);
             }
         }
         assertTrue(nonEmptyBlockCount > 0, "expected at least one non-empty <script> block (inline or external) to check on "
                 + pageLabel);
-        assertTrue(String.join("\n", failures), failures.isEmpty());
+        assertTrue(failures.isEmpty(), String.join("\n", failures));
     }
 
     @Test
