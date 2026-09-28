@@ -18,26 +18,26 @@ import org.htmlunit.Page;
 import org.htmlunit.WebRequest;
 import org.htmlunit.html.HtmlPage;
 import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
 import javax.script.Compilable;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Proves both the "Config Templates" job sidebar link/discoverability (unchanged from the old
@@ -46,10 +46,15 @@ import static org.junit.Assert.assertTrue;
  * {@code /job/&lt;name&gt;/configTemplates}, replacing the old association-to-a-separate-ConfigSet
  * flow entirely.
  */
+@WithJenkins
 public class ConfigTemplatesJobActionTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
+    private JenkinsRule jenkins;
+
+    @BeforeEach
+    public void setUp(JenkinsRule rule) {
+        jenkins = rule;
+    }
 
     @Test
     public void jobAction_isContributedToEveryJobAndMatchesTheManagementLinkEntry() throws Exception {
@@ -62,12 +67,9 @@ public class ConfigTemplatesJobActionTest {
                 .findFirst()
                 .orElse(null);
 
-        assertTrue("every Job must be contributed a ConfigTemplatesJobAction sidebar link",
-                jobAction != null);
-        assertEquals("label must match the ManagementLink entry character-for-character",
-                new ConfigTemplatesRootAction().getDisplayName(), jobAction.getDisplayName());
-        assertEquals("icon must match the ManagementLink entry",
-                new ConfigTemplatesRootAction().getIconFileName(), jobAction.getIconFileName());
+        assertTrue(jobAction != null, "every Job must be contributed a ConfigTemplatesJobAction sidebar link");
+        assertEquals(new ConfigTemplatesRootAction().getDisplayName(), jobAction.getDisplayName(), "label must match the ManagementLink entry character-for-character");
+        assertEquals(new ConfigTemplatesRootAction().getIconFileName(), jobAction.getIconFileName(), "icon must match the ManagementLink entry");
 
         // Guards the exact defect reported 2026-09-18: the value had been written as one
         // dash-joined token ("symbol-<name>-plugin-<plugin>"), which Jenkins cannot resolve at
@@ -77,13 +79,11 @@ public class ConfigTemplatesJobActionTest {
         // two sites agree) is the point: the previous assertion above passed happily while BOTH
         // sites were equally broken.
         String icon = jobAction.getIconFileName();
-        assertTrue("icon must name a symbol: " + icon, icon.startsWith("symbol-"));
-        assertTrue("icon must carry the owning plugin as a separate \"plugin-\" word, "
-                        + "not dash-joined onto the symbol name: " + icon,
-                icon.contains(" plugin-"));
-        assertEquals("target must be a plain job-relative segment, exposed at "
-                        + "/job/<name>/configTemplates just like /job/<name>/configure",
-                "configTemplates", jobAction.getUrlName());
+        assertTrue(icon.startsWith("symbol-"), "icon must name a symbol: " + icon);
+        assertTrue(icon.contains(" plugin-"), "icon must carry the owning plugin as a separate \"plugin-\" word, "
+                        + "not dash-joined onto the symbol name: " + icon);
+        assertEquals("configTemplates", jobAction.getUrlName(), "target must be a plain job-relative segment, exposed at "
+                        + "/job/<name>/configTemplates just like /job/<name>/configure");
     }
 
     @Test
@@ -91,8 +91,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("uitest-job-action-2");
 
         HtmlPage page = jenkins.createWebClient().getPage(project);
-        assertTrue("the job's page must render the 'Config Templates' sidebar link",
-                page.asNormalizedText().contains("Config Templates"));
+        assertTrue(page.asNormalizedText().contains("Config Templates"), "the job's page must render the 'Config Templates' sidebar link");
     }
 
     @Test
@@ -100,18 +99,16 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("uitest-job-action-3");
         ConfigTemplatesJobAction jobAction = findJobAction(project);
 
-        assertEquals("the action must expose the owning job so callers (and the Jelly view) can "
-                        + "always read the CURRENT property, never a stale snapshot",
-                project, jobAction.getJob());
-        assertFalse("a freshly created job must have no property yet", jobAction.isExists());
+        assertEquals(project, jobAction.getJob(), "the action must expose the owning job so callers (and the Jelly view) can "
+                        + "always read the CURRENT property, never a stale snapshot");
+        assertFalse(jobAction.isExists(), "a freshly created job must have no property yet");
 
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         property.addVersion("{}", "seed", "alice", 1L, java.util.Collections.emptyList(), null);
         project.addProperty(property);
 
-        assertTrue("isExists()/getVersions() must reflect the property added AFTER this action "
-                        + "instance was constructed — proves the property is read fresh, not cached",
-                jobAction.isExists());
+        assertTrue(jobAction.isExists(), "isExists()/getVersions() must reflect the property added AFTER this action "
+                        + "instance was constructed — proves the property is read fresh, not cached");
         assertEquals(1, jobAction.getVersions().size());
     }
 
@@ -129,8 +126,7 @@ public class ConfigTemplatesJobActionTest {
         // Owner requirement (2026-09-12): "Generate Template" must always be clickable, even before
         // anything has ever been saved — it now generates from the current, unsaved editor draft
         // instead of requiring an active version (see ConfigTemplatesJobActionGenerateTemplateTest).
-        assertTrue("Generate Template must never be gated on an active version existing",
-                action.isTemplateAvailable());
+        assertTrue(action.isTemplateAvailable(), "Generate Template must never be gated on an active version existing");
         assertEquals("{}", action.getEditorSeedJson());
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
@@ -155,12 +151,9 @@ public class ConfigTemplatesJobActionTest {
         String html = page.getWebResponse().getContentAsString();
         // CSP migration: this logic now lives in the external index.js, not inline.
         String js = fetchExternalScripts(wc, html);
-        assertTrue("save success/error must go through the native notificationBar toast",
-                js.contains("window.notificationBar.show("));
-        assertFalse("the old shared inline save banner element must be removed, not just unused",
-                html.contains("id=\"saveBanner\""));
-        assertFalse("the old showSaveBanner helper must be gone",
-                js.contains("function showSaveBanner"));
+        assertTrue(js.contains("window.notificationBar.show("), "save success/error must go through the native notificationBar toast");
+        assertFalse(html.contains("id=\"saveBanner\""), "the old shared inline save banner element must be removed, not just unused");
+        assertFalse(js.contains("function showSaveBanner"), "the old showSaveBanner helper must be gone");
     }
 
     @Test
@@ -171,17 +164,19 @@ public class ConfigTemplatesJobActionTest {
         // accepts, never requiring an active version to exist first.
         FreeStyleProject project = jenkins.createFreeStyleProject("generate-from-draft-job");
         ConfigTemplatesJobAction action = findJobAction(project);
-        assertFalse("this job must never have been saved for this test to be meaningful",
-                action.isExists());
+        assertFalse(action.isExists(), "this job must never have been saved for this test to be meaningful");
 
         String overlayJson = "{\"database\":{\"host\":\"db.internal\"}}";
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/renderTemplate?overlayJson=" + URLEncoder.encode(overlayJson, "UTF-8")
-                + "&baseChainJson=" + URLEncoder.encode("[]", "UTF-8"));
+        URL renderUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/renderTemplate");
+        WebRequest renderRequest = new WebRequest(renderUrl, HttpMethod.POST);
+        renderRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("overlayJson", overlayJson),
+                new org.htmlunit.util.NameValuePair("baseChainJson", "[]")
+        ));
+        Page result = wc.getPage(renderRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
-        assertTrue("generating from an unsaved draft with no active version must succeed",
-                json.getBoolean("ok"));
+        assertTrue(json.getBoolean("ok"), "generating from an unsaved draft with no active version must succeed");
         assertEquals("JSON", json.getString("contentType"));
         JSONObject template = JSONObject.fromObject(json.getString("template"));
         assertEquals("#{database.host}#", template.getJSONObject("database").getString("host"));
@@ -195,15 +190,18 @@ public class ConfigTemplatesJobActionTest {
         // same empty-chain/empty-overlay input (an empty object, no substitutions to tokenize).
         FreeStyleProject project = jenkins.createFreeStyleProject("generate-from-draft-empty-job");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/renderTemplate?overlayJson=" + URLEncoder.encode("{}", "UTF-8")
-                + "&baseChainJson=" + URLEncoder.encode("[]", "UTF-8"));
+        URL renderUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/renderTemplate");
+        WebRequest renderRequest = new WebRequest(renderUrl, HttpMethod.POST);
+        renderRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("overlayJson", "{}"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", "[]")
+        ));
+        Page result = wc.getPage(renderRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
-        assertTrue("an empty draft/chain must resolve, not error out", json.getBoolean("ok"));
+        assertTrue(json.getBoolean("ok"), "an empty draft/chain must resolve, not error out");
         assertEquals("JSON", json.getString("contentType"));
         JSONObject template = JSONObject.fromObject(json.getString("template"));
-        assertTrue("an empty override against an empty chain must template to an empty object",
-                template.isEmpty());
+        assertTrue(template.isEmpty(), "an empty override against an empty chain must template to an empty object");
     }
 
     // ---- State 2: base-chain rows + optional own override ----
@@ -226,20 +224,22 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("state2-job");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
-        Page jobResult = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/computeMerge?overlayJson=" + URLEncoder.encode(overlayJson, "UTF-8")
-                + "&baseChainJson=" + URLEncoder.encode(baseChainJson, "UTF-8"));
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+        WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
+        computeMergeRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("overlayJson", overlayJson),
+                new org.htmlunit.util.NameValuePair("baseChainJson", baseChainJson)
+        ));
+        Page jobResult = wc.getPage(computeMergeRequest);
         JSONObject jobMerge = JSONObject.fromObject(jobResult.getWebResponse().getContentAsString());
-        assertTrue("job merge preview must succeed for a resolvable chain", jobMerge.getBoolean("ok"));
+        assertTrue(jobMerge.getBoolean("ok"), "job merge preview must succeed for a resolvable chain");
 
         JSONObject merged = JSONObject.fromObject(jobMerge.getString("merged"));
-        assertEquals("base's own 'a' must survive the fold (overlay never touches it)", 1, merged.getInt("a"));
-        assertEquals("overlay's 'b' must win over the base chain's own 'b' (RFC 7396 overlay-wins)",
-                2, merged.getInt("b"));
+        assertEquals(1, merged.getInt("a"), "base's own 'a' must survive the fold (overlay never touches it)");
+        assertEquals(2, merged.getInt("b"), "overlay's 'b' must win over the base chain's own 'b' (RFC 7396 overlay-wins)");
 
         JSONObject mergedBases = JSONObject.fromObject(jobMerge.getString("mergedBases"));
-        assertEquals("mergedBases must reflect the base chain BEFORE the overlay is applied",
-                1, mergedBases.getInt("b"));
+        assertEquals(1, mergedBases.getInt("b"), "mergedBases must reflect the base chain BEFORE the overlay is applied");
     }
 
     // ---- State 3: override-only, zero chain, content used verbatim ----
@@ -250,18 +250,21 @@ public class ConfigTemplatesJobActionTest {
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
         String overlayJson = "{\"solo\":true}";
-        Page result = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/computeMerge?overlayJson=" + URLEncoder.encode(overlayJson, "UTF-8")
-                + "&baseChainJson=" + URLEncoder.encode("[]", "UTF-8"));
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+        WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
+        computeMergeRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("overlayJson", overlayJson),
+                new org.htmlunit.util.NameValuePair("baseChainJson", "[]")
+        ));
+        Page result = wc.getPage(computeMergeRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
 
-        assertTrue("an empty chain must resolve, not error out", json.getBoolean("ok"));
+        assertTrue(json.getBoolean("ok"), "an empty chain must resolve, not error out");
         assertEquals("JSON", json.getString("contentType"));
         JSONObject merged = JSONObject.fromObject(json.getString("merged"));
-        assertTrue("with zero bases, the override content is used verbatim as the merged result",
-                merged.getBoolean("solo"));
+        assertTrue(merged.getBoolean("solo"), "with zero bases, the override content is used verbatim as the merged result");
         JSONObject mergedBases = JSONObject.fromObject(json.getString("mergedBases"));
-        assertTrue("zero bases fold to an empty object", mergedBases.isEmpty());
+        assertTrue(mergedBases.isEmpty(), "zero bases fold to an empty object");
     }
 
     // ---- Cross-chain content-type-consistency rejection ----
@@ -296,19 +299,16 @@ public class ConfigTemplatesJobActionTest {
         ));
         Page result = wc.getPage(request);
 
-        assertFalse("a mismatched-type base chain must be rejected, not accepted with 200 OK",
-                result.getWebResponse().getStatusCode() == 200);
-        assertNull("no property must have been persisted",
-                project.getProperty(JobConfigTemplateProperty.class));
+        assertFalse(result.getWebResponse().getStatusCode() == 200, "a mismatched-type base chain must be rejected, not accepted with 200 OK");
+        assertNull(project.getProperty(JobConfigTemplateProperty.class), "no property must have been persisted");
 
         // Extended (tech-lead test-coverage migration decision, 2026-09-14 follow-up pass, rule 7):
         // this test already proved rejection but not the exact FR-61 message text — the dead
         // ConfigTemplatesUiTest#doSave_envPage_rejectsMixedContentTypeBaseChainWithExactWireframeMessage
         // asserted it at the (now-404ing) global env route; assert it here at the job route instead.
         String body = result.getWebResponse().getContentAsString();
-        assertTrue("exact wireframe message shape (FR-61) must also render at the job route: " + body,
-                body.contains("Save blocked: mismatched content types in base chain — "
-                        + "mismatch-json (JSON), mismatch-xml (XML) must all share one content type."));
+        assertTrue(body.contains("Save blocked: mismatched content types in base chain — "
+                        + "mismatch-json (JSON), mismatch-xml (XML) must all share one content type."), "exact wireframe message shape (FR-61) must also render at the job route: " + body);
     }
 
     // ---- Version history: append-only, Activate reloads baseChain+content, no explicitlyStandalone ----
@@ -328,13 +328,13 @@ public class ConfigTemplatesJobActionTest {
 
         JobConfigTemplateProperty property = project.getProperty(JobConfigTemplateProperty.class);
         assertNotNull(property);
-        assertEquals("append-only: both versions must remain in history", 2, property.getVersions().size());
+        assertEquals(2, property.getVersions().size(), "append-only: both versions must remain in history");
         assertEquals(v1, property.getVersion(v1).getVersionNumber());
         assertEquals(v2, property.getVersion(v2).getVersionNumber());
         assertEquals("{\"x\":1}", property.getVersion(v1).getContentJson());
         assertEquals("{\"x\":2}", property.getVersion(v2).getContentJson());
         assertEquals(1, property.getVersion(v1).getBaseChain().size());
-        assertTrue("v2 was saved with an explicitly empty chain", property.getVersion(v2).getBaseChain().isEmpty());
+        assertTrue(property.getVersion(v2).getBaseChain().isEmpty(), "v2 was saved with an explicitly empty chain");
 
         // Activate v1 (the one WITH a base chain) via the classic endpoint and confirm the response
         // shape carries activatedBaseChain/activatedContent/activatedContentType but explicitly
@@ -345,15 +345,13 @@ public class ConfigTemplatesJobActionTest {
         assertEquals("{\"x\":1}", activated.getString("activatedContent"));
         assertEquals(1, activated.getJSONArray("activatedBaseChain").size());
         assertEquals("JSON", activated.getString("activatedContentType"));
-        assertFalse("JobConfigTemplateProperty/JobConfigTemplateVersion has no explicitlyStandalone "
-                        + "concept — the activate response must never carry that field",
-                activated.has("activatedExplicitlyStandalone"));
+        assertFalse(activated.has("activatedExplicitlyStandalone"), "JobConfigTemplateProperty/JobConfigTemplateVersion has no explicitlyStandalone "
+                        + "concept — the activate response must never carry that field");
 
         // Version-history rows must also never carry an explicitlyStandalone field.
         JSONArray versionsJson = activated.getJSONArray("versions");
         for (int i = 0; i < versionsJson.size(); i++) {
-            assertFalse("version-history rows must never carry explicitlyStandalone for a job",
-                    versionsJson.getJSONObject(i).has("explicitlyStandalone"));
+            assertFalse(versionsJson.getJSONObject(i).has("explicitlyStandalone"), "version-history rows must never carry explicitlyStandalone for a job");
         }
     }
 
@@ -455,8 +453,8 @@ public class ConfigTemplatesJobActionTest {
     private void assertAllInlineScriptsAreSyntacticallyValidJs(String pageLabel, JenkinsRule.WebClient wc,
                                                                 String html) throws Exception {
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
-        assertNotNull("Nashorn JS engine must be resolvable on the test classpath "
-                + "(org.openjdk.nashorn:nashorn-core test dependency)", engine);
+        assertNotNull(engine, "Nashorn JS engine must be resolvable on the test classpath "
+                + "(org.openjdk.nashorn:nashorn-core test dependency)");
         Compilable compilable = (Compilable) engine;
 
         List<String> blocks = new ArrayList<>();
@@ -482,8 +480,8 @@ public class ConfigTemplatesJobActionTest {
                 failures.add("<script> block on " + pageLabel + " is not valid JS: " + e.getMessage());
             }
         }
-        assertTrue("expected at least one non-empty <script> block (inline or external) to check on "
-                + pageLabel, nonEmptyBlockCount > 0);
+        assertTrue(nonEmptyBlockCount > 0, "expected at least one non-empty <script> block (inline or external) to check on "
+                + pageLabel);
         assertTrue(String.join("\n", failures), failures.isEmpty());
     }
 
@@ -497,8 +495,13 @@ public class ConfigTemplatesJobActionTest {
         project.addProperty(property);
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/registerSecret?path=database.password&credentialId=job-secret-real-cred");
+        URL registerUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/registerSecret");
+        WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
+        registerRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("path", "database.password"),
+                new org.htmlunit.util.NameValuePair("credentialId", "job-secret-real-cred")
+        ));
+        Page result = wc.getPage(registerRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
 
@@ -517,8 +520,12 @@ public class ConfigTemplatesJobActionTest {
         project.addProperty(property);
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/unbindSecret?path=database.password");
+        URL unbindUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/unbindSecret");
+        WebRequest unbindRequest = new WebRequest(unbindUrl, HttpMethod.POST);
+        unbindRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("path", "database.password")
+        ));
+        Page result = wc.getPage(unbindRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
 
@@ -533,8 +540,7 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("removeSecret is now defined in the external index.js, not inline (CSP migration)",
-                fetchExternalScripts(wc, html).contains("function removeSecret"));
+        assertTrue(fetchExternalScripts(wc, html).contains("function removeSecret"), "removeSecret is now defined in the external index.js, not inline (CSP migration)");
         assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (remove-secret JS)", wc, html);
     }
 
@@ -546,10 +552,8 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("job page must render a real <select> credential picker (OQ-1), not free text",
-                html.contains("id=\"secretCredentialId\""));
-        assertTrue("job page's credential picker must list actually-registered credentials",
-                html.contains("job-picker-real-cred"));
+        assertTrue(html.contains("id=\"secretCredentialId\""), "job page must render a real <select> credential picker (OQ-1), not free text");
+        assertTrue(html.contains("job-picker-real-cred"), "job page's credential picker must list actually-registered credentials");
     }
 
     @Test
@@ -588,14 +592,10 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("job page must render a page-level Generate Template button (FR-41)",
-                html.contains("id=\"generateTemplateBtn\""));
-        assertTrue("job page must render the merge layout grid with its own id, replaced on click (FR-73)",
-                html.contains("id=\"mergeLayout\""));
-        assertTrue("job page must render the full-width generated-template panel container",
-                html.contains("id=\"generatedTemplatePanel\""));
-        assertTrue("job page must render the Back-to-3-panel-view affordance",
-                html.contains("id=\"backTo3PanelBtn\""));
+        assertTrue(html.contains("id=\"generateTemplateBtn\""), "job page must render a page-level Generate Template button (FR-41)");
+        assertTrue(html.contains("id=\"mergeLayout\""), "job page must render the merge layout grid with its own id, replaced on click (FR-73)");
+        assertTrue(html.contains("id=\"generatedTemplatePanel\""), "job page must render the full-width generated-template panel container");
+        assertTrue(html.contains("id=\"backTo3PanelBtn\""), "job page must render the Back-to-3-panel-view affordance");
     }
 
     @Test
@@ -608,9 +608,8 @@ public class ConfigTemplatesJobActionTest {
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
         Matcher matcher = Pattern.compile("<button[^>]*id=\"generateTemplateBtn\"[^>]*>").matcher(html);
-        assertTrue("must find the Generate Template button in the rendered HTML", matcher.find());
-        assertFalse("Generate Template must never render disabled, even before this job has ever saved",
-                matcher.group().contains("disabled"));
+        assertTrue(matcher.find(), "must find the Generate Template button in the rendered HTML");
+        assertFalse(matcher.group().contains("disabled"), "Generate Template must never render disabled, even before this job has ever saved");
     }
 
     @Test
@@ -633,14 +632,11 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("job compare banner must render an explicit 'Back to editing' button (FR-45a)",
-                html.contains("id=\"backToEditingBtn\""));
+        assertTrue(html.contains("id=\"backToEditingBtn\""), "job compare banner must render an explicit 'Back to editing' button (FR-45a)");
         // CSP migration: no inline onclick attribute any more — backToEditingBtn is wired to
         // switchToEditMode() in the external index.js instead; see that file's wiring block.
-        assertTrue("'Back to editing' must be wired to switchToEditMode() (FR-45b)",
-                fetchExternalScripts(wc, html).contains("on('backToEditingBtn', 'click', switchToEditMode)"));
-        assertTrue("'Load into editor' must remain present and distinct (FR-45c)",
-                html.contains("id=\"loadComparedBtn\""));
+        assertTrue(fetchExternalScripts(wc, html).contains("on('backToEditingBtn', 'click', switchToEditMode)"), "'Back to editing' must be wired to switchToEditMode() (FR-45b)");
+        assertTrue(html.contains("id=\"loadComparedBtn\""), "'Load into editor' must remain present and distinct (FR-45c)");
     }
 
     @Test
@@ -659,12 +655,10 @@ public class ConfigTemplatesJobActionTest {
 
         Pattern activeRow = Pattern.compile("id=\"historyRow-" + v2 + "\"[\\s\\S]*?</tr>");
         Matcher matcher = activeRow.matcher(html);
-        assertTrue("must find the active version's history row in the rendered HTML", matcher.find());
+        assertTrue(matcher.find(), "must find the active version's history row in the rendered HTML");
         String rowHtml = matcher.group();
-        assertTrue("the already-active row's Activate button must render disabled (FR-47)",
-                rowHtml.contains("disabled=\"disabled\""));
-        assertTrue("the disabled Activate button must explain why",
-                rowHtml.contains("Already the active version"));
+        assertTrue(rowHtml.contains("disabled=\"disabled\""), "the already-active row's Activate button must render disabled (FR-47)");
+        assertTrue(rowHtml.contains("Already the active version"), "the disabled Activate button must explain why");
     }
 
     @Test
@@ -675,10 +669,8 @@ public class ConfigTemplatesJobActionTest {
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
-        assertTrue("prepareSubmit must disable both save buttons (FR-46)",
-                js.contains("document.getElementById('saveBtn').disabled = true"));
-        assertTrue("activateVersion must disable every Activate button, not just the clicked one (FR-46)",
-                js.contains("function setActivateButtonsDisabled"));
+        assertTrue(js.contains("document.getElementById('saveBtn').disabled = true"), "prepareSubmit must disable both save buttons (FR-46)");
+        assertTrue(js.contains("function setActivateButtonsDisabled"), "activateVersion must disable every Activate button, not just the clicked one (FR-46)");
         assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (busy-disable-guard JS)", wc, html);
     }
 
@@ -689,23 +681,16 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("job page must render the base-chain editor rows table",
-                html.contains("id=\"baseChainRowsTable\""));
-        assertTrue("job page must render the Add-base row control",
-                html.contains("id=\"addBaseChainRowBtn\""));
-        assertFalse("job page has no explicitlyStandalone concept — the checkbox must never render",
-                html.contains("id=\"explicitlyStandaloneCheckbox\""));
-        assertTrue("job page must render the merged-bases pane (FR-73)",
-                html.contains("id=\"mergedBasesEditor\""));
-        assertTrue("job page must render the Discard-all-changes button (FR-74)",
-                html.contains("id=\"discardAllBtn\""));
-        assertTrue("job page must render the hidden baseChainJson field",
-                html.contains("id=\"baseChainField\""));
+        assertTrue(html.contains("id=\"baseChainRowsTable\""), "job page must render the base-chain editor rows table");
+        assertTrue(html.contains("id=\"addBaseChainRowBtn\""), "job page must render the Add-base row control");
+        assertFalse(html.contains("id=\"explicitlyStandaloneCheckbox\""), "job page has no explicitlyStandalone concept — the checkbox must never render");
+        assertTrue(html.contains("id=\"mergedBasesEditor\""), "job page must render the merged-bases pane (FR-73)");
+        assertTrue(html.contains("id=\"discardAllBtn\""), "job page must render the Discard-all-changes button (FR-74)");
+        assertTrue(html.contains("id=\"baseChainField\""), "job page must render the hidden baseChainJson field");
         // CSP migration: the seed value now rides on #ctsyncJobSeed's data-available-project-keys
         // attribute, read via JSON.parse(...) in the external index.js — no longer a bare
         // __availableProjectKeys token in the HTML itself.
-        assertTrue("job page must expose the available common project keys as row-picker seed data",
-                html.contains("data-available-project-keys="));
+        assertTrue(html.contains("data-available-project-keys="), "job page must expose the available common project keys as row-picker seed data");
     }
 
     @Test
@@ -723,9 +708,8 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("version-history row must render a [N bases] marker (FR-58)", html.contains("2 bases"));
-        assertTrue("expandable detail must include the PINNED entry's resolved version number",
-                html.contains("(v1)"));
+        assertTrue(html.contains("2 bases"), "version-history row must render a [N bases] marker (FR-58)");
+        assertTrue(html.contains("(v1)"), "expandable detail must include the PINNED entry's resolved version number");
     }
 
     @Test
@@ -755,17 +739,20 @@ public class ConfigTemplatesJobActionTest {
 
         FreeStyleProject project = jenkins.createFreeStyleProject("job-multi-base-merge");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/computeMerge?overlayJson=" + URLEncoder.encode("{}", "UTF-8")
-                + "&baseChainJson=" + URLEncoder.encode(baseChainJson, "UTF-8"));
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+        WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
+        computeMergeRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("overlayJson", "{}"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", baseChainJson)
+        ));
+        Page result = wc.getPage(computeMergeRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
         assertEquals("JSON", json.getString("contentType"));
         JSONObject merged = JSONObject.fromObject(json.getString("merged"));
         assertEquals(1, merged.getInt("a"));
         assertEquals(2, merged.getInt("b"));
-        assertEquals("perReference must carry one entry per resolved chain member (FR-57)",
-                2, json.getJSONArray("perReference").size());
+        assertEquals(2, json.getJSONArray("perReference").size(), "perReference must carry one entry per resolved chain member (FR-57)");
 
         JSONObject row1 = json.getJSONArray("perReference").getJSONObject(0);
         JSONObject row2 = json.getJSONArray("perReference").getJSONObject(1);
@@ -775,9 +762,8 @@ public class ConfigTemplatesJobActionTest {
         JSONObject row2Cumulative = JSONObject.fromObject(row2.getString("cumulativeJson"));
         assertEquals(1, row2Cumulative.getInt("a"));
         assertEquals(2, row2Cumulative.getInt("b"));
-        assertEquals("row N's cumulative must equal mergedBases (both are the fold of the full "
-                        + "chain with no overlay applied)",
-                JSONObject.fromObject(json.getString("mergedBases")).toString(), row2Cumulative.toString());
+        assertEquals(JSONObject.fromObject(json.getString("mergedBases")).toString(), row2Cumulative.toString(), "row N's cumulative must equal mergedBases (both are the fold of the full "
+                        + "chain with no overlay applied)");
     }
 
     @Test
@@ -785,12 +771,15 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-unresolvable-chain");
         String baseChainJson = "[{\"projectKey\":\"no-such-common-project\",\"pinMode\":\"ACTIVE\"}]";
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/computeMerge?overlayJson=" + URLEncoder.encode("{}", "UTF-8")
-                + "&baseChainJson=" + URLEncoder.encode(baseChainJson, "UTF-8"));
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+        WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
+        computeMergeRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("overlayJson", "{}"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", baseChainJson)
+        ));
+        Page result = wc.getPage(computeMergeRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
-        assertFalse("an unresolvable base-chain reference must be reported, not thrown as a server error",
-                json.getBoolean("ok"));
+        assertFalse(json.getBoolean("ok"), "an unresolvable base-chain reference must be reported, not thrown as a server error");
         assertNotNull(json.getString("error"));
     }
 
@@ -814,8 +803,7 @@ public class ConfigTemplatesJobActionTest {
                 new org.htmlunit.util.NameValuePair("activate", "true")
         ));
         Page result = wc.getPage(request);
-        assertEquals("a base-chain row with no pinMode must default to ACTIVE and save successfully",
-                200, result.getWebResponse().getStatusCode());
+        assertEquals(200, result.getWebResponse().getStatusCode(), "a base-chain row with no pinMode must default to ACTIVE and save successfully");
 
         JobConfigTemplateProperty property = project.getProperty(JobConfigTemplateProperty.class);
         assertNotNull(property);
@@ -830,20 +818,17 @@ public class ConfigTemplatesJobActionTest {
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
 
-        assertFalse("none of the four reorganized sections may render as a collapsible <details> accordion",
-                html.contains("<details"));
-        assertTrue("each section must use Jenkins core's own framed-section convention",
-                html.contains("jenkins-section"));
+        assertFalse(html.contains("<details"), "none of the four reorganized sections may render as a collapsible <details> accordion");
+        assertTrue(html.contains("jenkins-section"), "each section must use Jenkins core's own framed-section convention");
 
         int versionHistoryIdx = html.indexOf("id=\"versionHistoryDetails\"");
         int secretsManifestIdx = html.indexOf("id=\"secretsManifestDetails\"");
         int baseChainIdx = html.indexOf("id=\"baseChainEditor\"");
         int editorIdx = html.indexOf("id=\"editorDetails\"");
-        assertTrue("all four section markers must be present",
-                versionHistoryIdx >= 0 && secretsManifestIdx >= 0 && baseChainIdx >= 0 && editorIdx >= 0);
-        assertTrue("Version history must render before Secrets manifest", versionHistoryIdx < secretsManifestIdx);
-        assertTrue("Secrets manifest must render before the Base chain section", secretsManifestIdx < baseChainIdx);
-        assertTrue("Base chain must render before the Editor section", baseChainIdx < editorIdx);
+        assertTrue(versionHistoryIdx >= 0 && secretsManifestIdx >= 0 && baseChainIdx >= 0 && editorIdx >= 0, "all four section markers must be present");
+        assertTrue(versionHistoryIdx < secretsManifestIdx, "Version history must render before Secrets manifest");
+        assertTrue(secretsManifestIdx < baseChainIdx, "Secrets manifest must render before the Base chain section");
+        assertTrue(baseChainIdx < editorIdx, "Base chain must render before the Editor section");
     }
 
     @Test
@@ -864,8 +849,7 @@ public class ConfigTemplatesJobActionTest {
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
-        assertTrue("activateVersion must reload the editor state from the newly-activated version",
-                js.contains("function reloadEditorStateFromActivatedVersion"));
+        assertTrue(js.contains("function reloadEditorStateFromActivatedVersion"), "activateVersion must reload the editor state from the newly-activated version");
         assertTrue(js.contains("reloadEditorStateFromActivatedVersion(r)"));
         assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (activate-reload JS)", wc, html);
     }
@@ -877,8 +861,7 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("the Add-base button must use the clearer 'Add base config' wording",
-                html.contains(">&#10133; Add base config</button>") || html.contains("Add base config"));
+        assertTrue(html.contains(">&#10133; Add base config</button>") || html.contains("Add base config"), "the Add-base button must use the clearer 'Add base config' wording");
     }
 
     @Test
@@ -889,8 +872,7 @@ public class ConfigTemplatesJobActionTest {
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
         // CSP migration: this rule now lives in the external index.css, not an inline <style>.
-        assertTrue("the base-chain table must scope a compact max-width rule to its own selects",
-                fetchExternalStylesheets(wc, html).contains(".ctsync-basechain-table select.jenkins-select__input"));
+        assertTrue(fetchExternalStylesheets(wc, html).contains(".ctsync-basechain-table select.jenkins-select__input"), "the base-chain table must scope a compact max-width rule to its own selects");
     }
 
     @Test
@@ -902,14 +884,12 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("job page must render the Merged-bases pane (FR-73)", html.contains("id=\"mergedBasesEditor\""));
-        assertTrue("job page must render the Discard-all-changes button (FR-74)",
-                html.contains("id=\"discardAllBtn\""));
+        assertTrue(html.contains("id=\"mergedBasesEditor\""), "job page must render the Merged-bases pane (FR-73)");
+        assertTrue(html.contains("id=\"discardAllBtn\""), "job page must render the Discard-all-changes button (FR-74)");
         // CSP migration: both the class name (assigned at runtime) and the builder function now
         // live in the external index.css/index.js rather than inline.
-        assertTrue("the base-chain accordion toggle column must render per row (FR-71)",
-                fetchExternalStylesheets(wc, html).contains("ctsync-basechain-row-toggle")
-                        || fetchExternalScripts(wc, html).contains("buildBaseChainRowElement"));
+        assertTrue(fetchExternalStylesheets(wc, html).contains("ctsync-basechain-row-toggle")
+                        || fetchExternalScripts(wc, html).contains("buildBaseChainRowElement"), "the base-chain accordion toggle column must render per row (FR-71)");
     }
 
     @Test
@@ -954,12 +934,10 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("job page must render the FR-104 content-type row", html.contains("id=\"contentTypeRow\""));
-        assertTrue("no version yet must render the interactive (unlocked) radio group",
-                html.contains("id=\"contentTypeUnlockedGroup\""));
+        assertTrue(html.contains("id=\"contentTypeRow\""), "job page must render the FR-104 content-type row");
+        assertTrue(html.contains("id=\"contentTypeUnlockedGroup\""), "no version yet must render the interactive (unlocked) radio group");
         assertTrue(html.contains("name=\"contentTypeRadio\""));
-        assertFalse("must not render the locked display before any version exists",
-                html.contains("id=\"contentTypeLockedDisplay\""));
+        assertFalse(html.contains("id=\"contentTypeLockedDisplay\""), "must not render the locked display before any version exists");
     }
 
     @Test
@@ -1010,8 +988,7 @@ public class ConfigTemplatesJobActionTest {
         wc.getPage(request);
 
         JobConfigTemplateProperty reloaded = project.getProperty(JobConfigTemplateProperty.class);
-        assertEquals("a second version of an already-locked job property must never change its ContentType",
-                ContentType.XML, reloaded.getContentType());
+        assertEquals(ContentType.XML, reloaded.getContentType(), "a second version of an already-locked job property must never change its ContentType");
     }
 
     @Test
@@ -1024,24 +1001,29 @@ public class ConfigTemplatesJobActionTest {
 
         FreeStyleProject project = jenkins.createFreeStyleProject("job-recompute-merge");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page valid = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/computeMerge?overlayJson="
-                + URLEncoder.encode("{\"database\":{\"host\":null}}", "UTF-8")
-                + "&baseChainJson=" + URLEncoder.encode(baseChainJson, "UTF-8"));
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+
+        WebRequest validRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
+        validRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("overlayJson", "{\"database\":{\"host\":null}}"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", baseChainJson)
+        ));
+        Page valid = wc.getPage(validRequest);
         JSONObject validJson = JSONObject.fromObject(valid.getWebResponse().getContentAsString());
         assertTrue(validJson.getBoolean("ok"));
         assertEquals("JSON", validJson.getString("contentType"));
         JSONObject merged = JSONObject.fromObject(validJson.getString("merged"));
-        assertFalse("null in overlay must remove the key from the merged result (RFC 7396)",
-                merged.getJSONObject("database").has("host"));
+        assertFalse(merged.getJSONObject("database").has("host"), "null in overlay must remove the key from the merged result (RFC 7396)");
         assertEquals(5432, merged.getJSONObject("database").getInt("port"));
 
-        Page invalid = wc.getPage(wc.getContextPath() + "job/" + project.getName()
-                + "/configTemplates/computeMerge?overlayJson=" + URLEncoder.encode("{ not valid", "UTF-8")
-                + "&baseChainJson=" + URLEncoder.encode(baseChainJson, "UTF-8"));
+        WebRequest invalidRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
+        invalidRequest.setRequestParameters(List.of(
+                new org.htmlunit.util.NameValuePair("overlayJson", "{ not valid"),
+                new org.htmlunit.util.NameValuePair("baseChainJson", baseChainJson)
+        ));
+        Page invalid = wc.getPage(invalidRequest);
         JSONObject invalidJson = JSONObject.fromObject(invalid.getWebResponse().getContentAsString());
-        assertFalse("transiently invalid override JSON must be reported, not thrown as a server error",
-                invalidJson.getBoolean("ok"));
+        assertFalse(invalidJson.getBoolean("ok"), "transiently invalid override JSON must be reported, not thrown as a server error");
         assertNotNull(invalidJson.getString("error"));
     }
 
@@ -1069,18 +1051,17 @@ public class ConfigTemplatesJobActionTest {
                 + "recomputeMerge = function() {};"
                 + "moveBaseChainRow(1, -1);");
         Object expandedAfterMove = engine.eval("baseChainRowExpanded[0]");
-        assertEquals("moving the expanded row up must carry its expand state with it",
-                Boolean.TRUE, expandedAfterMove);
+        assertEquals(Boolean.TRUE, expandedAfterMove, "moving the expanded row up must carry its expand state with it");
 
         engine.eval("availableProjectKeys = ['json-proj', 'xml-proj'];"
                 + "commonVersionCatalog = { typeByProject: { 'json-proj': 'JSON', 'xml-proj': 'XML' } };"
                 + "baseChainRows = [{projectKey:'json-proj'}, {projectKey:'xml-proj'}];");
         Object row0Options = engine.eval("projectOptionsForRow(0).length");
-        assertEquals("row #1 (index 0) must list every available project, unfiltered",
-                2.0, ((Number) row0Options).doubleValue(), 0.001);
+        assertEquals(2.0, ((Number) row0Options).doubleValue(), 0.001,
+                "row #1 (index 0) must list every available project, unfiltered");
         Object row1Json = engine.eval("JSON.stringify(projectOptionsForRow(1))");
-        assertEquals("row #2+ must be filtered to row #1's resolved ContentType — 'xml-proj' does not "
-                + "match 'json-proj's JSON type", "[\"json-proj\"]", row1Json);
+        assertEquals("[\"json-proj\"]", row1Json, "row #2+ must be filtered to row #1's resolved ContentType — 'xml-proj' does not "
+                + "match 'json-proj's JSON type");
     }
 
     @Test
@@ -1105,25 +1086,20 @@ public class ConfigTemplatesJobActionTest {
         // also paint an icon that reveals nothing.
         Object shortLabel = engine.eval("baseChainVersionLabel({version: 3, note: 'tidy up'})");
         assertEquals("v3 — tidy up", shortLabel);
-        assertEquals("a label that already fits must be returned unchanged",
-                shortLabel, engine.eval("truncateVersionLabel(baseChainVersionLabel("
-                        + "{version: 3, note: 'tidy up'}))"));
+        assertEquals(shortLabel, engine.eval("truncateVersionLabel(baseChainVersionLabel("
+                        + "{version: 3, note: 'tidy up'}))"), "a label that already fits must be returned unchanged");
 
         // Owner report 2026-09-21: an unbounded note widened the select, widened the column, and
         // pushed the row's action buttons out of the table.
         engine.eval("var longLabel = baseChainVersionLabel({version: 12, "
                 + "note: 'switched the payment gateway sandbox endpoint and raised every retry budget'});");
         Object truncated = engine.eval("truncateVersionLabel(longLabel)");
-        assertEquals("a long label must be capped so the select cannot grow without bound",
-                40, ((String) truncated).length());
-        assertTrue("a truncated label must end in an ellipsis so the elision is visible: " + truncated,
-                ((String) truncated).endsWith("…"));
-        assertTrue("the truncated label must keep the version prefix, which is the part that "
-                        + "actually identifies the row: " + truncated,
-                ((String) truncated).startsWith("v12 — "));
-        assertEquals("truncation must not mutate the source label - the untruncated text is what "
-                        + "the info tooltip shows", Boolean.TRUE,
-                engine.eval("longLabel !== truncateVersionLabel(longLabel)"));
+        assertEquals(40, ((String) truncated).length(), "a long label must be capped so the select cannot grow without bound");
+        assertTrue(((String) truncated).endsWith("…"), "a truncated label must end in an ellipsis so the elision is visible: " + truncated);
+        assertTrue(((String) truncated).startsWith("v12 — "), "the truncated label must keep the version prefix, which is the part that "
+                        + "actually identifies the row: " + truncated);
+        assertEquals(Boolean.TRUE, engine.eval("longLabel !== truncateVersionLabel(longLabel)"), "truncation must not mutate the source label - the untruncated text is what "
+                        + "the info tooltip shows");
     }
 
     private int saveViaJsProxyLikeCall(FreeStyleProject project, JenkinsRule.WebClient wc, String content,
@@ -1150,7 +1126,7 @@ public class ConfigTemplatesJobActionTest {
         wc.getPage(request);
 
         JobConfigTemplateProperty property = project.getProperty(JobConfigTemplateProperty.class);
-        assertNotNull("save must have persisted a JobConfigTemplateProperty", property);
+        assertNotNull(property, "save must have persisted a JobConfigTemplateProperty");
         int max = 0;
         for (var v : property.getVersions()) {
             max = Math.max(max, v.getVersionNumber());

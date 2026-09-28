@@ -6,12 +6,13 @@ import io.jenkins.plugins.jobconfigchain.model.ContentType;
 import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
 import org.htmlunit.SilentCssErrorHandler;
 import org.htmlunit.html.HtmlPage;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Behavioural coverage for the table filter: drives the real script in a real DOM.
@@ -33,10 +34,15 @@ import static org.junit.Assert.assertTrue;
  * <p>Runs against the Config Sets list rather than a Config Set page on purpose: that page carries
  * no Monaco editor, so enabling JavaScript here does not drag an editor bundle into the test run.
  */
+@WithJenkins
 public class TableFilterBehaviourTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
+    private JenkinsRule jenkins;
+
+    @BeforeEach
+    public void setUp(JenkinsRule rule) {
+        jenkins = rule;
+    }
 
     private void seed(String projectKey, ContentType type) {
         ConfigSetRepository repository = new ConfigSetRepository();
@@ -103,15 +109,15 @@ public class TableFilterBehaviourTest {
         seed("othername-gamma", ContentType.JSON);
 
         HtmlPage page = listPageWithScripting();
-        assertEquals("all three seeded rows must render before filtering",
-                "filterbehav-alpha,filterbehav-beta,othername-gamma", visibleKeys(page));
+        assertEquals("filterbehav-alpha,filterbehav-beta,othername-gamma", visibleKeys(page),
+                "all three seeded rows must render before filtering");
 
         assertEquals("ok", setFilter(page, 0, "filterbehav"));
 
-        assertEquals("only the rows whose name contains the typed text may remain",
-                "filterbehav-alpha,filterbehav-beta", visibleKeys(page));
-        assertEquals("the status line must report how many of how many survive",
-                "2 of 3", status(page));
+        assertEquals("filterbehav-alpha,filterbehav-beta", visibleKeys(page),
+                "only the rows whose name contains the typed text may remain");
+        assertEquals("2 of 3", status(page),
+                "the status line must report how many of how many survive");
     }
 
     @Test
@@ -124,7 +130,7 @@ public class TableFilterBehaviourTest {
         // must not also match a value that merely contains it.
         assertEquals("ok", setFilter(page, 1, "XML"));
 
-        assertEquals("only the XML row may survive", "enumbehav-xml", visibleKeys(page));
+        assertEquals("enumbehav-xml", visibleKeys(page), "only the XML row may survive");
         assertEquals("1 of 2", status(page));
     }
 
@@ -136,11 +142,11 @@ public class TableFilterBehaviourTest {
         HtmlPage page = listPageWithScripting();
         assertEquals("ok", setFilter(page, 0, "zzz-no-such-config-set"));
 
-        assertEquals("no row may survive a filter nothing matches", "", visibleKeys(page));
+        assertEquals("", visibleKeys(page), "no row may survive a filter nothing matches");
         // The distinction that matters to a user: an empty table because nothing matched, versus
         // an empty table because there is no data. Without this line the two look identical.
-        assertTrue("the status line must say nothing matched, got: " + status(page),
-                status(page).toLowerCase().contains("no rows"));
+        assertTrue(status(page).toLowerCase().contains("no rows"),
+                "the status line must say nothing matched, got: " + status(page));
     }
 
     /**
@@ -174,10 +180,10 @@ public class TableFilterBehaviourTest {
         // assertion records the measurement so that the day the harness gains support, this test
         // fails loudly and the skipped test below can be switched back on - rather than the
         // limitation quietly outliving its reason.
-        assertEquals("harness behaviour changed: it now delivers MutationObserver callbacks, so "
+        assertEquals("0", count,
+                "harness behaviour changed: it now delivers MutationObserver callbacks, so "
                         + "anActiveFilterIsReappliedAfterTheTableBodyIsRebuilt can stop being "
-                        + "skipped and become a real test again",
-                "0", count);
+                        + "skipped and become a real test again");
     }
 
     /**
@@ -214,10 +220,10 @@ public class TableFilterBehaviourTest {
                         + "  return 'rebuilt';"));
         page.getWebClient().waitForBackgroundJavaScript(3000);
 
-        assertEquals("the filter must be re-applied to the rows that replaced the filtered ones - "
+        assertEquals("rebuild-keep", visibleKeys(page),
+                "the filter must be re-applied to the rows that replaced the filtered ones - "
                         + "otherwise the table silently shows everything while the control still "
-                        + "holds a value",
-                "rebuild-keep", visibleKeys(page));
+                        + "holds a value");
         assertEquals("1 of 3", status(page));
     }
 
@@ -234,7 +240,7 @@ public class TableFilterBehaviourTest {
         assertEquals("restore-one", visibleKeys(page));
 
         assertEquals("ok", setFilter(page, 0, ""));
-        assertEquals("clearing the filter must bring every row back", all, visibleKeys(page));
-        assertEquals("and the status line must retire with it", "HIDDEN", status(page));
+        assertEquals(all, visibleKeys(page), "clearing the filter must bring every row back");
+        assertEquals("HIDDEN", status(page), "and the status line must retire with it");
     }
 }

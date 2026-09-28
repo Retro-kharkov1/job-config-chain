@@ -2,16 +2,17 @@ package io.jenkins.plugins.jobconfigchain.ui;
 
 import hudson.model.FreeStyleProject;
 import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Pins the rule that decides whether a Config Set can be withdrawn or purged.
@@ -28,10 +29,15 @@ import static org.junit.Assert.assertTrue;
  * every key appears in some old chain; block nothing and a rollback breaks months later, in an
  * unrelated context, for somebody who did not make the decision.</p>
  */
+@WithJenkins
 public class ConfigSetUsageScannerTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
+    private JenkinsRule jenkins;
+
+    @BeforeEach
+    public void setUp(JenkinsRule rule) {
+        jenkins = rule;
+    }
 
     /**
      * Gives a Job a Config Templates property whose versions name the given base keys, and
@@ -63,8 +69,8 @@ public class ConfigSetUsageScannerTest {
         assertEquals(1, usage.getJobs().size());
         assertEquals("uses-it-now", usage.getJobs().get(0).getFullName());
         assertTrue(usage.getJobs().get(0).isActiveVersionReferences());
-        assertTrue("a live reference must stop a withdrawal", usage.blocksDelete());
-        assertTrue("and it must certainly stop a purge", usage.blocksPurge());
+        assertTrue(usage.blocksDelete(), "a live reference must stop a withdrawal");
+        assertTrue(usage.blocksPurge(), "and it must certainly stop a purge");
     }
 
     @Test
@@ -75,16 +81,16 @@ public class ConfigSetUsageScannerTest {
 
         ConfigSetUsageScanner.Usage usage = ConfigSetUsageScanner.scan("shared-db", List.of(job));
 
-        assertEquals("the historical reference must still be found", 1, usage.getJobs().size());
+        assertEquals(1, usage.getJobs().size(), "the historical reference must still be found");
         assertFalse(usage.getJobs().get(0).isActiveVersionReferences());
         assertEquals(List.of(1), usage.getJobs().get(0).getVersionNumbers());
         assertEquals(1, usage.getHistoricalOnlyJobs().size());
         assertTrue(usage.getActiveJobs().isEmpty());
 
-        assertFalse("withdrawal is reversible, so a historical reference only warns",
-                usage.blocksDelete());
-        assertTrue("purge is not reversible, so the same reference stops it",
-                usage.blocksPurge());
+        assertFalse(usage.blocksDelete(),
+                "withdrawal is reversible, so a historical reference only warns");
+        assertTrue(usage.blocksPurge(),
+                "purge is not reversible, so the same reference stops it");
     }
 
     @Test
@@ -94,8 +100,8 @@ public class ConfigSetUsageScannerTest {
 
         ConfigSetUsageScanner.Usage usage = ConfigSetUsageScanner.scan("shared-db", List.of(job));
 
-        assertEquals("both referencing versions must be named, so the operator sees the scope",
-                List.of(1, 3), usage.getJobs().get(0).getVersionNumbers());
+        assertEquals(List.of(1, 3), usage.getJobs().get(0).getVersionNumbers(),
+                "both referencing versions must be named, so the operator sees the scope");
     }
 
     @Test
@@ -107,8 +113,8 @@ public class ConfigSetUsageScannerTest {
         ConfigSetUsageScanner.Usage usage =
                 ConfigSetUsageScanner.scan("shared-db", List.of(plain, emptyChain, other));
 
-        assertTrue("nothing here names the key, so nothing may be reported",
-                usage.getJobs().isEmpty());
+        assertTrue(usage.getJobs().isEmpty(),
+                "nothing here names the key, so nothing may be reported");
         assertFalse(usage.blocksDelete());
         assertFalse(usage.blocksPurge());
     }

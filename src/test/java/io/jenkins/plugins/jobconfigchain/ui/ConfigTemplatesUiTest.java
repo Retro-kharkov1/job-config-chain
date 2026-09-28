@@ -17,9 +17,10 @@ import io.jenkins.plugins.jobconfigchain.model.SecretPlaceholder;
 import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
 import net.sf.json.JSONObject;
 import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 
 import javax.script.Compilable;
 import javax.script.ScriptEngine;
@@ -31,10 +32,10 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * End-to-end Stapler/Jelly UI tests for the Milestone-2 admin screens (FR-30–FR-39). Uses
@@ -44,10 +45,15 @@ import static org.junit.Assert.assertTrue;
  * <p>Each test seeds its own uniquely-named Config Set (no shared cross-test state) to keep tests
  * isolated per the pom.xml's own notes on Windows JenkinsRule fork/AV flakiness.</p>
  */
+@WithJenkins
 public class ConfigTemplatesUiTest {
 
-    @Rule
-    public JenkinsRule jenkins = new JenkinsRule();
+    private JenkinsRule jenkins;
+
+    @BeforeEach
+    public void setUp(JenkinsRule rule) {
+        jenkins = rule;
+    }
 
     private ConfigSet seedCommon(String projectKey, String contentJson, String note) {
         ConfigSetRepository repository = new ConfigSetRepository();
@@ -68,8 +74,7 @@ public class ConfigTemplatesUiTest {
         // jenkins.model.Jenkins#getActions() javadoc). This screen must no longer appear there.
         boolean stillATopNavAction = jenkins.jenkins.getActions().stream()
                 .anyMatch(a -> a instanceof ConfigTemplatesRootAction);
-        assertFalse("the plugin's entry point must no longer be a top-nav RootAction",
-                stillATopNavAction);
+        assertFalse(stillATopNavAction, "the plugin's entry point must no longer be a top-nav RootAction");
     }
 
     @Test
@@ -79,18 +84,16 @@ public class ConfigTemplatesUiTest {
                 .map(ConfigTemplatesRootAction.class::cast)
                 .findFirst()
                 .orElse(null);
-        assertNotNull("the plugin must register itself as a ManagementLink extension", managementLink);
+        assertNotNull(managementLink, "the plugin must register itself as a ManagementLink extension");
         assertEquals("configTemplates", managementLink.getUrlName());
         assertEquals("Config Templates", managementLink.getDisplayName());
-        assertEquals("closest fit in ManagementLink's fixed Category enum (see class javadoc)",
-                ManagementLink.Category.TOOLS, managementLink.getCategory());
+        assertEquals(ManagementLink.Category.TOOLS, managementLink.getCategory(), "closest fit in ManagementLink's fixed Category enum (see class javadoc)");
     }
 
     @Test
     public void managePage_listsTheConfigTemplatesEntry() throws Exception {
         HtmlPage page = jenkins.createWebClient().goTo("manage");
-        assertTrue("the Manage Jenkins page must list an entry for this plugin",
-                page.asNormalizedText().contains("Config Templates"));
+        assertTrue(page.asNormalizedText().contains("Config Templates"), "the Manage Jenkins page must list an entry for this plugin");
     }
 
     @Test
@@ -102,8 +105,7 @@ public class ConfigTemplatesUiTest {
         seedCommon("uitest70", "{\"a\":1}", "seed");
 
         HtmlPage page = jenkins.createWebClient().goTo("configTemplates");
-        assertTrue("existing /configTemplates URL must still resolve to the same list page",
-                page.asNormalizedText().contains("uitest70"));
+        assertTrue(page.asNormalizedText().contains("uitest70"), "existing /configTemplates URL must still resolve to the same list page");
     }
 
     @Test
@@ -127,10 +129,8 @@ public class ConfigTemplatesUiTest {
         HtmlPage page = wc.goTo("configTemplates");
         String html = page.getWebResponse().getContentAsString();
 
-        assertTrue("row link must point at /configTemplates/<key>/ with no /common suffix",
-                html.contains("configTemplates/uitest150/\">uitest150<"));
-        assertFalse("row link text must no longer carry the retired -common suffix",
-                html.contains("uitest150-common"));
+        assertTrue(html.contains("configTemplates/uitest150/\">uitest150<"), "row link must point at /configTemplates/<key>/ with no /common suffix");
+        assertFalse(html.contains("uitest150-common"), "row link text must no longer carry the retired -common suffix");
     }
 
     @Test
@@ -159,13 +159,10 @@ public class ConfigTemplatesUiTest {
         HtmlPage page = wc.goTo("configTemplates/uitest151/");
         String html = page.getWebResponse().getContentAsString();
 
-        assertTrue("the root project URL must render the seeded active version's content, proving "
-                + "the common editor (not a stub landing page) is served here",
-                html.contains("db.internal"));
-        assertTrue("the root project URL must render the common editor's version-history section",
-                html.contains("id=\"versionHistoryDetails\""));
-        assertTrue("the root project URL must render the Generate Template action",
-                html.contains("id=\"modeGenerateBtn\""));
+        assertTrue(html.contains("db.internal"), "the root project URL must render the seeded active version's content, proving "
+                + "the common editor (not a stub landing page) is served here");
+        assertTrue(html.contains("id=\"versionHistoryDetails\""), "the root project URL must render the common editor's version-history section");
+        assertTrue(html.contains("id=\"modeGenerateBtn\""), "the root project URL must render the Generate Template action");
     }
 
     @Test
@@ -180,8 +177,7 @@ public class ConfigTemplatesUiTest {
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
         Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest152/common/");
-        assertEquals("the old /common URL segment must plainly 404, not redirect or render a stub",
-                404, result.getWebResponse().getStatusCode());
+        assertEquals(404, result.getWebResponse().getStatusCode(), "the old /common URL segment must plainly 404, not redirect or render a stub");
     }
 
     @Test
@@ -204,12 +200,10 @@ public class ConfigTemplatesUiTest {
                 new org.htmlunit.util.NameValuePair("note", "bad save attempt")
         ));
         Page result = wc.getPage(request);
-        assertFalse("invalid JSON must not be accepted (FR-33)",
-                result.getWebResponse().getStatusCode() == 200);
+        assertFalse(result.getWebResponse().getStatusCode() == 200, "invalid JSON must not be accepted (FR-33)");
 
         ConfigSetRepository repository = new ConfigSetRepository();
-        assertEquals("no Config Set must have been persisted from the rejected save",
-                null, repository.findCommon("uitest4"));
+        assertEquals(null, repository.findCommon("uitest4"), "no Config Set must have been persisted from the rejected save");
     }
 
     @Test
@@ -222,8 +216,12 @@ public class ConfigTemplatesUiTest {
         assertEquals(1, reloaded.getActiveVersionNumber());
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(
-                wc.getContextPath() + "configTemplates/uitest5/activateVersion?version=" + v2);
+        URL activateUrl = new URL(wc.getContextPath() + "configTemplates/uitest5/activateVersion");
+        WebRequest activateRequest = new WebRequest(activateUrl, HttpMethod.POST);
+        activateRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("version", String.valueOf(v2))
+        ));
+        Page result = wc.getPage(activateRequest);
         String body = result.getWebResponse().getContentAsString();
         JSONObject json = JSONObject.fromObject(body);
         assertTrue(json.getBoolean("ok"));
@@ -252,8 +250,12 @@ public class ConfigTemplatesUiTest {
         // documented on editPage_loadsActiveVersionContent above) — this test instead proves the
         // exact data contract the client-side diff view is wired to.
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest8/diffVersions?version=" + v2);
+        URL diffUrl = new URL(wc.getContextPath() + "configTemplates/uitest8/diffVersions");
+        WebRequest diffRequest = new WebRequest(diffUrl, HttpMethod.POST);
+        diffRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("version", String.valueOf(v2))
+        ));
+        Page result = wc.getPage(diffRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
         assertEquals(v2, json.getInt("version"));
@@ -265,11 +267,14 @@ public class ConfigTemplatesUiTest {
         seedCommon("uitest9", "{\"a\":1}", "v1");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest9/diffVersions?version=99");
+        URL diffUrl = new URL(wc.getContextPath() + "configTemplates/uitest9/diffVersions");
+        WebRequest diffRequest = new WebRequest(diffUrl, HttpMethod.POST);
+        diffRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("version", "99")
+        ));
+        Page result = wc.getPage(diffRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
-        assertFalse("a nonexistent version number must be reported, not thrown as a server error",
-                json.getBoolean("ok"));
+        assertFalse(json.getBoolean("ok"), "a nonexistent version number must be reported, not thrown as a server error");
         assertNotNull(json.getString("error"));
     }
 
@@ -291,15 +296,12 @@ public class ConfigTemplatesUiTest {
                 new org.htmlunit.util.NameValuePair("note", "trying to leak a real secret")
         ));
         Page result = wc.getPage(request);
-        assertFalse("a real value at a manifest-declared secret path must be rejected (FR-14/OQ-1)",
-                result.getWebResponse().getStatusCode() == 200);
+        assertFalse(result.getWebResponse().getStatusCode() == 200, "a real value at a manifest-declared secret path must be rejected (FR-14/OQ-1)");
 
         ConfigSetRepository verify = new ConfigSetRepository();
         ConfigSet reloaded = verify.findCommon("uitest7");
-        assertEquals("no new version must have been persisted from the rejected save",
-                1, reloaded.getVersions().size());
-        assertFalse("the real secret text must never have been written to storage",
-                reloaded.getActiveVersion().getContentJson().contains("hunter2-real-secret"));
+        assertEquals(1, reloaded.getVersions().size(), "no new version must have been persisted from the rejected save");
+        assertFalse(reloaded.getActiveVersion().getContentJson().contains("hunter2-real-secret"), "the real secret text must never have been written to storage");
     }
 
     private void seedRealCredential(String id) throws Exception {
@@ -314,16 +316,19 @@ public class ConfigTemplatesUiTest {
         seedCommon("uitest10", "{\"database\":{\"password\":\"" + SecretPlaceholder.VALUE + "\"}}", "seed");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest10/registerSecret?path=database.password&credentialId=does-not-exist");
+        URL registerUrl = new URL(wc.getContextPath() + "configTemplates/uitest10/registerSecret");
+        WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
+        registerRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("path", "database.password"),
+                new org.htmlunit.util.NameValuePair("credentialId", "does-not-exist")
+        ));
+        Page result = wc.getPage(registerRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
-        assertFalse("a credential ID with no matching real Jenkins credential must be rejected (OQ-1)",
-                json.getBoolean("ok"));
+        assertFalse(json.getBoolean("ok"), "a credential ID with no matching real Jenkins credential must be rejected (OQ-1)");
         assertNotNull(json.getString("error"));
 
         ConfigSetRepository repository = new ConfigSetRepository();
-        assertTrue("no manifest entry must have been persisted for the rejected credential ID",
-                repository.findCommon("uitest10").getSecretsManifest().isEmpty());
+        assertTrue(repository.findCommon("uitest10").getSecretsManifest().isEmpty(), "no manifest entry must have been persisted for the rejected credential ID");
     }
 
     @Test
@@ -332,8 +337,13 @@ public class ConfigTemplatesUiTest {
         seedCommon("uitest11", "{\"database\":{\"password\":\"" + SecretPlaceholder.VALUE + "\"}}", "seed");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest11/registerSecret?path=database.password&credentialId=uitest11-real-cred");
+        URL registerUrl = new URL(wc.getContextPath() + "configTemplates/uitest11/registerSecret");
+        WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
+        registerRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("path", "database.password"),
+                new org.htmlunit.util.NameValuePair("credentialId", "uitest11-real-cred")
+        ));
+        Page result = wc.getPage(registerRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
 
@@ -351,16 +361,19 @@ public class ConfigTemplatesUiTest {
         seedCommon("uitest13", "{\"database\":{\"password\":\"a-real-plaintext-password\"}}", "seed");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest13/registerSecret?path=database.password&credentialId=uitest13-real-cred");
+        URL registerUrl = new URL(wc.getContextPath() + "configTemplates/uitest13/registerSecret");
+        WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
+        registerRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("path", "database.password"),
+                new org.htmlunit.util.NameValuePair("credentialId", "uitest13-real-cred")
+        ));
+        Page result = wc.getPage(registerRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
-        assertFalse("must reject declaring a path secret when the active version already holds a real value",
-                json.getBoolean("ok"));
+        assertFalse(json.getBoolean("ok"), "must reject declaring a path secret when the active version already holds a real value");
         assertNotNull(json.getString("error"));
 
         ConfigSetRepository repository = new ConfigSetRepository();
-        assertTrue("no manifest entry must have been persisted for the rejected retroactive declaration",
-                repository.findCommon("uitest13").getSecretsManifest().isEmpty());
+        assertTrue(repository.findCommon("uitest13").getSecretsManifest().isEmpty(), "no manifest entry must have been persisted for the rejected retroactive declaration");
     }
 
     @Test
@@ -369,11 +382,15 @@ public class ConfigTemplatesUiTest {
         seedCommon("uitest14", "{\"database\":{\"password\":\"" + SecretPlaceholder.VALUE + "\"}}", "seed");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest14/registerSecret?path=database.password&credentialId=uitest14-real-cred");
+        URL registerUrl = new URL(wc.getContextPath() + "configTemplates/uitest14/registerSecret");
+        WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
+        registerRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("path", "database.password"),
+                new org.htmlunit.util.NameValuePair("credentialId", "uitest14-real-cred")
+        ));
+        Page result = wc.getPage(registerRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
-        assertTrue("a path already holding the placeholder must be acceptable to newly declare secret",
-                json.getBoolean("ok"));
+        assertTrue(json.getBoolean("ok"), "a path already holding the placeholder must be acceptable to newly declare secret");
 
         ConfigSetRepository repository = new ConfigSetRepository();
         assertEquals("uitest14-real-cred",
@@ -391,14 +408,17 @@ public class ConfigTemplatesUiTest {
         new ConfigSetRepository().save(common);
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest31/unbindSecret?path=database.password");
+        URL unbindUrl = new URL(wc.getContextPath() + "configTemplates/uitest31/unbindSecret");
+        WebRequest unbindRequest = new WebRequest(unbindUrl, HttpMethod.POST);
+        unbindRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("path", "database.password")
+        ));
+        Page result = wc.getPage(unbindRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
 
         ConfigSetRepository repository = new ConfigSetRepository();
-        assertTrue("the manifest entry must no longer be present after removal",
-                repository.findCommon("uitest31").getSecretsManifest().isEmpty());
+        assertTrue(repository.findCommon("uitest31").getSecretsManifest().isEmpty(), "the manifest entry must no longer be present after removal");
     }
 
     @Test
@@ -406,11 +426,14 @@ public class ConfigTemplatesUiTest {
         seedCommon("uitest32", "{\"a\":1}", "seed");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest32/unbindSecret?path=never.bound");
+        URL unbindUrl = new URL(wc.getContextPath() + "configTemplates/uitest32/unbindSecret");
+        WebRequest unbindRequest = new WebRequest(unbindUrl, HttpMethod.POST);
+        unbindRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("path", "never.bound")
+        ));
+        Page result = wc.getPage(unbindRequest);
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
-        assertFalse("unbinding a path that was never bound must be reported, not thrown as a server error",
-                json.getBoolean("ok"));
+        assertFalse(json.getBoolean("ok"), "unbinding a path that was never bound must be reported, not thrown as a server error");
         assertNotNull(json.getString("error"));
     }
 
@@ -426,10 +449,8 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest34/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("a manifest row must render a delete control (CRUD completion)",
-                html.contains("ctsync-remove-secret-btn"));
-        assertTrue("the delete control must carry the dotted path so removeSecret() can read it",
-                html.contains("data-secret-path=\"database.password\""));
+        assertTrue(html.contains("ctsync-remove-secret-btn"), "a manifest row must render a delete control (CRUD completion)");
+        assertTrue(html.contains("data-secret-path=\"database.password\""), "the delete control must carry the dotted path so removeSecret() can read it");
     }
 
     @Test
@@ -442,8 +463,7 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest35/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("removeSecret is now defined in the external index.js, not inline (CSP migration)",
-                fetchExternalScripts(wc, html).contains("function removeSecret"));
+        assertTrue(fetchExternalScripts(wc, html).contains("function removeSecret"), "removeSecret is now defined in the external index.js, not inline (CSP migration)");
         assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (remove-secret JS)", wc, html);
     }
 
@@ -464,12 +484,9 @@ public class ConfigTemplatesUiTest {
         // CSP migration: this logic now lives in the external index.js, not inline — see
         // fetchExternalScripts.
         String js = fetchExternalScripts(wc, html);
-        assertTrue("save success/error must go through the native notificationBar toast",
-                js.contains("window.notificationBar.show("));
-        assertFalse("the old inline save banner element must be removed, not just unused",
-                html.contains("id=\"saveBanner\""));
-        assertFalse("the old showSaveBanner helper must be gone",
-                js.contains("function showSaveBanner"));
+        assertTrue(js.contains("window.notificationBar.show("), "save success/error must go through the native notificationBar toast");
+        assertFalse(html.contains("id=\"saveBanner\""), "the old inline save banner element must be removed, not just unused");
+        assertFalse(js.contains("function showSaveBanner"), "the old showSaveBanner helper must be gone");
     }
 
     // --- Real-JS-engine regression guard --------------------------------------------------
@@ -524,8 +541,8 @@ public class ConfigTemplatesUiTest {
     private void assertAllInlineScriptsAreSyntacticallyValidJs(String pageLabel, JenkinsRule.WebClient wc,
                                                                 String html) throws Exception {
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
-        assertNotNull("Nashorn JS engine must be resolvable on the test classpath "
-                + "(org.openjdk.nashorn:nashorn-core test dependency)", engine);
+        assertNotNull(engine, "Nashorn JS engine must be resolvable on the test classpath "
+                + "(org.openjdk.nashorn:nashorn-core test dependency)");
         Compilable compilable = (Compilable) engine;
 
         List<String> blocks = new ArrayList<>();
@@ -551,8 +568,8 @@ public class ConfigTemplatesUiTest {
                 failures.add("<script> block on " + pageLabel + " is not valid JS: " + e.getMessage());
             }
         }
-        assertTrue("expected at least one non-empty <script> block (inline or external) to check on "
-                + pageLabel, nonEmptyBlockCount > 0);
+        assertTrue(nonEmptyBlockCount > 0, "expected at least one non-empty <script> block (inline or external) to check on "
+                + pageLabel);
         assertTrue(String.join("\n", failures), failures.isEmpty());
     }
 
@@ -597,7 +614,8 @@ public class ConfigTemplatesUiTest {
                 + SecretPlaceholder.VALUE + "\"}}", "seed");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest20/renderTemplate");
+        URL renderUrl = new URL(wc.getContextPath() + "configTemplates/uitest20/renderTemplate");
+        Page result = wc.getPage(new WebRequest(renderUrl, HttpMethod.POST));
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
         assertTrue(json.getBoolean("ok"));
         // §7/FR-64: `template` is now already-serialized text in the resolved contentType, plus a
@@ -605,8 +623,7 @@ public class ConfigTemplatesUiTest {
         assertEquals("JSON", json.getString("contentType"));
         JSONObject template = JSONObject.fromObject(json.getString("template"));
         assertEquals("#{database.host}#", template.getJSONObject("database").getString("host"));
-        assertEquals("secret leaf must render as the identical token, no special-casing (FR-42)",
-                "#{database.password}#", template.getJSONObject("database").getString("password"));
+        assertEquals("#{database.password}#", template.getJSONObject("database").getString("password"), "secret leaf must render as the identical token, no special-casing (FR-42)");
     }
 
     @Test
@@ -615,9 +632,10 @@ public class ConfigTemplatesUiTest {
         // getActiveVersion() is null — must return a structured ok:false error, never
         // throw an exception page (FR-40's "disabled-state message, not an exception page").
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        Page result = wc.getPage(wc.getContextPath() + "configTemplates/uitest21-nonexistent/renderTemplate");
+        URL renderUrl = new URL(wc.getContextPath() + "configTemplates/uitest21-nonexistent/renderTemplate");
+        Page result = wc.getPage(new WebRequest(renderUrl, HttpMethod.POST));
         JSONObject json = JSONObject.fromObject(result.getWebResponse().getContentAsString());
-        assertFalse("no active version must be reported, not thrown as a server error", json.getBoolean("ok"));
+        assertFalse(json.getBoolean("ok"), "no active version must be reported, not thrown as a server error");
         assertNotNull(json.getString("error"));
     }
 
@@ -629,10 +647,8 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest25/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("global page must render the Generate Template toggle button (FR-40)",
-                html.contains("id=\"modeGenerateBtn\""));
-        assertTrue("global page must render the ACTIVE-version banner text (FR-16)",
-                html.contains("NOT this box's unsaved edits"));
+        assertTrue(html.contains("id=\"modeGenerateBtn\""), "global page must render the Generate Template toggle button (FR-40)");
+        assertTrue(html.contains("NOT this box's unsaved edits"), "global page must render the ACTIVE-version banner text (FR-16)");
     }
 
     @Test
@@ -644,8 +660,7 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest26-nonexistent/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("Generate Template button must render disabled with an explanatory label (FR-40)",
-                html.contains("disabled=\"disabled\"") && html.contains("no active version yet"));
+        assertTrue(html.contains("disabled=\"disabled\"") && html.contains("no active version yet"), "Generate Template button must render disabled with an explanatory label (FR-40)");
     }
 
     @Test
@@ -658,8 +673,7 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest29/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("switchToGenerateMode is now defined in the external index.js (CSP migration)",
-                fetchExternalScripts(wc, html).contains("switchToGenerateMode"));
+        assertTrue(fetchExternalScripts(wc, html).contains("switchToGenerateMode"), "switchToGenerateMode is now defined in the external index.js (CSP migration)");
         assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (generate-template JS)", wc, html);
     }
 
@@ -676,16 +690,13 @@ public class ConfigTemplatesUiTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("configTemplates/uitest40/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue("compare banner must render an explicit 'Back to editing' button (FR-45a)",
-                html.contains("id=\"backToEditingBtn\""));
+        assertTrue(html.contains("id=\"backToEditingBtn\""), "compare banner must render an explicit 'Back to editing' button (FR-45a)");
         // CSP migration: no inline onclick attribute any more — backToEditingBtn is wired to
         // switchToEditMode() in the external index.js instead (same function the re-click-same-row
         // path already calls); see CommonConfigSetPage/index.js's wiring block.
-        assertTrue("'Back to editing' must be wired to switchToEditMode(), the same no-op-exit "
-                + "function the re-click-same-row path already calls (FR-45b)",
-                fetchExternalScripts(wc, html).contains("on('backToEditingBtn', 'click', switchToEditMode)"));
-        assertTrue("'Load into editor' must remain present and distinct (FR-45c)",
-                html.contains("id=\"loadComparedBtn\""));
+        assertTrue(fetchExternalScripts(wc, html).contains("on('backToEditingBtn', 'click', switchToEditMode)"), "'Back to editing' must be wired to switchToEditMode(), the same no-op-exit "
+                + "function the re-click-same-row path already calls (FR-45b)");
+        assertTrue(html.contains("id=\"loadComparedBtn\""), "'Load into editor' must remain present and distinct (FR-45c)");
     }
 
     @Test
@@ -707,20 +718,17 @@ public class ConfigTemplatesUiTest {
         Pattern activeRow = Pattern.compile(
                 "id=\"historyRow-" + activeVersion + "\"[\\s\\S]*?</tr>");
         Matcher matcher = activeRow.matcher(html);
-        assertTrue("must find the active version's history row in the rendered HTML", matcher.find());
+        assertTrue(matcher.find(), "must find the active version's history row in the rendered HTML");
         String rowHtml = matcher.group();
-        assertTrue("the already-active row's Activate button must render disabled (FR-47)",
-                rowHtml.contains("disabled=\"disabled\""));
-        assertTrue("the disabled Activate button must explain why",
-                rowHtml.contains("Already the active version"));
+        assertTrue(rowHtml.contains("disabled=\"disabled\""), "the already-active row's Activate button must render disabled (FR-47)");
+        assertTrue(rowHtml.contains("Already the active version"), "the disabled Activate button must explain why");
 
         int inactiveVersion = activeVersion == 1 ? 2 : 1;
         Pattern inactiveRow = Pattern.compile(
                 "id=\"historyRow-" + inactiveVersion + "\"[\\s\\S]*?</tr>");
         Matcher inactiveMatcher = inactiveRow.matcher(html);
         assertTrue(inactiveMatcher.find());
-        assertFalse("a non-active row's Activate button must remain enabled",
-                inactiveMatcher.group().contains("disabled=\"disabled\""));
+        assertFalse(inactiveMatcher.group().contains("disabled=\"disabled\""), "a non-active row's Activate button must remain enabled");
     }
 
     @Test
@@ -735,10 +743,8 @@ public class ConfigTemplatesUiTest {
         HtmlPage page = wc.goTo("configTemplates/uitest44/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
-        assertTrue("prepareSubmit must disable both save buttons (FR-46)",
-                js.contains("document.getElementById('saveBtn').disabled = true"));
-        assertTrue("activateVersion must disable every Activate button, not just the clicked one (FR-46)",
-                js.contains("function setActivateButtonsDisabled"));
+        assertTrue(js.contains("document.getElementById('saveBtn').disabled = true"), "prepareSubmit must disable both save buttons (FR-46)");
+        assertTrue(js.contains("function setActivateButtonsDisabled"), "activateVersion must disable every Activate button, not just the clicked one (FR-46)");
         assertAllInlineScriptsAreSyntacticallyValidJs("common edit page (busy-disable-guard JS)", wc, html);
     }
 
@@ -787,9 +793,8 @@ public class ConfigTemplatesUiTest {
         String jsonArrayText = new com.google.gson.Gson().fromJson(seedLiteral, String.class);
         com.google.gson.JsonArray seededChain = com.google.gson.JsonParser.parseString(jsonArrayText).getAsJsonArray();
 
-        assertEquals("a brand-new job must seed an EMPTY base-chain array — no self-reference "
-                        + "default exists for the job-scoped model",
-                0, seededChain.size());
+        assertEquals(0, seededChain.size(), "a brand-new job must seed an EMPTY base-chain array — no self-reference "
+                        + "default exists for the job-scoped model");
     }
 
     // ---- Multi-format content (FR-59-FR-70) ----
@@ -804,8 +809,8 @@ public class ConfigTemplatesUiTest {
 
         HtmlPage page = jenkins.createWebClient().goTo("configTemplates");
         String text = page.asNormalizedText();
-        assertTrue("Type column must render JSON for a JSON Config Set (FR-67)", text.contains("JSON"));
-        assertTrue("Type column must render XML for an XML Config Set (FR-67)", text.contains("XML"));
+        assertTrue(text.contains("JSON"), "Type column must render JSON for a JSON Config Set (FR-67)");
+        assertTrue(text.contains("XML"), "Type column must render XML for an XML Config Set (FR-67)");
     }
 
     @Test
@@ -867,23 +872,35 @@ public class ConfigTemplatesUiTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
-        Page validPage = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest64/checkContentSyntax?content="
-                + java.net.URLEncoder.encode("<root><a>1</a></root>", "UTF-8") + "&contentType=XML");
+        URL checkSyntaxUrl = new URL(wc.getContextPath() + "configTemplates/uitest64/checkContentSyntax");
+
+        WebRequest validRequest = new WebRequest(checkSyntaxUrl, HttpMethod.POST);
+        validRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "<root><a>1</a></root>"),
+                new org.htmlunit.util.NameValuePair("contentType", "XML")
+        ));
+        Page validPage = wc.getPage(validRequest);
         JSONObject validJson = JSONObject.fromObject(validPage.getWebResponse().getContentAsString());
-        assertTrue("doCheckContentSyntax must accept syntactically valid XML", validJson.getBoolean("ok"));
+        assertTrue(validJson.getBoolean("ok"), "doCheckContentSyntax must accept syntactically valid XML");
 
-        Page invalidPage = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest64/checkContentSyntax?content="
-                + java.net.URLEncoder.encode("<root><a></root>", "UTF-8") + "&contentType=XML");
+        WebRequest invalidRequest = new WebRequest(checkSyntaxUrl, HttpMethod.POST);
+        invalidRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "<root><a></root>"),
+                new org.htmlunit.util.NameValuePair("contentType", "XML")
+        ));
+        Page invalidPage = wc.getPage(invalidRequest);
         JSONObject invalidJson = JSONObject.fromObject(invalidPage.getWebResponse().getContentAsString());
-        assertFalse("doCheckContentSyntax must reject malformed XML", invalidJson.getBoolean("ok"));
+        assertFalse(invalidJson.getBoolean("ok"), "doCheckContentSyntax must reject malformed XML");
 
-        Page formatPage = wc.getPage(wc.getContextPath()
-                + "configTemplates/uitest64/reformatContent?content="
-                + java.net.URLEncoder.encode("a: 1", "UTF-8") + "&contentType=YAML");
+        URL reformatUrl = new URL(wc.getContextPath() + "configTemplates/uitest64/reformatContent");
+        WebRequest formatRequest = new WebRequest(reformatUrl, HttpMethod.POST);
+        formatRequest.setRequestParameters(java.util.List.of(
+                new org.htmlunit.util.NameValuePair("content", "a: 1"),
+                new org.htmlunit.util.NameValuePair("contentType", "YAML")
+        ));
+        Page formatPage = wc.getPage(formatRequest);
         JSONObject formatJson = JSONObject.fromObject(formatPage.getWebResponse().getContentAsString());
-        assertTrue("doReformatContent must succeed for valid YAML", formatJson.getBoolean("ok"));
+        assertTrue(formatJson.getBoolean("ok"), "doReformatContent must succeed for valid YAML");
         assertNotNull(formatJson.getString("formatted"));
     }
 
@@ -915,22 +932,20 @@ public class ConfigTemplatesUiTest {
         HtmlPage page = wc.goTo("configTemplates");
         String html = page.getWebResponse().getContentAsString();
 
-        assertTrue("root page must render the new-project content-type radio group (FR-105)",
-                html.contains("id=\"newContentTypeGroup\""));
-        assertTrue("root page must reuse the same 'choose once — locked forever' helper wording",
-                html.contains("choose once") && html.contains("locked forever after the first Save"));
+        assertTrue(html.contains("id=\"newContentTypeGroup\""), "root page must render the new-project content-type radio group (FR-105)");
+        assertTrue(html.contains("choose once") && html.contains("locked forever after the first Save"), "root page must reuse the same 'choose once — locked forever' helper wording");
 
         Matcher jsonRadio = Pattern.compile("id=\"newContentTypeJson\"[^>]*").matcher(html);
         assertTrue(jsonRadio.find());
-        assertTrue("JSON radio must render pre-checked by default", jsonRadio.group().contains("checked=\"checked\""));
+        assertTrue(jsonRadio.group().contains("checked=\"checked\""), "JSON radio must render pre-checked by default");
 
         Matcher xmlRadio = Pattern.compile("id=\"newContentTypeXml\"[^>]*").matcher(html);
         assertTrue(xmlRadio.find());
-        assertFalse("XML radio must not be pre-checked by default", xmlRadio.group().contains("checked"));
+        assertFalse(xmlRadio.group().contains("checked"), "XML radio must not be pre-checked by default");
 
         Matcher yamlRadio = Pattern.compile("id=\"newContentTypeYaml\"[^>]*").matcher(html);
         assertTrue(yamlRadio.find());
-        assertFalse("YAML radio must not be pre-checked by default", yamlRadio.group().contains("checked"));
+        assertFalse(yamlRadio.group().contains("checked"), "YAML radio must not be pre-checked by default");
     }
 
     @Test
@@ -954,10 +969,8 @@ public class ConfigTemplatesUiTest {
         Page result = createButton.click();
 
         String url = result.getUrl().toString();
-        assertTrue("clicking create must navigate to the new project's common editor: " + url,
-                url.contains("/uitest90/"));
-        assertTrue("the selected content type must be carried through as a query parameter (FR-105): " + url,
-                url.contains("contentType=XML"));
+        assertTrue(url.contains("/uitest90/"), "clicking create must navigate to the new project's common editor: " + url);
+        assertTrue(url.contains("contentType=XML"), "the selected content type must be carried through as a query parameter (FR-105): " + url);
     }
 
     @Test
@@ -976,10 +989,9 @@ public class ConfigTemplatesUiTest {
         Page result = createButton.click();
 
         String url = result.getUrl().toString();
-        assertTrue("an empty projectKey must still produce the same empty-segment navigation shape "
-                + "as before this change: " + url, url.contains("configTemplates//"));
-        assertTrue("the default JSON content type must still be appended: " + url,
-                url.contains("contentType=JSON"));
+        assertTrue(url.contains("configTemplates//"), "an empty projectKey must still produce the same empty-segment navigation shape "
+                + "as before this change: " + url);
+        assertTrue(url.contains("contentType=JSON"), "the default JSON content type must still be appended: " + url);
     }
 
     @Test
@@ -989,17 +1001,14 @@ public class ConfigTemplatesUiTest {
         HtmlPage page = wc.goTo("configTemplates/uitest91-new/?contentType=XML");
         String html = page.getWebResponse().getContentAsString();
 
-        assertTrue("the picker must still render unlocked for a brand-new project",
-                html.contains("id=\"contentTypeUnlockedGroup\""));
+        assertTrue(html.contains("id=\"contentTypeUnlockedGroup\""), "the picker must still render unlocked for a brand-new project");
         Matcher xmlRadio = Pattern.compile("value=\"XML\"[^>]*").matcher(html);
         assertTrue(xmlRadio.find());
-        assertTrue("the XML radio must render pre-selected from the carried-through ?contentType= param (FR-105)",
-                xmlRadio.group().contains("checked=\"checked\""));
+        assertTrue(xmlRadio.group().contains("checked=\"checked\""), "the XML radio must render pre-selected from the carried-through ?contentType= param (FR-105)");
 
         Matcher jsonRadio = Pattern.compile("value=\"JSON\"[^>]*").matcher(html);
         assertTrue(jsonRadio.find());
-        assertFalse("JSON must no longer be the pre-selected radio once XML was carried through",
-                jsonRadio.group().contains("checked=\"checked\""));
+        assertFalse(jsonRadio.group().contains("checked=\"checked\""), "JSON must no longer be the pre-selected radio once XML was carried through");
     }
 
     @Test
@@ -1014,18 +1023,15 @@ public class ConfigTemplatesUiTest {
         HtmlPage page = wc.goTo("configTemplates/uitest92/?contentType=XML");
         String html = page.getWebResponse().getContentAsString();
 
-        assertTrue("an existing project's picker must render locked, never the unlocked radio group",
-                html.contains("id=\"contentTypeLockedDisplay\""));
+        assertTrue(html.contains("id=\"contentTypeLockedDisplay\""), "an existing project's picker must render locked, never the unlocked radio group");
         assertFalse(html.contains("id=\"contentTypeUnlockedGroup\""));
         Matcher lockedDisplay = Pattern.compile("id=\"contentTypeLockedDisplay\">([^<]*)").matcher(html);
         assertTrue(lockedDisplay.find());
-        assertTrue("the locked display must still show the originally-committed JSON type, not the "
-                + "ignored incoming XML param: " + lockedDisplay.group(1),
-                lockedDisplay.group(1).trim().startsWith("JSON"));
+        assertTrue(lockedDisplay.group(1).trim().startsWith("JSON"), "the locked display must still show the originally-committed JSON type, not the "
+                + "ignored incoming XML param: " + lockedDisplay.group(1));
 
         ConfigSetRepository repository = new ConfigSetRepository();
-        assertEquals("the incoming contentType param must have no persistence effect either",
-                ContentType.JSON, repository.findCommon("uitest92").getContentType());
+        assertEquals(ContentType.JSON, repository.findCommon("uitest92").getContentType(), "the incoming contentType param must have no persistence effect either");
     }
 
     // --- Live manual review fixes (2026-09-04): section reorg (accordion -> framed sections,
@@ -1043,9 +1049,7 @@ public class ConfigTemplatesUiTest {
         HtmlPage page = wc.goTo("configTemplates/uitest104/");
         String html = page.getWebResponse().getContentAsString();
 
-        assertFalse("Common page's sections must also no longer render as <details> accordions",
-                html.contains("<details"));
-        assertTrue("Common page's sections must also use Jenkins core's framed-section convention",
-                html.contains("jenkins-section"));
+        assertFalse(html.contains("<details"), "Common page's sections must also no longer render as <details> accordions");
+        assertTrue(html.contains("jenkins-section"), "Common page's sections must also use Jenkins core's framed-section convention");
     }
 }

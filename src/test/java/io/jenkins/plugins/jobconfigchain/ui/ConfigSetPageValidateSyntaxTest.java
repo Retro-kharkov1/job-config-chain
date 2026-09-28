@@ -2,25 +2,22 @@ package io.jenkins.plugins.jobconfigchain.ui;
 
 import hudson.model.Failure;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.Collection;
 
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Parameterized coverage of {@link ConfigSetPage#validateSyntaxOrFail(String, ContentType)} — the
  * single consolidated syntax-validation call site (FR-65) — across valid/invalid/wrong-root-shape
  * content for all 3 formats.
  */
-@RunWith(Parameterized.class)
 public class ConfigSetPageValidateSyntaxTest {
 
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> cases() {
+    static Collection<Object[]> cases() {
         return Arrays.asList(
                 new Object[]{ContentType.JSON, "{\"a\":1}", true},
                 new Object[]{ContentType.JSON, "{\"a\":", false},
@@ -34,18 +31,9 @@ public class ConfigSetPageValidateSyntaxTest {
         );
     }
 
-    private final ContentType type;
-    private final String content;
-    private final boolean expectedValid;
-
-    public ConfigSetPageValidateSyntaxTest(ContentType type, String content, boolean expectedValid) {
-        this.type = type;
-        this.content = content;
-        this.expectedValid = expectedValid;
-    }
-
-    @Test
-    public void validatesOrFails() {
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("cases")
+    public void validatesOrFails(ContentType type, String content, boolean expectedValid) {
         if (expectedValid) {
             ConfigSetPage.validateSyntaxOrFail(content, type); // must not throw
         } else {

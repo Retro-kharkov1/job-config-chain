@@ -1,14 +1,14 @@
 package io.jenkins.plugins.jobconfigchain.ui;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Locale;
 import java.util.ResourceBundle;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * Narrow, standalone proof that the maven-localizer-plugin-generated {@link Messages} class (from
@@ -29,12 +29,12 @@ public class MessagesI18nTest {
 
     private Locale originalLocale;
 
-    @Before
+    @BeforeEach
     public void saveLocale() {
         originalLocale = Locale.getDefault();
     }
 
-    @After
+    @AfterEach
     public void restoreLocale() {
         Locale.setDefault(originalLocale);
     }
