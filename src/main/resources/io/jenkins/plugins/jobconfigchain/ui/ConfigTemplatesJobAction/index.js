@@ -229,15 +229,71 @@
       proceed(window.prompt(opts.message));
       return;
     }
-    window.dialog.prompt(opts.title, {
+    var promptResult = window.dialog.prompt(opts.title, {
       message: opts.message,
       allowEmpty: false,
       type: 'destructive',
       okText: opts.okLabel,
       cancelText: s.cancel
-    }).then(proceed).catch(function () {
+    });
+    // Bug fix (2026-09-28): core's own dialog only gates its OK button on "is the field
+    // non-empty" (allowEmpty:false) — it has no notion of the exact name this dialog requires, so
+    // the button used to become clickable on ANY typed text, not just a match. proceed() above
+    // already refused a mismatch (it never called opts.onConfirm), so this was never a
+    // data-safety hole, but it broke the disabled-until-correct promise the button visually
+    // makes: a mismatched Enter/click closed the dialog and only then reported the mismatch,
+    // instead of never being clickable in the first place. dialog.prompt() renders (and shows)
+    // its dialog synchronously before returning the pending promise above — the same reason the
+    // dialog is already visible to the operator the instant this call returns — so the freshly
+    // opened <dialog> is reachable immediately afterwards, with no need to wait on anything async.
+    enforceNameMatchOnOpenDialog(opts.expectedName, s.cancel);
+    promptResult.then(proceed).catch(function () {
       // Cancelling rejects with no argument — swallow to avoid an unhandled-rejection console error.
     });
+  }
+
+  // Bug fix (2026-09-28), see confirmByName's own comment above for the "why". This codebase never
+  // has more than one of these modal prompts open at a time, so the freshly opened dialog is
+  // always the LAST <dialog> element in the document at this point.
+  function enforceNameMatchOnOpenDialog(expectedName, cancelLabel) {
+    if (typeof document === 'undefined' || !document.querySelectorAll) { return; }
+    var dialogs = document.querySelectorAll('dialog');
+    var dlg = dialogs[dialogs.length - 1];
+    if (!dlg) { return; }
+    wireDialogNameInput(dlg, expectedName, cancelLabel);
+  }
+
+  function findDialogOkButton(dlg, cancelLabel) {
+    // type:'destructive' is the only type this codebase ever asks core's dialog.prompt for, so
+    // its rendered OK button always carries this same modifier class Jenkins' own design language
+    // (and this plugin's own markup, e.g. deleteConfigSetBtn) already uses for destructive
+    // actions elsewhere on these pages.
+    var destructive = dlg.querySelector('button.jenkins-button--destructive');
+    if (destructive) { return destructive; }
+    // Fallback for a future core version that renders this differently: whichever dialog button
+    // is not labelled exactly like the Cancel button we asked for (matched by its own rendered
+    // text, so this stays correct under localization instead of guessing an English word).
+    var buttons = Array.prototype.slice.call(dlg.querySelectorAll('button'));
+    for (var i = 0; i < buttons.length; i++) {
+      if (buttons[i].textContent.replace(/^\s+|\s+$/g, '') !== cancelLabel) { return buttons[i]; }
+    }
+    return null;
+  }
+
+  function wireDialogNameInput(dlg, expectedName, cancelLabel) {
+    var input = dlg.querySelector('input[type="text"], input:not([type])');
+    if (!input) { return; }
+    function sync() {
+      var btn = findDialogOkButton(dlg, cancelLabel);
+      if (!btn) { return; }
+      var typed = input.value.replace(/^\s+|\s+$/g, '');
+      // Only ever forces the button back to disabled on a mismatch — never re-enables it here, so
+      // core's own allowEmpty:false gate (which DOES re-enable it once the field stops being
+      // empty, on every keystroke) always still runs first, exactly as before this fix.
+      if (typed !== expectedName) { btn.disabled = true; }
+    }
+    input.addEventListener('input', sync);
+    sync();
   }
 
   function showBlocked(bannerId, title, sections) {
