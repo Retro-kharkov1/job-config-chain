@@ -1,13 +1,13 @@
 package io.jenkins.plugins.jobconfigchain.merge.tree;
 
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Behavior-neutral refactor check for {@link TreePaths} against the JSON adapter (formerly {@code JsonPathsTest}). */
 public class TreePathsTest {

@@ -5,25 +5,25 @@ import io.jenkins.plugins.jobconfigchain.model.ConfigSet;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
 import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class BaseChainResolverTest {
 
-    @Rule
-    public TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @TempDir
+    File temporaryFolder;
 
     @Test
     public void resolvesActiveAndPinnedReferencesAcrossProjects() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
 
         ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         int aV1 = teamA.addVersion("{\"a\":1}", "v1", "alice", 1L);
@@ -50,7 +50,7 @@ public class BaseChainResolverTest {
 
     @Test
     public void missingProjectResolvesToNullConfigSetAndVersionWithoutThrowing() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         List<BaseConfigReference> chain = Collections.singletonList(BaseConfigReference.active("no-such-project"));
 
         List<BaseChainResolver.ResolvedReference> resolved = BaseChainResolver.resolve(repository, chain);
@@ -62,7 +62,7 @@ public class BaseChainResolverTest {
 
     @Test
     public void missingPinnedVersionResolvesToNullVersionWithoutThrowing() throws Exception {
-        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder.newFolder());
+        ConfigSetRepository repository = new ConfigSetRepository(temporaryFolder);
         ConfigSet teamA = new ConfigSet("team-a-common", ConfigSetRole.COMMON, null, "Team A Common", ContentType.JSON);
         teamA.addVersion("{\"a\":1}", "v1", "alice", 1L);
         repository.save(teamA);

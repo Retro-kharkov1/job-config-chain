@@ -5,14 +5,14 @@ import com.google.gson.JsonParser;
 import io.jenkins.plugins.jobconfigchain.merge.tree.TreeFormats;
 import io.jenkins.plugins.jobconfigchain.merge.tree.TreeNode;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class EffectiveConfigResolverTest {
 
@@ -71,8 +71,8 @@ public class EffectiveConfigResolverTest {
         TreeNode viaChain = EffectiveConfigResolver.resolveChain(ContentType.JSON,
                 Collections.singletonList(json(base)), envPatch);
 
-        assertEquals("resolve() and resolveChain() for the same single-base inputs must be byte-identical",
-                render(viaResolve), render(viaChain));
+        assertEquals(render(viaResolve), render(viaChain),
+                "resolve() and resolveChain() for the same single-base inputs must be byte-identical");
     }
 
     @Test

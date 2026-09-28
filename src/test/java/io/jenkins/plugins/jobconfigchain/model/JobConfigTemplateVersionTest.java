@@ -1,14 +1,14 @@
 package io.jenkins.plugins.jobconfigchain.model;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JobConfigTemplateVersionTest {
 
@@ -24,7 +24,7 @@ public class JobConfigTemplateVersionTest {
     public void emptyBaseChainIsValid_andNeverNull() {
         JobConfigTemplateVersion v = new JobConfigTemplateVersion(1, "{}", "note", "alice", 1L,
                 Collections.emptyList());
-        assertTrue("empty baseChain must round-trip as empty, never null", v.getBaseChain().isEmpty());
+        assertTrue(v.getBaseChain().isEmpty(), "empty baseChain must round-trip as empty, never null");
     }
 
     @Test
