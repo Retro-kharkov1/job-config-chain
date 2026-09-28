@@ -13,7 +13,7 @@
 
   <groupId>io.jenkins.plugins</groupId>
   <artifactId>job-config-chain</artifactId>
-  <version>${revision}</version>
+  <version>${revision}-${changelist}</version>
   <packaging>hpi</packaging>
 
   <name>Job Config Chain</name>
@@ -22,7 +22,7 @@
     #{Dotted.Path}# placeholder tokens in a target application config file, validating drift and
     substituting real values at deploy time, without an external database or a git-backed store.
   </description>
-  <url>https://github.com/Retro-kharkov1/job-config-chain</url>
+  <url>https://github.com/jenkinsci/${project.artifactId}-plugin</url>
 
   <licenses>
     <license>
@@ -31,13 +31,6 @@
       <distribution>repo</distribution>
     </license>
   </licenses>
-
-  <developers>
-    <developer>
-      <id>retrokharkov1</id>
-      <name>Retro-kharkov1</name>
-    </developer>
-  </developers>
 
   <scm>
     <connection>scm:git:https://github.com/Retro-kharkov1/job-config-chain.git</connection>
@@ -64,22 +57,50 @@
          checkout with no git history / no GitVersion CLI installed (or for anyone who
          invokes the raw `mvn` binary directly instead of the wrapper). -->
     <revision>0.0.0-SNAPSHOT</revision>
+    <!-- Jenkins Hosting Checker / official CD requirement
+         (https://www.jenkins.io/doc/developer/publishing/releasing-cd/): the packaged version
+         MUST contain `${changelist}`. This repo keeps its own GitVersion-computed `revision`
+         above (interim GitHub Packages release path, see the `github-packages` profile and
+         publish-github-packages.yaml) rather than dropping it — the "Manually Controlled
+         Prefix"/"Wrapped Components" pattern documented on that page (`${revision}-${changelist}`,
+         also used by real jenkinsci-hosted plugins, e.g. git-plugin) layers the standard
+         `changelist` qualifier on top instead of replacing the whole scheme outright. `999999-SNAPSHOT`
+         is the standard local/dev fallback value (see any archetype-generated plugin pom.xml); once
+         this repo is transferred and released via the official CD pipeline
+         (.github/workflows/cd.yaml + .mvn/extensions.xml's git-changelist-maven-extension), that
+         extension computes a real value for `changelist` from the git tag being released. -->
+    <changelist>999999-SNAPSHOT</changelist>
     <!-- Bumped 2026-09-16 alongside the parent POM bump: the new parent
          (org.jenkins-ci.plugins:plugin 6.2236.v12dd4c483242) itself declares
          <jenkins.version>2.479</jenkins.version> as its own minimum baseline and
          <maven.compiler.release>17</maven.compiler.release> as its Java baseline -
-         both strictly above this project's previous 2.426.3 / Java 11. jenkins.version
-         is set to 2.555.3 (not the parent's bare minimum, and not the newest LTS
-         2.568.3 either) per the official baseline-selection guidance at
+         both strictly above this project's previous 2.426.3 / Java 11. jenkins.baseline
+         is set to 2.555 (not the parent's bare minimum, and not the newest LTS 2.568
+         either) per the official baseline-selection guidance at
          https://www.jenkins.io/doc/developer/plugin-development/choosing-jenkins-baseline/,
-         which names 2.541.3/2.555.3 as the currently recommended "good core
-         dependencies" choices. java.level/maven.compiler.source/target are bumped to
-         17 to satisfy the parent's own maven.compiler.release requirement. -->
-    <jenkins.version>2.555.3</jenkins.version>
-    <java.level>17</java.level>
+         which names 2.541/2.555 as the currently recommended "good core dependencies"
+         choices; jenkins.version and the imported bom's artifactId are both derived from
+         it below (Jenkins Hosting Checker requirement) so the two never drift apart. -->
+    <jenkins.baseline>2.555</jenkins.baseline>
+    <jenkins.version>${jenkins.baseline}.3</jenkins.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.source>17</maven.compiler.source>
-    <maven.compiler.target>17</maven.compiler.target>
+    <!-- maven.compiler.source/target/release and java.level are intentionally NOT redeclared
+         here (Jenkins Hosting Checker requirement) — the parent POM
+         (org.jenkins-ci.plugins:plugin) already declares maven.compiler.release=17 for this
+         jenkins.baseline, and redeclaring them here only risks silently drifting from whatever
+         the parent bumps to next. -->
+    <!-- Jenkins Hosting Checker required properties — see
+         https://www.jenkins.io/doc/developer/plugin-development/dependency-management/ and the
+         enforcer rules on org.jenkins-ci.plugins:plugin. Each corresponds to one enforcer check
+         that is normally skipped by the parent POM's own defaults; flipping to `false` here turns
+         that check ON for this plugin (Required Hosting Checker findings #10-#13). See this
+         pass's report for which of these are currently clean vs. a known-will-fail build-time
+         risk not fixable without running Maven (owner-gated in this repo). -->
+    <hpi.strictBundledArtifacts>true</hpi.strictBundledArtifacts>
+    <banObsoleteDependencyOverrides.skip>false</banObsoleteDependencyOverrides.skip>
+    <ban-junit4-imports.skip>false</ban-junit4-imports.skip>
+    <ban-deprecated-stapler.skip>false</ban-deprecated-stapler.skip>
+    <ban-commons-lang-2.skip>false</ban-commons-lang-2.skip>
   </properties>
 
   <repositories>
@@ -99,8 +120,8 @@
     <dependencies>
       <dependency>
         <groupId>io.jenkins.tools.bom</groupId>
-        <artifactId>bom-2.555.x</artifactId>
-        <version>7020.vf38cb_40380d1</version>
+        <artifactId>bom-${jenkins.baseline}.x</artifactId>
+        <version>7046.v43536164769c</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -170,7 +191,7 @@
            see the tech-lead contract review's OQ-11 §7 for why CpsThread/workflow-cps was rejected
            for this). Not pulled in transitively by workflow-step-api at any scope (confirmed by
            reading workflow-step-api-plugin's own pom.xml/StepContext.java source) — this is a new,
-           real main-scope dependency, version managed by the imported bom-2.555.x. -->
+           real main-scope dependency, version managed by the imported bom-${jenkins.baseline}.x. -->
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-api</artifactId>
     </dependency>
@@ -211,26 +232,36 @@
            real runtime dependency the symbol cannot be resolved on a live controller and Jenkins
            renders its missing-symbol placeholder instead of the icon (owner report, 2026-09-18:
            a cross appeared on both "Config Templates" menu entries). Version is managed by the
-           imported bom-2.555.x. -->
+           imported bom-${jenkins.baseline}.x. -->
       <groupId>io.jenkins.plugins</groupId>
       <artifactId>ionicons-api</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.google.code.gson</groupId>
-      <artifactId>gson</artifactId>
-      <version>2.10.1</version>
+      <!-- Jenkins Hosting Checker requirement: a Jenkins plugin must consume a shared third-party
+           library through its "api plugin" wrapper (io.jenkins.plugins:gson-api), never a direct
+           org.jenkins-ci.plugins:plugin-independent `com.google.code.gson:gson` dependency — see
+           https://www.jenkins.io/doc/developer/plugin-development/dependency-management/
+           ("Bundling third-party libraries"). gson-api re-packages stock Gson unmodified (confirmed
+           by reading jenkinsci/gson-api-plugin's own pom.xml: it depends directly on
+           com.google.code.gson:gson with no shade/relocate step), so every existing
+           `com.google.gson.*` import in this plugin's Java sources is unchanged. No explicit
+           <version> here — managed by the imported bom-${jenkins.baseline}.x. -->
+      <groupId>io.jenkins.plugins</groupId>
+      <artifactId>gson-api</artifactId>
     </dependency>
     <dependency>
-      <!-- YAML content-type support (NFR-9). No transitive snakeyaml is pulled in by this project's
-           current dependency tree (confirmed via `mvn dependency:tree -Dincludes=org.yaml:snakeyaml`
-           before adding this — zero matches), so this is a fresh explicit pin, not an alignment to an
-           existing transitive version. Used only via the safe, low-level Yaml#compose/Yaml#serialize
-           node-graph API (YamlTreeAdapter) — never Yaml#load()'s Constructor-based POJO
-           deserialization — so CVE-2022-1471's unsafe-deserialization class does not apply to this
-           usage pattern; 2.2 is still picked as a modern, already-patched baseline. -->
-      <groupId>org.yaml</groupId>
-      <artifactId>snakeyaml</artifactId>
-      <version>2.2</version>
+      <!-- Jenkins Hosting Checker requirement (same rule as gson-api above, see that dependency's
+           comment): replaces a direct `org.yaml:snakeyaml` dependency with the api-plugin wrapper
+           io.jenkins.plugins:snakeyaml-api. Confirmed by reading jenkinsci/snakeyaml-api-plugin's
+           own pom.xml: it depends directly on org.yaml:snakeyaml with no shade/relocate step, so
+           every existing `org.yaml.snakeyaml.*` import in YamlTreeAdapter/TreeFormat is unchanged.
+           YAML content-type support (NFR-9) is still used only via the safe, low-level
+           Yaml#compose/Yaml#serialize node-graph API (YamlTreeAdapter) — never Yaml#load()'s
+           Constructor-based POJO deserialization — so CVE-2022-1471's unsafe-deserialization class
+           still does not apply. No explicit <version> here — managed by the imported
+           bom-${jenkins.baseline}.x. -->
+      <groupId>io.jenkins.plugins</groupId>
+      <artifactId>snakeyaml-api</artifactId>
     </dependency>
     <dependency>
       <!-- Standalone Nashorn (removed from the JDK itself since 15; this build runs on a newer
