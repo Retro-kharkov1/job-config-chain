@@ -2,7 +2,7 @@
 <!--
   Block 1 of 4: version history. Shared between EnvConfigSetPage/index.jelly and
   ConfigTemplatesJobAction/index.jelly (tech-lead design contract, 2026-09-09) — rendered via
-  <st:include page="_shared/versionHistoryBlock.jelly" it="${it}"/>. Relies on ${it} exposing the
+  <jc:versionHistoryBlock/>. Relies on ${it} exposing the
   SAME getter names on both hosts: exists, versions (versionNumber/timestampEpochMillis/author/note/
   baseChain[projectKey/pinMode/pinnedVersionNumber]), activeVersion, explicitlyStandaloneSupported.
   Every id/function referenced here (versionHistoryTbody, historyRow-<n>, selectHistoryRow,

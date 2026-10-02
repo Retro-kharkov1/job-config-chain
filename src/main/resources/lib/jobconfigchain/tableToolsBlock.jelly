@@ -25,18 +25,9 @@
     there without misrepresenting which value wins.
   -->
   <!--
-    CSP migration (Jenkins hosting requirement, see
-    https://www.jenkins.io/doc/developer/security/csp/): this fragment used to carry its own
-    inline &lt;style&gt;/&lt;script&gt;. Both are gone — the identical CSS/JS now lives verbatim
-    inside EACH host page's own external index.css/index.js (ConfigTemplatesRootAction,
-    ConfigTemplatesJobAction, CommonConfigSetPage), loaded once per page via
-    h.getViewResource(it, 'index.css'|'index.js'). It is duplicated three times rather than
-    factored into one shared file because this fragment is included with `it` bound to whichever
-    HOST page is rendering it (st:include ... it="${it}"), so a resource path resolved from `it`
-    always lands next to the CALLER's own index.jelly, never a SharedBlocks-relative path — the
-    same reason this plugin's own page-level &lt;style&gt; blocks were already duplicated
-    per-host "kept in sync deliberately" before this migration. The JS/CSS here is host-independent
-    (no ${...} substitution), so the three copies are byte-identical; keep them that way.
+    CSP: no inline &lt;style&gt;/&lt;script&gt;. The CSS/JS for this tag lives in the shared
+    adjuncts ctsyncSharedStyle / ctsyncSharedScript (io.jenkins.plugins.jobconfigchain.adjuncts),
+    which every host page loads once through its own page adjunct.
   -->
   <template id="ctsyncTableToolsStrings"
             data-filter-placeholder="${%filter.placeholder}"

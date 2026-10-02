@@ -82,15 +82,6 @@ import java.util.stream.Collectors;
 // worked fine even when this class was package-private — that asymmetry is exactly what made this
 // bug look like a persistence problem during Milestone-2 UI test-writing, not a visibility one).
 public abstract class ConfigSetPage {
-    /**
-     * Resolved {@link SharedBlocks} class for {@code st:include class="${it.sharedBlocksClass}"},
-     * mirroring {@link ConfigTemplatesJobAction#getSharedBlocksClass()} - see that method for why
-     * the class object is bound rather than a literal String.
-     */
-    public Class<SharedBlocks> getSharedBlocksClass() {
-        return SharedBlocks.class;
-    }
-
 
     // Identifier of a config set/chain, not a credential or secret.
     @SuppressWarnings("lgtm[jenkins/plaintext-storage]")

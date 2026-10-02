@@ -79,15 +79,6 @@ import java.util.List;
  */
 @Extension
 public class ConfigTemplatesRootAction extends ManagementLink implements StaplerProxy {
-    /**
-     * Resolved {@link SharedBlocks} class for {@code st:include class="${it.sharedBlocksClass}"},
-     * mirroring {@link ConfigTemplatesJobAction#getSharedBlocksClass()} - see that method for why
-     * the class object is bound rather than a literal String.
-     */
-    public Class<SharedBlocks> getSharedBlocksClass() {
-        return SharedBlocks.class;
-    }
-
 
     public static final String URL_NAME = "configChains";
 
