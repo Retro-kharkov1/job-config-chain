@@ -1,1 +1,8 @@
-<div>Checks that the target file has no drift against the effective configuration of this job&#39;s Config Chain, and fails the build if it does.</div>
+<div>
+  Checks the target file against the effective configuration before deploy and changes nothing. The build fails if the
+  file contains a <code>#{Dotted.Path}#</code> token that has no matching key (typo or missing key). Keys that no token
+  uses are only reported as a warning.
+  <p>Typically called right before <code>configChainSubstitute</code> with the same parameters, for example
+  <code>configChainValidate(file: &#39;app.json&#39;)</code>. The former name <code>configTemplateValidate</code> still
+  works as a deprecated alias.</p>
+</div>

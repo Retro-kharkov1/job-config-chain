@@ -1,1 +1,7 @@
-<div>Replay the configuration deployed by an earlier build: a build number of this job, or <code>&lt;job full name&gt;#&lt;build number&gt;</code> for another job. Leave empty for a normal deployment.</div>
+<div>
+  Replay the configuration an earlier build was deployed with, for rollback: a build number of this job, or
+  <code>&lt;job full name&gt;#&lt;build number&gt;</code>. Leave empty for a normal deployment.
+  <p>The result is byte-identical to that build&#39;s output even if the base Config Sets have changed since. If that
+  build has no recorded Deployment Binding, the step says so in the build log and uses this job&#39;s live
+  configuration instead of failing.</p>
+</div>
