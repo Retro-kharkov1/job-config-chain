@@ -1,1 +1,5 @@
-<div>Path of the target file, relative to the workspace. Required, either here or in a preceding <code>setupConfigChain</code> call. A file outside the workspace only produces a warning.</div>
+<div>
+  Path of the target config file, relative to the build workspace. Required: give it here or in an earlier
+  <code>setupConfigChain</code> call in the same build.
+  <p>A file outside the workspace is not rejected; the step writes a warning to the build log and continues.</p>
+</div>

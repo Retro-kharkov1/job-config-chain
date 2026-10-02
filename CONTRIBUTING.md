@@ -1,32 +1,61 @@
 # Contributing
 
 Thanks for considering a contribution. This plugin keeps versioned, structurally-validated
-configuration templates inside Jenkins itself, so changes tend to touch persisted data — please read
+configuration chains inside Jenkins itself, so changes tend to touch persisted data — please read
 the parts below that apply before opening a pull request.
 
-## Building
+## Building from source
 
-The build runs entirely in containers, so no host-installed Java, Maven, or GitVersion is required:
+Requirements: JDK 21+ for a host build, or only Docker for the container build.
 
 ```bash
-./docker-build.sh          # Linux/macOS/Git Bash
-docker-build.cmd           # Windows
+./mvnw clean verify        # Linux/macOS
+mvnw.cmd clean verify      # Windows
 ```
 
-The result is `target/job-config-chain.hpi`. A conventional `./mvnw verify` also works if you do have
-a JDK 21+ on the host.
+```bash
+./docker-build.sh          # Linux/macOS/Git Bash/WSL, no host Java/Maven needed
+docker-build.cmd           # Windows cmd.exe
+```
 
-Versions are computed by GitVersion from commit history, not written into `pom.xml` — the
-`<version>` element is `${revision}` and the build passes `-Drevision=<SemVer>`. This means **an
-uncommitted change cannot produce a new version number**: commit first, then build, or successive
-builds will all carry the same version and become impossible to tell apart.
+The result is `target/job-config-chain.hpi`. Install it by uploading it under Manage Jenkins -> Plugins ->
+Advanced settings -> Deploy Plugin.
 
-Use `+semver: minor` or `+semver: major` in a commit message to bump beyond the default patch
-increment.
+Versions are computed by GitVersion from commit history, not written into `pom.xml`: the `<version>` element is
+`${revision}` and the build passes `-Drevision=<SemVer>` (the wrapper and `docker-build.*` do this; if
+`dotnet-gitversion` is missing, the build falls back to `0.0.0-SNAPSHOT`). The `.hpi` version is
+`${revision}-${changelist}`, with `changelist` defaulting to `999999-SNAPSHOT` outside the official CD pipeline.
+An uncommitted change cannot produce a new version number: commit first, then build, or successive builds will
+carry the same version. Use `+semver: minor` or `+semver: major` in a commit message to bump beyond a patch.
+
+This versioning scheme is expected to change when the plugin moves to the Jenkins organization (official CD);
+see [HOSTING.md](HOSTING.md).
+
+## Fast loop for UI changes: `mvn hpi:run`
+
+For Jelly, CSS and JavaScript work, start a throwaway Jenkins with the plugin loaded straight from the working
+tree instead of rebuilding an `.hpi`:
+
+```bash
+mvn hpi:run
+```
+
+Jenkins starts at <http://localhost:8080/jenkins> with a fresh `work/` directory (reuse it between runs, delete
+it to reset). Pipeline steps and the Snippet Generator need the Pipeline plugins; `hpi:run` loads the plugin's
+declared dependencies, so install any extra plugin you need from the Plugins page.
+
+Static resources (adjunct CSS/JS) and Jelly views are normally re-read from `src/main/resources` while the
+server runs, so a browser refresh is enough. This is **unverified for this plugin**: Jelly files inside taglibs
+(`lib/jobconfigchain`) may be cached and need a restart of `hpi:run`, or running with
+`-Dstapler.jelly.noCache=true` (`mvn hpi:run -Dstapler.jelly.noCache=true`). Java changes always need a restart.
+If a change does not show up, restart before debugging.
+
+An alternative is the disposable Docker Jenkins with seeded data described in
+[docker/test-jenkins/README.md](docker/test-jenkins/README.md).
 
 ## Tests
 
-`./docker-build.sh` runs the full suite. Please do not delete or weaken a failing test to get a green
+`./mvnw clean verify` and `./docker-build.sh` run the full suite. Please do not delete or weaken a failing test to get a green
 build — if a test fails, that is the finding.
 
 New behaviour needs a test. Two areas deserve particular care:
@@ -50,4 +79,5 @@ value silently resolves to no plugin and renders a missing-symbol placeholder.
 
 - One logical change per pull request; keep unrelated cleanups separate.
 - Describe what changes for a user of the plugin, and why — not which files moved.
-- Make sure the build is green before asking for review.
+- Open an issue first for significant work, and make sure the build is green before asking for review.
+- Use the domain vocabulary of the user docs (`Config Key`, `Config Set`, `base chain`, `effective configuration`).

@@ -1,1 +1,12 @@
-<div>Replaces <code>#{Path}#</code> tokens in the target file with values from the effective configuration (secrets from their credentials) and writes the file back. Fails if any token stays unresolved.</div>
+<div>
+  Replaces every <code>#{Dotted.Path}#</code> token in the target file with its value from the effective configuration
+  and writes the file back. Secret values come from the Jenkins credentials bound in the Config Set&#39;s secrets
+  manifest, never from stored text.
+  <p>Substitution is single-pass: each token is replaced once and inserted text is never scanned again. The build fails
+  if a token stays unresolved or a bound credential is missing. On success the build records a Deployment Binding of
+  the exact versions used, so the same configuration can be replayed later with <b>Redeploy from run</b>.</p>
+  <p>Note: when configurations are layered, JSON arrays are replaced wholesale by the overlay and never merged
+  element by element.</p>
+  <p>Call it with a Map, for example <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. The former name
+  <code>configTemplateSubstitute</code> still works as a deprecated alias.</p>
+</div>
