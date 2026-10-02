@@ -164,7 +164,7 @@ public class ConfigSetRepository {
     }
 
     /**
-     * Lists every persisted common Config Set (used by the global "Config Templates" admin list
+     * Lists every persisted common Config Set (used by the global "Config Chains" admin list
      * view — see admin-ui.md's "Global level" section). Storage-key-driven, not a free-text scan — mirrors {@link ConfigSet#getStorageKey()}'s
      * {@code <projectKey>--common} convention.
      */

@@ -14,7 +14,7 @@ import org.kohsuke.stapler.interceptor.RequirePOST;
 
 /**
  * The global Config Set edit page (see admin-ui.md's "Global level" section), served directly at
- * {@code /configTemplates/<projectKey>/} — this IS the common Config Set editor, not a separate
+ * {@code /configChains/<projectKey>/} — this IS the common Config Set editor, not a separate
  * page one URL segment deeper (owner decision, 2026-09-14: the {@code /common} URL segment and the
  * near-empty hub page that used to precede it are both retired).
  */
@@ -41,7 +41,7 @@ public class CommonConfigSetPage extends ConfigSetPage {
 
     /**
      * The {@code -common} title suffix is retired (owner decision, 2026-09-14): this page is now
-     * the ONLY page reachable under {@code /configTemplates/<projectKey>/}, so there is nothing
+     * the ONLY page reachable under {@code /configChains/<projectKey>/}, so there is nothing
      * left to disambiguate from — mirrors {@link ConfigTemplatesJobAction#getDisplayName()} already
      * carrying no role suffix of its own.
      */

@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * An immutable, append-only snapshot of one {@code Job}'s Config Templates content at a point in
+ * An immutable, append-only snapshot of one {@code Job}'s Config Chain content at a point in
  * time — the job-scoped sibling of {@link ConfigSetVersion} (tech-lead design contract,
  * 2026-09-09). Version numbers are monotonically increasing and never reused or renumbered, and
  * instances are never mutated after construction, exactly mirroring {@link ConfigSetVersion}'s own

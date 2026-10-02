@@ -479,7 +479,7 @@ function deleteConfigSetClicked() {
           // The page identity is gone, so it cannot stay. The list page renders the
           // confirmation server-side from this query parameter - a toast would not survive
           // the navigation.
-          window.location.href = __commonSeedData.rootUrl + '/manage/configTemplates/?deleted='
+          window.location.href = __commonSeedData.rootUrl + '/manage/configChains/?deleted='
               + encodeURIComponent(r2.projectKey);
         });
       }
@@ -526,7 +526,7 @@ function purgeConfigSetClicked() {
             else { window.ctsyncNotify(r2.error, true); }
             return;
           }
-          window.location.href = __commonSeedData.rootUrl + '/manage/configTemplates/?purged='
+          window.location.href = __commonSeedData.rootUrl + '/manage/configChains/?purged='
               + encodeURIComponent(r2.projectKey);
         });
       }

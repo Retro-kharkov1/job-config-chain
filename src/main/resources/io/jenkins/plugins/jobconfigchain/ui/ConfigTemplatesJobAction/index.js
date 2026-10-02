@@ -928,7 +928,7 @@ function buildBaseChainRowElement(row, index) {
   // visual language rather than a bare Unicode glyph link.
   if (row.projectKey) {
     var openLink = document.createElement('a');
-    openLink.href = __seed.rootUrl + '/configTemplates/' + encodeURIComponent(row.projectKey) + '/';
+    openLink.href = __seed.rootUrl + '/configChains/' + encodeURIComponent(row.projectKey) + '/';
     openLink.target = '_blank';
     openLink.rel = 'noopener noreferrer';
     openLink.className = 'ctsync-basechain-open-link';
@@ -1279,7 +1279,7 @@ function saveClicked(activate) {
 // Bug fix (2026-09-28): this job's very first successful save also flips the record from "does
 // not exist yet" to existing — without a page reload, the stale "does not exist yet" banner must
 // be brought in line with that, exactly mirroring CommonConfigSetPage/index.js's identical fix.
-// This page has no Delete button to reveal (job-scoped Config Templates content is deleted by
+// This page has no Delete button to reveal (job-scoped Config Chain content is deleted by
 // clearing the base chain and override, not through a standalone lifecycle action), so this only
 // ever touches the banner.
 function applyConfigSetNowExists() {
