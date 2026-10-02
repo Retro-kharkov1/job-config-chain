@@ -2,9 +2,9 @@ package io.jenkins.plugins.jobconfigchain.safetynet;
 
 import static io.jenkins.plugins.jobconfigchain.safetynet.ChainTestKit.PLACEHOLDER;
 import static io.jenkins.plugins.jobconfigchain.safetynet.ChainTestKit.echoBytes;
-import static io.jenkins.plugins.jobconfigchain.safetynet.ChainTestKit.setup;
-import static io.jenkins.plugins.jobconfigchain.safetynet.ChainTestKit.substitute;
-import static io.jenkins.plugins.jobconfigchain.safetynet.ChainTestKit.validate;
+import static io.jenkins.plugins.jobconfigchain.safetynet.ChainTestKit.legacySetup;
+import static io.jenkins.plugins.jobconfigchain.safetynet.ChainTestKit.legacySubstitute;
+import static io.jenkins.plugins.jobconfigchain.safetynet.ChainTestKit.legacyValidate;
 import static io.jenkins.plugins.jobconfigchain.safetynet.ChainTestKit.writeText;
 
 /**
@@ -86,54 +86,54 @@ final class PinnedScenario {
     /** Builds #1 and #2 of {@link #JOB}: all three steps, zero-argument after setup. */
     static String liveDeployScript() {
         return nodeBlock(
-                setup("file: '" + FILE + "'"),
+                legacySetup("file: '" + FILE + "'"),
                 writeText(FILE, TEMPLATE),
-                validate(""),
-                substitute(""),
+                legacyValidate(""),
+                legacySubstitute(""),
                 echoBytes(BIN, FILE));
     }
 
     /** Build #3 of {@link #JOB}: redeploy of build #1 driven through setup. */
     static String redeployOfBuild1Script() {
         return nodeBlock(
-                setup("file: '" + FILE + "', redeployFromRun: '1'"),
+                legacySetup("file: '" + FILE + "', redeployFromRun: '1'"),
                 writeText(FILE, TEMPLATE),
-                validate("version: 1"),
-                substitute(""),
+                legacyValidate("version: 1"),
+                legacySubstitute(""),
                 echoBytes(BIN, FILE));
     }
 
     /** Reference run for the in-flight jobs: same steps, no pause. */
     static String controlScript() {
         return nodeBlock(
-                setup("file: '" + FILE + "'"),
+                legacySetup("file: '" + FILE + "'"),
                 writeText(FILE, IF_TEMPLATE),
-                validate(""),
-                substitute(""),
+                legacyValidate(""),
+                legacySubstitute(""),
                 echoBytes(BIN, FILE));
     }
 
     /** Paused right after {@code setupConfigTemplate}; validate and substitute still to run. */
     static String inflight1Script() {
-        return setup("file: '" + FILE + "'") + "\n"
+        return legacySetup("file: '" + FILE + "'") + "\n"
                 + GATE + "\n"
                 + nodeBlock(
                         writeText(FILE, IF_TEMPLATE),
-                        validate(""),
-                        substitute(""),
+                        legacyValidate(""),
+                        legacySubstitute(""),
                         echoBytes(BIN, FILE));
     }
 
     /** Setup and validate already done in a finished {@code node} block; paused before substitute. */
     static String inflight2Script() {
         return nodeBlock(
-                        setup("file: '" + FILE + "'"),
+                        legacySetup("file: '" + FILE + "'"),
                         writeText(FILE, IF_TEMPLATE),
-                        validate(""))
+                        legacyValidate(""))
                 + "\n" + GATE + "\n"
                 + nodeBlock(
                         writeText(FILE, IF_TEMPLATE),
-                        substitute(""),
+                        legacySubstitute(""),
                         echoBytes(BIN, FILE));
     }
 }

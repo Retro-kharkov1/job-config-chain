@@ -40,10 +40,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Proves both the "Config Templates" job sidebar link/discoverability (unchanged from the old
+ * Proves both the "Config Chains" job sidebar link/discoverability (unchanged from the old
  * association-only design) and the new job-scoped content model (tech-lead design contract,
  * 2026-09-09): a job holds its OWN {@link JobConfigTemplateProperty} directly, rendered at
- * {@code /job/&lt;name&gt;/configTemplates}, replacing the old association-to-a-separate-ConfigSet
+ * {@code /job/&lt;name&gt;/configChains}, replacing the old association-to-a-separate-ConfigSet
  * flow entirely.
  */
 @WithJenkins
@@ -82,8 +82,8 @@ public class ConfigTemplatesJobActionTest {
         assertTrue(icon.startsWith("symbol-"), "icon must name a symbol: " + icon);
         assertTrue(icon.contains(" plugin-"), "icon must carry the owning plugin as a separate \"plugin-\" word, "
                         + "not dash-joined onto the symbol name: " + icon);
-        assertEquals("configTemplates", jobAction.getUrlName(), "target must be a plain job-relative segment, exposed at "
-                        + "/job/<name>/configTemplates just like /job/<name>/configure");
+        assertEquals("configChains", jobAction.getUrlName(), "target must be a plain job-relative segment, exposed at "
+                        + "/job/<name>/configChains just like /job/<name>/configure");
     }
 
     @Test
@@ -91,7 +91,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("uitest-job-action-2");
 
         HtmlPage page = jenkins.createWebClient().getPage(project);
-        assertTrue(page.asNormalizedText().contains("Config Templates"), "the job's page must render the 'Config Templates' sidebar link");
+        assertTrue(page.asNormalizedText().contains("Config Chains"), "the job's page must render the 'Config Chains' sidebar link");
     }
 
     @Test
@@ -157,7 +157,7 @@ public class ConfigTemplatesJobActionTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/");
+        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configChains/");
         assertEquals(200, page.getWebResponse().getStatusCode());
     }
 
@@ -173,7 +173,7 @@ public class ConfigTemplatesJobActionTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/");
+        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         // CSP migration: this logic now lives in the external index.js, not inline.
         String js = fetchExternalScripts(wc, html);
@@ -190,7 +190,7 @@ public class ConfigTemplatesJobActionTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/");
+        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
 
         assertTrue(html.contains("id=\"notExistYetBanner\""), "the \"does not exist yet\" banner "
@@ -213,7 +213,7 @@ public class ConfigTemplatesJobActionTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/");
+        Page page = wc.getPage(wc.getContextPath() + "job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
 
@@ -236,7 +236,7 @@ public class ConfigTemplatesJobActionTest {
         String overlayJson = "{\"database\":{\"host\":\"db.internal\"}}";
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        URL renderUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/renderTemplate");
+        URL renderUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/renderTemplate");
         WebRequest renderRequest = new WebRequest(renderUrl, HttpMethod.POST);
         renderRequest.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("overlayJson", overlayJson),
@@ -259,7 +259,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("generate-from-draft-empty-job");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        URL renderUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/renderTemplate");
+        URL renderUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/renderTemplate");
         WebRequest renderRequest = new WebRequest(renderUrl, HttpMethod.POST);
         renderRequest.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("overlayJson", "{}"),
@@ -294,7 +294,7 @@ public class ConfigTemplatesJobActionTest {
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
-        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/computeMerge");
         WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
         computeMergeRequest.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("overlayJson", overlayJson),
@@ -321,7 +321,7 @@ public class ConfigTemplatesJobActionTest {
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
         String overlayJson = "{\"solo\":true}";
-        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/computeMerge");
         WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
         computeMergeRequest.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("overlayJson", overlayJson),
@@ -361,7 +361,7 @@ public class ConfigTemplatesJobActionTest {
         String baseChainJson = "[{\"projectKey\":\"mismatch-json\",\"pinMode\":\"ACTIVE\"},"
                 + "{\"projectKey\":\"mismatch-xml\",\"pinMode\":\"ACTIVE\"}]";
 
-        URL url = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/submitSave");
+        URL url = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         request.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("content", "{}"),
@@ -429,7 +429,7 @@ public class ConfigTemplatesJobActionTest {
     // ---- Migrated from ConfigTemplatesUiTest (tech-lead test-coverage migration decision,
     // 2026-09-14 follow-up pass): genuine, currently-uncovered, still-live business logic that used
     // to be exercised against the now-404ing global env route (ProjectConfigPage.getDynamic was
-    // deleted); rewritten here against /job/<name>/configTemplates instead. ------------------------
+    // deleted); rewritten here against /job/<name>/configChains instead. ------------------------
 
     private void seedRealCredential(String id) throws Exception {
         SystemCredentialsProvider.getInstance().getCredentials().add(new StringCredentialsImpl(
@@ -595,7 +595,7 @@ public class ConfigTemplatesJobActionTest {
 
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        URL registerUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/registerSecret");
+        URL registerUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/registerSecret");
         WebRequest registerRequest = new WebRequest(registerUrl, HttpMethod.POST);
         registerRequest.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("path", "database.password"),
@@ -621,7 +621,7 @@ public class ConfigTemplatesJobActionTest {
 
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        URL unbindUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/unbindSecret");
+        URL unbindUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/unbindSecret");
         WebRequest unbindRequest = new WebRequest(unbindUrl, HttpMethod.POST);
         unbindRequest.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("path", "database.password")
@@ -639,7 +639,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-remove-secret-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(fetchExternalScripts(wc, html).contains("function removeSecret"), "removeSecret is now defined in the external index.js, not inline (CSP migration)");
         assertAllInlineScriptsAreSyntacticallyValidJs("job Config Templates page (remove-secret JS)", wc, html);
@@ -651,7 +651,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-secret-picker");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains("id=\"secretCredentialId\""), "job page must render a real <select> credential picker (OQ-1), not free text");
         assertTrue(html.contains("job-picker-real-cred"), "job page's credential picker must list actually-registered credentials");
@@ -662,7 +662,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-inline-scripts-valid");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         assertAllInlineScriptsAreSyntacticallyValidJs(
                 "job Config Templates page", wc, page.getWebResponse().getContentAsString());
     }
@@ -681,7 +681,7 @@ public class ConfigTemplatesJobActionTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         assertAllInlineScriptsAreSyntacticallyValidJs(
                 "job Config Templates page (multiline JSON seed)", wc, page.getWebResponse().getContentAsString());
     }
@@ -691,7 +691,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-generate-template-layout");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains("id=\"generateTemplateBtn\""), "job page must render a page-level Generate Template button (FR-41)");
         assertTrue(html.contains("id=\"mergeLayout\""), "job page must render the merge layout grid with its own id, replaced on click (FR-73)");
@@ -706,7 +706,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-generate-template-never-disabled");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         Matcher matcher = Pattern.compile("<button[^>]*id=\"generateTemplateBtn\"[^>]*>").matcher(html);
         assertTrue(matcher.find(), "must find the Generate Template button in the rendered HTML");
@@ -718,7 +718,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-generate-template-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
         assertTrue(js.contains("showGeneratedTemplateView"));
@@ -731,7 +731,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-compare-banner");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains("id=\"backToEditingBtn\""), "job compare banner must render an explicit 'Back to editing' button (FR-45a)");
         // CSP migration: no inline onclick attribute any more — backToEditingBtn is wired to
@@ -751,7 +751,7 @@ public class ConfigTemplatesJobActionTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
 
         Pattern activeRow = Pattern.compile("id=\"historyRow-" + v2 + "\"[\\s\\S]*?</tr>");
@@ -767,7 +767,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-busy-disable-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
         assertTrue(js.contains("document.getElementById('saveBtn').disabled = true"), "prepareSubmit must disable both save buttons (FR-46)");
@@ -780,7 +780,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-base-chain-markup");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains("id=\"baseChainRowsTable\""), "job page must render the base-chain editor rows table");
         assertTrue(html.contains("id=\"addBaseChainRowBtn\""), "job page must render the Add-base row control");
@@ -807,7 +807,7 @@ public class ConfigTemplatesJobActionTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains("2 bases"), "version-history row must render a [N bases] marker (FR-58)");
         assertTrue(html.contains("(v1)"), "expandable detail must include the PINNED entry's resolved version number");
@@ -818,7 +818,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-base-chain-editor-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
         assertTrue(js.contains("function addBaseChainRow"));
@@ -841,7 +841,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-multi-base-merge");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/computeMerge");
         WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
         computeMergeRequest.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("overlayJson", "{}"),
@@ -874,7 +874,7 @@ public class ConfigTemplatesJobActionTest {
         String baseChainJson = "[{\"projectKey\":\"no-such-common-project\",\"pinMode\":\"ACTIVE\"}]";
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/computeMerge");
         WebRequest computeMergeRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
         computeMergeRequest.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("overlayJson", "{}"),
@@ -897,7 +897,7 @@ public class ConfigTemplatesJobActionTest {
 
         String baseChainJson = "[{\"projectKey\":\"job-missing-pinmode-common\"}]"; // pinMode deliberately absent
 
-        URL url = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/submitSave");
+        URL url = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         request.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("content", "{}"),
@@ -918,7 +918,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-sections-order");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
 
         assertFalse(html.contains("<details"), "none of the four reorganized sections may render as a collapsible <details> accordion");
@@ -939,7 +939,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-section-reorg-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         assertAllInlineScriptsAreSyntacticallyValidJs(
                 "job Config Templates page (post section-reorg)", wc, page.getWebResponse().getContentAsString());
     }
@@ -949,7 +949,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-reload-editor-state-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
         assertTrue(js.contains("function reloadEditorStateFromActivatedVersion"), "activateVersion must reload the editor state from the newly-activated version");
@@ -962,7 +962,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-add-base-wording");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains(">&#10133; Add base config</button>") || html.contains("Add base config"), "the Add-base button must use the clearer 'Add base config' wording");
     }
@@ -972,7 +972,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-base-chain-select-width");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         // CSP migration: this rule now lives in the external index.css, not an inline <style>.
         assertTrue(fetchExternalStylesheets(wc, html).contains(".ctsync-basechain-table select.jenkins-select__input"), "the base-chain table must scope a compact max-width rule to its own selects");
@@ -985,7 +985,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-merged-bases-pane");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains("id=\"mergedBasesEditor\""), "job page must render the Merged-bases pane (FR-73)");
         assertTrue(html.contains("id=\"discardAllBtn\""), "job page must render the Discard-all-changes button (FR-74)");
@@ -1002,7 +1002,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-discard-code-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
         assertTrue(js.contains("function discardAllChangesClicked"));
@@ -1024,7 +1024,7 @@ public class ConfigTemplatesJobActionTest {
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains("id=\"contentTypeLockedDisplay\""));
         assertFalse(html.contains("id=\"contentTypeUnlockedGroup\""));
@@ -1035,7 +1035,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-content-type-unlocked");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         assertTrue(html.contains("id=\"contentTypeRow\""), "job page must render the FR-104 content-type row");
         assertTrue(html.contains("id=\"contentTypeUnlockedGroup\""), "no version yet must render the interactive (unlocked) radio group");
@@ -1052,7 +1052,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-content-type-picker-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         String js = fetchExternalScripts(wc, html);
         assertTrue(js.contains("function onContentTypeChange"));
@@ -1080,7 +1080,7 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
         wc.getOptions().setJavaScriptEnabled(false);
 
-        URL url = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/submitSave");
+        URL url = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         request.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("content", "<root><a>2</a></root>"),
@@ -1105,7 +1105,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-recompute-merge");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
-        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/computeMerge");
+        URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/computeMerge");
 
         WebRequest validRequest = new WebRequest(computeMergeUrl, HttpMethod.POST);
         validRequest.setRequestParameters(List.of(
@@ -1137,7 +1137,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-basechain-js-engine");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
 
         // CSP migration: the functions under test now live in the external index.js, not inline —
@@ -1174,7 +1174,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-basechain-version-label");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
 
         // CSP migration: the functions under test now live in the external index.js, not inline —
@@ -1220,7 +1220,7 @@ public class ConfigTemplatesJobActionTest {
         FreeStyleProject project = jenkins.createFreeStyleProject("job-exists-banner-check");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
-        HtmlPage page = wc.goTo("job/" + project.getName() + "/configTemplates/");
+        HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
         String allScripts = fetchExternalScripts(wc, html);
 
@@ -1252,7 +1252,7 @@ public class ConfigTemplatesJobActionTest {
 
         // doSubmitSave (classic, form-encoded) is the equivalent, URL-addressable sibling this
         // class's own tests exercise directly, mirroring ConfigSetPageValidateSyntaxTest's approach.
-        URL url = new URL(wc.getContextPath() + "job/" + project.getName() + "/configTemplates/submitSave");
+        URL url = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/submitSave");
         WebRequest request = new WebRequest(url, HttpMethod.POST);
         request.setRequestParameters(List.of(
                 new org.htmlunit.util.NameValuePair("content", content),
