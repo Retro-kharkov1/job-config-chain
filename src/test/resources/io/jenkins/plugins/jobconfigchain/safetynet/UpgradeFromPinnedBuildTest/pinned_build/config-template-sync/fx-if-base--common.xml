@@ -1,0 +1,28 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<io.jenkins.plugins.jobconfigchain.model.ConfigSet>
+  <projectKey>fx-if-base</projectKey>
+  <role>COMMON</role>
+  <displayName>Common</displayName>
+  <secretsManifest class="linked-hash-map">
+    <entry>
+      <string>Db.Password</string>
+      <string>fx-cred</string>
+    </entry>
+  </secretsManifest>
+  <versions>
+    <io.jenkins.plugins.jobconfigchain.model.ConfigSetVersion>
+      <versionNumber>1</versionNumber>
+      <contentJson>{&quot;Db&quot;:{&quot;Host&quot;:&quot;if-host&quot;,&quot;Password&quot;:&quot;__SECRET__&quot;}}</contentJson>
+      <note>seed</note>
+      <author>safety-net</author>
+      <timestampEpochMillis>1</timestampEpochMillis>
+      <baseChain class="java.util.Collections$UnmodifiableRandomAccessList" resolves-to="java.util.Collections$UnmodifiableList">
+        <c class="list"/>
+        <list reference="../c"/>
+      </baseChain>
+      <explicitlyStandalone>false</explicitlyStandalone>
+    </io.jenkins.plugins.jobconfigchain.model.ConfigSetVersion>
+  </versions>
+  <activeVersionNumber>1</activeVersionNumber>
+  <contentType>JSON</contentType>
+</io.jenkins.plugins.jobconfigchain.model.ConfigSet>

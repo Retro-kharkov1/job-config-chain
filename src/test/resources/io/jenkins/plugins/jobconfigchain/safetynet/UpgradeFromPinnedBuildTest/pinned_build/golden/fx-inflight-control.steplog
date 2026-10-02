@@ -1,0 +1,2 @@
+[configTemplateSync] Validation passed for Job '@JOB@'
+[configTemplateSync] Substituted app.cfg for Job '@JOB@' using base chain [fx-if-base@v1] / own config v1
