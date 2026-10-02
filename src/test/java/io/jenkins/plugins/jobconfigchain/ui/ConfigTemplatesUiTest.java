@@ -614,7 +614,7 @@ public class ConfigTemplatesUiTest {
             Pattern.compile("<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern EXTERNAL_SCRIPT_SRC =
-            Pattern.compile("<script src=\"([^\"]+)\"");
+            Pattern.compile("<script src=[\"']([^\"']+)[\"']");
 
     /**
      * CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): every
