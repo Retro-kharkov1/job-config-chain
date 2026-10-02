@@ -37,22 +37,29 @@ public class BundleParityTest {
     private static final File UI_RESOURCES =
             new File("src/main/resources/io/jenkins/plugins/jobconfigchain/ui");
 
+    private static final File TAGLIB_RESOURCES =
+            new File("src/main/resources/lib/jobconfigchain");
+
     /** Locale suffixes every base bundle must ship. */
     private static final List<String> REQUIRED_LOCALES = List.of("uk", "ru");
 
     private static List<File> baseBundles() throws IOException {
         assertTrue(UI_RESOURCES.isDirectory(),
                 "UI resource directory must exist: " + UI_RESOURCES.getAbsolutePath());
-        try (var paths = Files.walk(UI_RESOURCES.toPath())) {
-            List<File> bases = paths
-                    .map(java.nio.file.Path::toFile)
-                    .filter(f -> f.getName().endsWith(".properties"))
-                    .filter(f -> !f.getName().matches(".*_[a-z]{2}(_[A-Z]{2})?\\.properties"))
-                    .sorted()
-                    .collect(Collectors.toList());
-            assertFalse(bases.isEmpty(), "expected to discover at least one base bundle");
-            return bases;
+        List<File> bases = new ArrayList<>();
+        for (File root : List.of(UI_RESOURCES, TAGLIB_RESOURCES)) {
+            assertTrue(root.isDirectory(), "resource directory must exist: " + root.getAbsolutePath());
+            try (var paths = Files.walk(root.toPath())) {
+                bases.addAll(paths
+                        .map(java.nio.file.Path::toFile)
+                        .filter(f -> f.getName().endsWith(".properties"))
+                        .filter(f -> !f.getName().matches(".*_[a-z]{2}(_[A-Z]{2})?\\.properties"))
+                        .sorted()
+                        .collect(Collectors.toList()));
+            }
         }
+        assertFalse(bases.isEmpty(), "expected to discover at least one base bundle");
+        return bases;
     }
 
     private static Properties load(File f) throws IOException {

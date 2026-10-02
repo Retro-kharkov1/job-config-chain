@@ -53,7 +53,7 @@
       </div>
     </div>
 
-    <div id="generateBanner" class="alert alert-info" style="display:none">
+    <div id="generateBanner" class="jenkins-alert jenkins-alert-info" style="display:none">
       Effective template from the current base chain &#8853; this ${it.ownScopeLabel}'s own override
       draft — reflects whatever is currently in the editor below, whether saved or not.
     </div>
@@ -79,7 +79,7 @@
            Nesting it inside one column only pushed that column's title down and unbalanced the
            two-column layout relative to "Merged bases" (business-rules/base-chains.md, "Merge-panel
            header alignment & compare-mode banner placement", 2026-09-11). -->
-      <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
+      <div id="compareBanner" class="jenkins-alert jenkins-alert-info ctsync-banner-row" style="display:none">
         <span id="compareBannerText"/>
         <span>
           <button type="button" id="loadComparedBtn" class="jenkins-button jenkins-button--primary"
@@ -143,7 +143,7 @@
                  historical version back to normal editing) — with 0 or 1 version there is nothing to
                  meaningfully compare against, so the button would be pointless clutter. Initial SSR
                  render reuses the SAME ${it.versions} getter the Version-history table itself renders
-                 from (SharedBlocks/versionHistoryBlock.jelly); the AJAX-refreshed case is handled by
+                 from (versionHistoryBlock tag); the AJAX-refreshed case is handled by
                  each host's own renderVersionHistoryRows(versions) toggling this same id by the
                  versions.length passed to it (no new data source added). -->
             <button type="button" id="modeEditBtn"
@@ -164,7 +164,7 @@
     </div>
 
     <f:entry title="${%changeNote.entryTitle}">
-      <input class="setting-input" type="text" id="noteField" required="required"/>
+      <input class="jenkins-input" type="text" id="noteField" required="required"/>
     </f:entry>
     <input type="hidden" id="baseChainField" value=""/>
 

@@ -115,16 +115,6 @@ public class ConfigTemplatesJobAction implements Action {
     }
 
     /**
-     * Resolved {@link SharedBlocks} class, bound into the Jelly view's {@code st:include class="${it.sharedBlocksClass}"}
-     * attribute instead of a literal string — avoids Commons BeanUtils' String→Class conversion,
-     * which in the live Jenkins-plugin runtime resolves against the core WebAppClassLoader rather
-     * than this plugin's own PluginClassLoader and can never find a plugin-defined class this way.
-     */
-    public Class<SharedBlocks> getSharedBlocksClass() {
-        return SharedBlocks.class;
-    }
-
-    /**
      * This job's current {@link JobConfigTemplateProperty}, or {@code null} if it has none. Always
      * re-reads {@code job.getProperty(...)} rather than returning a cached field, mirroring
      * {@link ConfigSetPage#getConfigSet()}'s own "never cache" contract.

@@ -1,16 +1,16 @@
 <?jelly escape-by-default='true'?>
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form" xmlns:jc="/lib/jobconfigchain">
   <l:layout title="${it.displayName}">
     <l:main-panel>
       <st:bind var="proxy" value="${it}"/>
 
       <!-- CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): this page's own
            inline <style>/<script> were extracted verbatim into index.css/index.js, sibling files
-           to this index.jelly, loaded via h.getViewResource(it, ...) (resolves relative to this
-           view class — see https://www.jenkins.io/doc/developer/views/exposing-bundled-resources/).
+           to this index.jelly, loaded via st:adjunct (see the ctsyncCommonStyle/CommonScript adjuncts under
+           io/jenkins/plugins/jobconfigchain/adjuncts/).
            Server-side values index.js needs (previously interpolated via ${...}/<j:out> straight
            into the script text) now ride on #ctsyncCommonSeed's data-* attributes instead. -->
-      <link rel="stylesheet" href="${h.getViewResource(it, 'index.css')}"/>
+      <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncCommonStyle"/>
 
       <div id="ctsyncCommonSeed" style="display:none"
            data-editor-seed="${it.editorSeedJsonForScript}"
@@ -22,7 +22,7 @@
 
       <div class="ctsync-page">
 
-      <st:include class="${it.sharedBlocksClass}" page="confirmByNameBlock.jelly" it="${it}"/>
+      <jc:confirmByNameBlock/>
 
       <div class="ctsync-page-header">
         <h1>${it.displayName}</h1>
@@ -55,7 +55,7 @@
         </div>
       </div>
 
-      <div id="deleteBlockedBanner" class="alert alert-danger ctsync-blocked-banner"
+      <div id="deleteBlockedBanner" class="jenkins-alert jenkins-alert-danger ctsync-blocked-banner"
            style="display:none"/>
 
       <!-- Localized text for the script-built dialogs. Jelly cannot substitute ${%key} inside a
@@ -89,7 +89,7 @@
           <!-- Never the "does not exist yet - Save creates it" notice below: a deleted Config Set
                rendering as a blank new one is exactly the invitation to clobber an archive that
                reserving the name exists to prevent. -->
-          <div class="alert alert-warning">
+          <div class="jenkins-alert jenkins-alert-warning">
             ${%deletedState.banner(it.deletion.deletedBy)}
             <span class="ctsync-created-cell" data-epoch="${it.deletion.deletedAtEpochMillis}"
                   >${it.deletion.deletedAtEpochMillis}</span>
@@ -99,7 +99,7 @@
         <j:when test="${!it.exists}">
           <!-- Bug fix (2026-09-28): id added so the first Save's in-place-update response (see
                index.js's saveClicked) can hide this banner without a page reload. -->
-          <div id="notExistYetBanner" class="alert alert-info">${%notExistYet}</div>
+          <div id="notExistYetBanner" class="jenkins-alert jenkins-alert-info">${%notExistYet}</div>
         </j:when>
       </j:choose>
 
@@ -108,7 +108,7 @@
         <p>A path listed here is structurally locked: the JSON editor below may only hold the literal
            <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
            value is supplied only via the Jenkins credential picked below, never typed here.</p>
-        <st:include class="${it.sharedBlocksClass}" page="tableToolsBlock.jelly" it="${it}"/>
+        <jc:tableToolsBlock/>
         <div id="secretsManifestTableWrap" class="ctsync-scroll-table">
           <table class="jenkins-table sortable ctsync-filterable" style="width:100%">
             <thead><tr><th>${%column.dottedPath}</th><th>${%column.credential}</th><th data-sort-disable="true"/></tr></thead>
@@ -154,7 +154,7 @@
         <f:entry title="${%addSecret.entryTitle}">
           <div class="ctsync-secret-form">
             <div class="ctsync-secret-form-fields">
-              <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
+              <input class="jenkins-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
               <div class="jenkins-select">
                 <select class="jenkins-select__input" id="secretCredentialId">
                   <j:forEach var="cid" items="${it.availableCredentialIds}">
@@ -331,7 +331,7 @@
           <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
         </div>
 
-        <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
+        <div id="compareBanner" class="jenkins-alert jenkins-alert-info ctsync-banner-row" style="display:none">
           <span id="compareBannerText"/>
           <span>
             <button type="button" id="loadComparedBtn" class="jenkins-button jenkins-button--primary"
@@ -342,7 +342,7 @@
                    >${%backToEditing.label}</button>
           </span>
         </div>
-        <div id="generateBanner" class="alert alert-info" style="display:none">
+        <div id="generateBanner" class="jenkins-alert jenkins-alert-info" style="display:none">
           Common-only template from the ACTIVE version — NOT this box's unsaved edits, if any.
         </div>
         <div id="monacoEditor" style="height:420px;border:1px solid #ccc;margin-bottom:16px"/>
@@ -360,7 +360,7 @@
              #generateCopyRow, whichever is visible) creates breathing room before this field
              instead of it sitting flush against the coding block. -->
         <f:entry title="${%changeNote.entryTitle}">
-          <input class="setting-input" type="text" id="noteField" required="required"/>
+          <input class="jenkins-input" type="text" id="noteField" required="required"/>
         </f:entry>
         <input type="hidden" id="contentTypeField" value="${it.preselectedContentTypeValue}"/>
 
@@ -384,7 +384,7 @@
            HTML sits in between. Every script tag here must have an explicit closing tag. -->
       <script src="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/loader.js"></script>
       <link rel="stylesheet" href="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/editor/editor.main.css"/>
-      <script src="${h.getViewResource(it, 'index.js')}"></script>
+      <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncCommonScript"/>
 
       </div>
     </l:main-panel>
