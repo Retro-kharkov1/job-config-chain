@@ -1,6 +1,9 @@
 package io.jenkins.plugins.jobconfigchain.ui;
 
+import hudson.model.DescriptorVisibilityFilter;
 import hudson.model.FreeStyleProject;
+import net.sf.json.JSONObject;
+import org.kohsuke.stapler.StaplerRequest2;
 import hudson.model.JobPropertyDescriptor;
 import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
@@ -12,13 +15,16 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Proves {@link JobConfigTemplateProperty} works as a real, persisted {@link hudson.model.JobProperty}
  * — round-trips through {@code config.xml} via XStream exactly like every other {@code JobProperty}
  * (including its append-only version history and secrets manifest), and is never offered on the
- * generic {@code /job/&lt;name&gt;/configure} form (mirrors the old {@code ConfigTemplatesJobProperty}'s
- * equivalent guarantee, which this class replaces).
+ * generic {@code /job/&lt;name&gt;/configure} form as a visible block (hidden by a visibility filter; the
+ * descriptor itself stays applicable so Configure-&gt;Save keeps the property).
  */
 @WithJenkins
 public class JobConfigTemplatePropertyPersistenceTest {
@@ -47,24 +53,32 @@ public class JobConfigTemplatePropertyPersistenceTest {
     }
 
     @Test
-    public void descriptorIsApplicable_alwaysReturnsFalse() {
+    public void descriptorIsApplicable_soConfigureSaveKeepsTheProperty() {
         JobConfigTemplateProperty.DescriptorImpl descriptor = new JobConfigTemplateProperty.DescriptorImpl();
 
-        assertFalse(descriptor.isApplicable(FreeStyleProject.class),
-                "this descriptor must never be surfaced by Job/configure.jelly's f:descriptorList");
+        assertTrue(descriptor.isApplicable(FreeStyleProject.class),
+                "must be applicable, otherwise Job Configure->Save silently drops the property (C11)");
         assertEquals("Config Templates", descriptor.getDisplayName());
     }
 
     @Test
-    public void descriptorIsNotInThePropertyDescriptorsJobConfigureRenders(JenkinsRule jenkins) throws Exception {
-        jenkins.createFreeStyleProject("job-config-template-not-offered-on-configure");
+    public void descriptorIsHiddenFromTheDescriptorListsJobConfigureRenders(JenkinsRule jenkins) throws Exception {
+        FreeStyleProject project = jenkins.createFreeStyleProject("job-config-template-not-offered-on-configure");
 
-        List<JobPropertyDescriptor> descriptors =
-                JobPropertyDescriptor.getPropertyDescriptors(FreeStyleProject.class);
+        // The list Job/configure.jelly iterates is getPropertyDescriptors filtered by the visibility filters.
+        List<JobPropertyDescriptor> descriptors = DescriptorVisibilityFilter.apply(project,
+                JobPropertyDescriptor.getPropertyDescriptors(FreeStyleProject.class));
 
         boolean present = descriptors.stream()
                 .anyMatch(JobConfigTemplateProperty.DescriptorImpl.class::isInstance);
-        assertFalse(present, "JobConfigTemplateProperty's descriptor must not appear in the list "
-                        + "Job/configure.jelly's h.getJobPropertyDescriptors(it) iterates");
+        assertFalse(present, "JobConfigTemplateProperty's descriptor must not be rendered on the Configure page");
+    }
+
+    @Test
+    public void newInstance_returnsNull_andReconfigureReturnsTheLiveInstance() throws Exception {
+        JobConfigTemplateProperty property = new JobConfigTemplateProperty();
+        assertNull(new JobConfigTemplateProperty.DescriptorImpl().newInstance((StaplerRequest2) null, new JSONObject()));
+        assertSame(property, property.reconfigure((StaplerRequest2) null, null));
+        assertSame(property, property.reconfigure((StaplerRequest2) null, new JSONObject()));
     }
 }
