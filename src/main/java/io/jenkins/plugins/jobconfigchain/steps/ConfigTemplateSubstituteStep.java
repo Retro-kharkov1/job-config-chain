@@ -82,7 +82,16 @@ import java.util.stream.Collectors;
  * entirely if a prior {@code setupConfigTemplate} call in the same build already supplied them (see
  * pipeline-steps.md's "setupConfigTemplate build-scoped convenience step"); explicit call-site
  * values always win per parameter. Only {@code file} remains mandatory.</p>
+ *
+ * <p><b>Deprecated alias (public-API rename).</b> Kept whole - class, nested {@code Execution} and
+ * {@code DescriptorImpl} names, fields and {@code serialVersionUID} - so older Jenkinsfiles, replayed builds
+ * and in-flight Pipeline state that name this step keep working unchanged. New Jenkinsfiles use
+ * {@code configChainSubstitute}, which delegates to the same {@code Execution}. The Snippet Generator lists this step
+ * only under the advanced/deprecated entries.</p>
+ *
+ * @deprecated use {@link ConfigChainSubstituteStep} ({@code configChainSubstitute})
  */
+@Deprecated
 public class ConfigTemplateSubstituteStep extends Step {
 
     private String file;
@@ -550,6 +559,12 @@ public class ConfigTemplateSubstituteStep extends Step {
     @Extension
     public static class DescriptorImpl extends StepDescriptor {
 
+        /** Deprecated alias: only listed under the Snippet Generator's advanced entries. */
+        @Override
+        public boolean isAdvanced() {
+            return true;
+        }
+
         @Override
         public String getFunctionName() {
             return "configTemplateSubstitute";
@@ -557,7 +572,7 @@ public class ConfigTemplateSubstituteStep extends Step {
 
         @Override
         public String getDisplayName() {
-            return io.jenkins.plugins.jobconfigchain.ui.Messages.Step_Substitute_DisplayName();
+            return io.jenkins.plugins.jobconfigchain.ui.Messages.Step_Substitute_DeprecatedDisplayName();
         }
 
         @Override
