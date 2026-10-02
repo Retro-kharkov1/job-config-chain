@@ -28,7 +28,16 @@ import java.util.Set;
  * here either, for the same reason there is none on the two steps this configures — see
  * pipeline-steps.md's "Pipeline call resolution — the final parameter model". {@code configKey} is
  * only meaningful together with {@code useBase: true}.</p>
+ *
+ * <p><b>Deprecated alias (public-API rename).</b> Kept whole - class, nested {@code Execution} and
+ * {@code DescriptorImpl} names, fields and {@code serialVersionUID} - so older Jenkinsfiles, replayed builds
+ * and in-flight Pipeline state that name this step keep working unchanged. New Jenkinsfiles use
+ * {@code setupConfigChain}, which delegates to the same {@code Execution}. The Snippet Generator lists this step
+ * only under the advanced/deprecated entries.</p>
+ *
+ * @deprecated use {@link SetupConfigChainStep} ({@code setupConfigChain})
  */
+@Deprecated
 public class SetupConfigTemplateStep extends Step {
 
     private String file;
@@ -109,6 +118,18 @@ public class SetupConfigTemplateStep extends Step {
         @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
         private final String configKey;
         private final Integer version;
+        /**
+         * Added with the public-API rename: absent (null) in executions serialized by older builds,
+         * which means "called through the old function names". It only selects the step names quoted
+         * in the parallel-branch error message; the behavior is identical either way.
+         */
+        private Boolean chainNames;
+
+        Execution(StepContext context, String file, String redeployFromRun, boolean useBase, String configKey,
+                  Integer version, boolean chainNames) {
+            this(context, file, redeployFromRun, useBase, configKey, version);
+            this.chainNames = chainNames ? Boolean.TRUE : null;
+        }
 
         Execution(StepContext context, String file, String redeployFromRun, boolean useBase, String configKey,
                   Integer version) {
@@ -126,10 +147,14 @@ public class SetupConfigTemplateStep extends Step {
             String branch = ParallelBranchGuard.enclosingParallelBranchName(flowNode);
             if (branch != null) {
                 // See pipeline-steps.md's "Forbidden inside parallel {}" rule.
-                throw new AbortException("[configTemplateSync] setupConfigTemplate() is not supported "
+                boolean chain = Boolean.TRUE.equals(chainNames);
+                String setup = chain ? "setupConfigChain" : "setupConfigTemplate";
+                String validate = chain ? "configChainValidate" : "configTemplateValidate";
+                String substitute = chain ? "configChainSubstitute" : "configTemplateSubstitute";
+                throw new AbortException("[configTemplateSync] " + setup + "() is not supported "
                         + "inside a parallel {} branch ('" + branch + "') — its build-scoped state would be "
-                        + "ambiguous across concurrently-running branches. Call configTemplateValidate/"
-                        + "configTemplateSubstitute with their own full explicit parameters inside "
+                        + "ambiguous across concurrently-running branches. Call " + validate + "/"
+                        + substitute + " with their own full explicit parameters inside "
                         + "parallel {} instead.");
             }
             Run<?, ?> run = getContext().get(Run.class);
@@ -147,6 +172,12 @@ public class SetupConfigTemplateStep extends Step {
     @Extension
     public static class DescriptorImpl extends StepDescriptor {
 
+        /** Deprecated alias: only listed under the Snippet Generator's advanced entries. */
+        @Override
+        public boolean isAdvanced() {
+            return true;
+        }
+
         @Override
         public String getFunctionName() {
             return "setupConfigTemplate";
@@ -154,7 +185,7 @@ public class SetupConfigTemplateStep extends Step {
 
         @Override
         public String getDisplayName() {
-            return io.jenkins.plugins.jobconfigchain.ui.Messages.Step_Setup_DisplayName();
+            return io.jenkins.plugins.jobconfigchain.ui.Messages.Step_Setup_DeprecatedDisplayName();
         }
 
         @Override

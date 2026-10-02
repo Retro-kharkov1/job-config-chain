@@ -316,7 +316,7 @@ final class StepSupport {
                     + "', resolved via " + resolutionMode + ") references " + missing.size() + " " + plural
                     + " with no matching key in the effective configuration: " + wrapAsTokens(missing)
                     + ". Check for a typo in the token's dotted path, or add this key to the resolved source "
-                    + "(this Job's own Config Templates, or the global COMMON Config Set referenced via "
+                    + "(this Job's own Config Chain, or the global COMMON Config Set referenced via "
                     + "useBase/configKey).";
             listener.getLogger().println("[configTemplateSync][ERROR] " + message);
             throw new AbortException("[configTemplateSync] " + message);
@@ -430,8 +430,8 @@ final class StepSupport {
         }
         if (!missing.isEmpty()) {
             throw new AbortException("[configTemplateSync] Missing required parameter(s) " + missing
-                    + " — not supplied explicitly on this call, and no prior setupConfigTemplate() call in this "
-                    + "build provided them.");
+                    + " — not supplied explicitly on this call, and no prior setupConfigChain() (or the deprecated "
+                    + "setupConfigTemplate()) call in this build provided them.");
         }
         return new EffectiveParams(file, redeployFromRun, useBase, configKey, version);
     }
