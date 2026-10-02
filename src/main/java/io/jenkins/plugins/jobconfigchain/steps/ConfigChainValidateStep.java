@@ -95,6 +95,13 @@ public class ConfigChainValidateStep extends Step {
     @Extension
     public static class DescriptorImpl extends StepDescriptor {
 
+        /** Snippet Generator submit: untouched (empty) fields mean "not supplied". */
+        @Override
+        public Step newInstance(org.kohsuke.stapler.StaplerRequest2 req, net.sf.json.JSONObject formData)
+                throws FormException {
+            return super.newInstance(req, SnippetFormSupport.withoutBlankValues(formData));
+        }
+
         @Override
         public String getFunctionName() {
             return "configChainValidate";
