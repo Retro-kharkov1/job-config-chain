@@ -8,11 +8,13 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
@@ -23,6 +25,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * XML support (see nfr.md's "Minimize new dependency footprint for multi-format content" rule):
@@ -51,6 +55,38 @@ import java.util.Map;
 final class XmlTreeAdapter implements TreeFormat {
 
     private static final String XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
+
+    private static final Logger LOGGER = Logger.getLogger(XmlTreeAdapter.class.getName());
+
+    /**
+     * The one place a {@link TransformerFactory} is created: secure processing on, and no access to
+     * external DTDs or stylesheets. The attribute calls are best effort (a factory implementation may
+     * not support them; secure processing still applies then). Used for DOM serialization only, which
+     * is why {@code jenkins.util.xml.XMLUtils#safeTransform} (rejects {@code DOMSource}) is not used.
+     */
+    static TransformerFactory newHardenedTransformerFactory() {
+        return harden(TransformerFactory.newInstance());
+    }
+
+    /** Applies the hardening to {@code factory} (package-private so a test can pass a restrictive one). */
+    static TransformerFactory harden(TransformerFactory factory) {
+        try {
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        } catch (TransformerConfigurationException e) {
+            throw new IllegalStateException("XML transformer does not support secure processing", e);
+        }
+        setAttributeQuietly(factory, XMLConstants.ACCESS_EXTERNAL_DTD);
+        setAttributeQuietly(factory, XMLConstants.ACCESS_EXTERNAL_STYLESHEET);
+        return factory;
+    }
+
+    private static void setAttributeQuietly(TransformerFactory factory, String attribute) {
+        try {
+            factory.setAttribute(attribute, "");
+        } catch (IllegalArgumentException e) {
+            LOGGER.log(Level.FINE, "TransformerFactory does not support attribute " + attribute, e);
+        }
+    }
 
     @Override
     public ContentType contentType() {
@@ -145,7 +181,7 @@ final class XmlTreeAdapter implements TreeFormat {
     @Override
     public String serialize(TreeNode root) {
         try {
-            Transformer t = TransformerFactory.newInstance().newTransformer();
+            Transformer t = newHardenedTransformerFactory().newTransformer();
             t.setOutputProperty(OutputKeys.INDENT, "yes");
             t.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
             t.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
@@ -402,7 +438,7 @@ final class XmlTreeAdapter implements TreeFormat {
             StringBuilder sb = new StringBuilder();
             for (Element e : elements) {
                 try {
-                    Transformer t = TransformerFactory.newInstance().newTransformer();
+                    Transformer t = newHardenedTransformerFactory().newTransformer();
                     t.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
                     StringWriter sw = new StringWriter();
                     t.transform(new DOMSource(e), new StreamResult(sw));
