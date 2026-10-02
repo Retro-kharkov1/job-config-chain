@@ -118,7 +118,7 @@ A from-scratch walkthrough for a brand-new user, install to first successful bui
 `target/job-config-chain.hpi` via Manage Jenkins → Plugins → Advanced settings → Deploy
 Plugin.
 
-**2. Create your first Config Key (Common Config Set).** On the global `/configTemplates` page,
+**2. Create your first Config Key (Common Config Set).** On the global `/configChains` page,
 click "New Config Set," give it a name (e.g. `sample-app`), and submit the creation form:
 
 ![New Config Set creation form](docs/screenshots/08-new-config-set-creation-form.png)
@@ -148,11 +148,11 @@ secret and bind it to a Jenkins credential ID — never a real value:
 ![Add-secret form](docs/screenshots/10-secrets-manifest-add-form.png)
 *The add-secret form: a dotted-path field plus a Jenkins credential picker.*
 
-**6. Attach the target Job's own Config Templates page.** On the Job that will consume this
-config, open `/job/<name>/configTemplates`:
+**6. Attach the target Job's own Config Chains page.** On the Job that will consume this
+config, open `/job/<name>/configChains`:
 
-![Job-scoped Config Templates editor](docs/screenshots/03-job-scoped-editor.png)
-*A Job's own `/configTemplates` page — its base chain plus its own override content, side by
+![Job-scoped Config Chains editor](docs/screenshots/03-job-scoped-editor.png)
+*A Job's own `/configChains` page — its base chain plus its own override content, side by
 side.*
 
 **7. Add a base-chain entry.** Reference the Config Key created in step 2 (`ACTIVE`, or pinned to
@@ -172,16 +172,16 @@ pipeline {
   stages {
     stage('Prepare config') {
       steps {
-        configTemplateValidate(file: 'app.json')
-        configTemplateSubstitute(file: 'app.json')
+        configChainValidate(file: 'app.json')
+        configChainSubstitute(file: 'app.json')
       }
     }
   }
 }
 ```
 
-`configTemplateValidate` fails the build if `app.json` references a `#{Path}#` token with no
-matching key in the effective (merged) configuration. `configTemplateSubstitute` then resolves
+`configChainValidate` fails the build if `app.json` references a `#{Path}#` token with no
+matching key in the effective (merged) configuration. `configChainSubstitute` then resolves
 secrets from their bound Jenkins credentials and substitutes every token in place.
 
 **9. Trigger a build and read the console output.** The build console names exactly which
@@ -197,7 +197,7 @@ and successfully resolved by a real pipeline build.
 
 ### Parameters
 
-`configTemplateValidate` / `configTemplateSubstitute` take:
+`configChainValidate` / `configChainSubstitute` take:
 
 | Parameter | Type | Meaning |
 |---|---|---|
@@ -205,11 +205,17 @@ and successfully resolved by a real pipeline build.
 | `useBase` | boolean, default `false` | When `true`, resolves the base chain only (own override ignored), or redirects to a named global Config Set when `configKey` is also given. |
 | `configKey` | String, optional | Only valid together with `useBase: true`. Names a global COMMON Config Set to resolve directly, independent of the calling Job's own base chain. |
 | `version` | int, optional | Pins a specific version instead of the currently ACTIVE one. Meaning depends on the other parameters — see the matrix below. |
-| `redeployFromRun` | int or `<jobFullName>#<buildNumber>`, optional (`configTemplateSubstitute` only) | Replays a different Run's frozen Deployment Binding byte-identically, for rollback. |
+| `redeployFromRun` | int or `<jobFullName>#<buildNumber>`, optional (`configChainSubstitute` only) | Replays a different Run's frozen Deployment Binding byte-identically, for rollback. |
 
 There is no `environment` parameter — every call resolves, by construction, against the **calling
 Job's own attached local config**, unless `useBase: true` + `configKey` explicitly redirects to a
 named global Config Set.
+
+> **Renamed steps.** The steps were previously called `configTemplateValidate`,
+> `configTemplateSubstitute` and `setupConfigTemplate`. Those names still work as deprecated aliases
+> with identical behavior and output, so existing Jenkinsfiles and replays of older builds keep
+> running unchanged; new Jenkinsfiles should use `configChainValidate`, `configChainSubstitute` and
+> `setupConfigChain`. The old `/configTemplates` page URLs redirect to `/configChains`.
 
 > **Planned, not yet available:** the token delimiter shown throughout this document (`#{...}#`)
 > is being made configurable per Config Key/Job (five built-in presets — `{{...}}`, `${...}`,
@@ -250,15 +256,15 @@ def cfg = [
     version: 5
     // configKey: 'shared-database',   // optional, only meaningful together with useBase: true
 ]
-configTemplateValidate(cfg)
-configTemplateSubstitute(cfg)
+configChainValidate(cfg)
+configChainSubstitute(cfg)
 ```
 
-`setupConfigTemplate(file:, useBase:, configKey:, version:, redeployFromRun:)` is a build-scoped
+`setupConfigChain(file:, useBase:, configKey:, version:, redeployFromRun:)` is a build-scoped
 convenience alternative: call it once, and any later zero-argument (or partial) call to
-`configTemplateValidate()`/`configTemplateSubstitute()` in the same build reads whichever parameter
+`configChainValidate()`/`configChainSubstitute()` in the same build reads whichever parameter
 it wasn't itself given from the stored state. Explicit call-site parameters always override stored
-setup state, per parameter. `setupConfigTemplate` is rejected inside a `parallel {}` block (its
+setup state, per parameter. `setupConfigChain` is rejected inside a `parallel {}` block (its
 build-scoped state would be ambiguous across concurrently-running branches); the two other steps
 remain fully safe inside `parallel {}` when called with their own full explicit parameters.
 
@@ -269,9 +275,9 @@ remain fully safe inside `parallel {}` when called with their own full explicit 
   'configKey', or add 'useBase: true' to this call.`
 - **`configKey` names a Config Set that doesn't exist:**
   `[configTemplateSync] No global COMMON Config Set found for configKey '<value>'.`
-- **`file` missing from both the call site and any prior `setupConfigTemplate` call:** an
+- **`file` missing from both the call site and any prior `setupConfigChain` call:** an
   `AbortException` naming `file` as the missing required parameter.
-- **Missing-key drift (fatal, `configTemplateValidate`):** `Missing config keys — target file
+- **Missing-key drift (fatal, `configChainValidate`):** `Missing config keys — target file
   '<file>' (Job='<jobFullName>', resolved via <resolution mode>) references <N> token(s) with no
   matching key in the effective configuration: <list>. Check for a typo in the token's dotted
   path, or add this key to the resolved source described above.`
@@ -295,7 +301,7 @@ version used.
   Run's already-written binding instead of re-resolving `ACTIVE`/`PINNED` references live —
   guaranteeing every call within one build sees the identical effective configuration, even if a
   base Config Set's active version changes mid-build.
-- **`redeployFromRun` cross-Run replay:** `configTemplateSubstitute(..., redeployFromRun:
+- **`redeployFromRun` cross-Run replay:** `configChainSubstitute(..., redeployFromRun:
   <build-number-or-jobFullName#buildNumber>)` looks up the Deployment Binding of the **target**
   Run (not the current one) and substitutes using its frozen chain — byte-identical to the target
   Run's original output, even if a referenced base Config Set's active version has since changed.
@@ -346,11 +352,11 @@ eliminating typo drift.
 #### UF-3 — Validate config drift before deploying
 
 When your deploy pipeline needs to catch a broken/renamed token before it reaches a live deploy,
-call `configTemplateValidate(file: 'app.json')` before any real substitution.
+call `configChainValidate(file: 'app.json')` before any real substitution.
 
 *Example:*
 ```groovy
-configTemplateValidate(file: 'app.json')
+configChainValidate(file: 'app.json')
 ```
 If `app.json` contains `#{doesNotExist}#` with no matching key, the build fails naming
 `doesNotExist`. If the effective configuration has an unused key, the build succeeds with a
@@ -361,11 +367,11 @@ for the exact wording of both outcomes and a real failure console.
 
 #### UF-4 — Substitute real values at deploy time
 
-Once validation passes, call `configTemplateSubstitute(file: 'app.json')`.
+Once validation passes, call `configChainSubstitute(file: 'app.json')`.
 
 *Example:*
 ```groovy
-configTemplateSubstitute(file: 'app.json')
+configChainSubstitute(file: 'app.json')
 ```
 *Outcome:* every `#{Path}#` token in `app.json` is replaced with its real value (secrets resolved
 from their bound Jenkins credential, never from a stored placeholder), a Deployment Binding is
@@ -393,7 +399,7 @@ pipeline, pass `redeployFromRun` so the matching old config comes back automatic
 
 *Example:*
 ```groovy
-configTemplateSubstitute(file: 'app.json', redeployFromRun: 42)
+configChainSubstitute(file: 'app.json', redeployFromRun: 42)
 ```
 *Outcome:* if a Deployment Binding exists for build #42, substitution uses that binding's pinned
 versions — not whatever is currently "active." If no binding exists, the system falls back to
@@ -413,7 +419,7 @@ When you just want the ordinary, no-frills resolution every normal deploy uses, 
 *Example:* a Job's own config has one base-chain entry (`matrixdemo-base-db`@ACTIVE) plus its own
 override `{"Own":{"Override":"own-v2-override-value"}}`:
 ```groovy
-configTemplateSubstitute(file: 'app.json')
+configChainSubstitute(file: 'app.json')
 ```
 *Outcome:* both `Own.Override` (from the Job's own content) and `Database.Host` (from the folded
 base) land in the substituted file. Demonstrated live by `config-template-sync-matrix-demo`, build
@@ -426,7 +432,7 @@ with `useBase` omitted/`false` and `configKey` omitted.
 
 *Example:*
 ```groovy
-configTemplateSubstitute(file: 'app.json', version: 1)
+configChainSubstitute(file: 'app.json', version: 1)
 ```
 *Outcome:* resolves version 1's own content and its own recorded base chain exactly as saved,
 regardless of whichever version is active today. Demonstrated live by
@@ -439,7 +445,7 @@ call with `useBase: true` and both `configKey`/`version` omitted.
 
 *Example:*
 ```groovy
-configTemplateSubstitute(file: 'app.json', useBase: true)
+configChainSubstitute(file: 'app.json', useBase: true)
 ```
 *Outcome:* resolves `Database.Host` from the base chain but leaves `Own.Override` absent — visibly
 different from UF-7's output for the identical Job/version. Demonstrated live by
@@ -453,7 +459,7 @@ omitted.
 
 *Example:*
 ```groovy
-configTemplateSubstitute(file: 'app.json', useBase: true, version: 1)
+configChainSubstitute(file: 'app.json', useBase: true, version: 1)
 ```
 *Outcome:* folds version 1's own 2-entry chain (`matrixdemo-base-db`, `matrixdemo-base-logging`),
 producing both `Database.Host` and `Logging.Level` — proving a multi-entry chain pins cleanly.
@@ -468,7 +474,7 @@ Job's own base chain, supply `useBase: true` and `configKey: 'X'`, `version` omi
 
 *Example:* `unrelated-shared-config` is never referenced by the calling Job's own chain at all:
 ```groovy
-configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'unrelated-shared-config')
+configChainSubstitute(file: 'app.json', useBase: true, configKey: 'unrelated-shared-config')
 ```
 *Outcome:* still resolves it directly, returning its ACTIVE content — chain membership is not
 required. Demonstrated live by `config-template-sync-matrix-demo`, build #5
@@ -481,7 +487,7 @@ When you need a reproducible, specific historical version of a named global conf
 
 *Example:*
 ```groovy
-configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'unrelated-shared-config', version: 1)
+configChainSubstitute(file: 'app.json', useBase: true, configKey: 'unrelated-shared-config', version: 1)
 ```
 *Outcome:* resolves `Shared.Value` from version 1 — visibly different from UF-11's ACTIVE (v2)
 output for the identical `configKey`. Demonstrated live by `config-template-sync-matrix-demo`,
@@ -496,7 +502,7 @@ rather than silently falling through to some other resolution.
 
 *Example:*
 ```groovy
-configTemplateSubstitute(file: 'app.json', configKey: 'unrelated-shared-config')
+configChainSubstitute(file: 'app.json', configKey: 'unrelated-shared-config')
 ```
 *Outcome:* aborts with `[configTemplateSync] 'configKey' ('unrelated-shared-config') is only valid
 together with useBase: true — remove 'configKey', or add 'useBase: true' to this call.`
@@ -511,7 +517,7 @@ of silently resolving nothing.
 
 *Example:*
 ```groovy
-configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'typo-name')
+configChainSubstitute(file: 'app.json', useBase: true, configKey: 'typo-name')
 ```
 *Outcome:* aborts with `[configTemplateSync] No global COMMON Config Set found for configKey
 'typo-name'.`
@@ -537,7 +543,7 @@ a Job with no config property at all, or zero saved versions.
 
 *Example:*
 ```groovy
-configTemplateValidate(file: 'app.json')  // on a brand-new Job with nothing configured yet
+configChainValidate(file: 'app.json')  // on a brand-new Job with nothing configured yet
 ```
 *Outcome:* the effective configuration is simply empty — a valid, non-error state. If `app.json`
 has zero tokens, this is a silent no-op; if it has one or more tokens, the existing missing-keys
@@ -551,7 +557,7 @@ of the byte-identical replay in action.
 
 #### UF-17 — Same-Run repeat call replays the frozen chain instead of re-resolving live
 
-When a Jenkinsfile restarts from a stage, or calls `configTemplateSubstitute` more than once in
+When a Jenkinsfile restarts from a stage, or calls `configChainSubstitute` more than once in
 the same build, the second call reuses the first call's own frozen resolution.
 
 *Trigger:* a second (or later) real-substitution call within the same Run, after an earlier call in
@@ -566,32 +572,32 @@ across every call in one build, even if a base Config Set's active version chang
 When you need to redeploy an older build and get back the config that build actually shipped with
 — not whatever is active today — use `redeployFromRun`.
 
-*Trigger:* `configTemplateSubstitute(..., redeployFromRun: <build-number-or-jobFullName#buildNumber>)`
+*Trigger:* `configChainSubstitute(..., redeployFromRun: <build-number-or-jobFullName#buildNumber>)`
 called from a different Run than the one that originally substituted.
 
 *Example (from `config-template-sync-rebuild-demo`):* build #1 seeds Configuration A (v1); build
 #2 (no `redeployFromRun`, after Configuration B/v2 is activated) live-resolves to Configuration B;
 build #3:
 ```groovy
-configTemplateSubstitute(file: 'app.json', redeployFromRun: '1')
+configChainSubstitute(file: 'app.json', redeployFromRun: '1')
 ```
 *Outcome:* build #3 replays build #1's original `x=configuration-A-value` output byte-identically,
 despite Configuration B being active by then. The current Run also gets its own fresh Deployment
 Binding written, so a future rollback can chain forward and target it too. Screenshot: [rebuild
 demo console](docs/screenshots/15-rebuild-demo-redeploy-console.png).
 
-### `setupConfigTemplate` — declaring parameters once per build
+### `setupConfigChain` — declaring parameters once per build
 
-#### UF-19 — One `setupConfigTemplate` call configures every later zero-argument call in the same build
+#### UF-19 — One `setupConfigChain` call configures every later zero-argument call in the same build
 
 When you don't want to repeat the same parameters on every step call, declare them once at the top
-of the Jenkinsfile with `setupConfigTemplate`.
+of the Jenkinsfile with `setupConfigChain`.
 
 *Example:*
 ```groovy
-setupConfigTemplate(file: 'app.json', useBase: true, configKey: 'sample-app')
-configTemplateValidate()
-configTemplateSubstitute()
+setupConfigChain(file: 'app.json', useBase: true, configKey: 'sample-app')
+configChainValidate()
+configChainSubstitute()
 ```
 *Outcome:* both later calls read `file`/`useBase`/`configKey` from the stored setup state exactly
 as if passed directly.
@@ -599,39 +605,39 @@ as if passed directly.
 #### UF-20 — Explicit call-site parameters override stored setup state, per parameter
 
 When one specific call needs to diverge from the shared defaults on just one parameter, supply
-only that parameter explicitly — the rest still come from `setupConfigTemplate`.
+only that parameter explicitly — the rest still come from `setupConfigChain`.
 
 *Example:*
 ```groovy
-setupConfigTemplate(file: 'app.json', useBase: true, configKey: 'sample-app')
-configTemplateSubstitute(file: 'override.json')  // useBase/configKey still come from setup
+setupConfigChain(file: 'app.json', useBase: true, configKey: 'sample-app')
+configChainSubstitute(file: 'override.json')  // useBase/configKey still come from setup
 ```
 *Outcome:* precedence is evaluated per parameter, not all-or-nothing — the explicit `file` is used
 together with the stored `useBase`/`configKey`.
 
-#### UF-21 — `setupConfigTemplate` is rejected inside a `parallel {}` block
+#### UF-21 — `setupConfigChain` is rejected inside a `parallel {}` block
 
-When building a matrix deploy with `parallel {}`, don't call `setupConfigTemplate` inside a
+When building a matrix deploy with `parallel {}`, don't call `setupConfigChain` inside a
 branch — its build-scoped state would be ambiguous across concurrently-running branches.
 
 *Example:*
 ```groovy
 parallel(
-  dev: { setupConfigTemplate(file: 'app.json') }  // rejected
+  dev: { setupConfigChain(file: 'app.json') }  // rejected
 )
 ```
 *Outcome:* an `AbortException` naming the branch it was called from. Calls to
-`configTemplateValidate`/`configTemplateSubstitute` with their own full explicit parameters remain
+`configChainValidate`/`configChainSubstitute` with their own full explicit parameters remain
 fully supported and safe inside `parallel {}`.
 
-#### UF-22 — Calling `configTemplateValidate`/`configTemplateSubstitute` with no `file` from any source fails loud
+#### UF-22 — Calling `configChainValidate`/`configChainSubstitute` with no `file` from any source fails loud
 
-If `file` is missing from both the call site and any prior `setupConfigTemplate` call, the build
+If `file` is missing from both the call site and any prior `setupConfigChain` call, the build
 aborts rather than proceeding with a null/empty/default path.
 
 *Example:*
 ```groovy
-configTemplateValidate()  // no prior setupConfigTemplate, no file argument
+configChainValidate()  // no prior setupConfigChain, no file argument
 ```
 *Outcome:* an `AbortException` naming `file` as the missing required parameter — it never silently
 proceeds with a null/empty/default file path.
@@ -646,7 +652,7 @@ found in the target file, producing two independent, non-overlapping outcomes.
 *Example (missing key, fatal):* template references `#{doesNotExist}#`, which has no matching key
 in the Job's own active config (`{"a":1}`):
 ```groovy
-configTemplateValidate(file: 'app.json')
+configChainValidate(file: 'app.json')
 ```
 Build fails, console names `doesNotExist`. Demonstrated live by
 `config-template-sync-validation-demo`, build #1 — see the real failure console:
