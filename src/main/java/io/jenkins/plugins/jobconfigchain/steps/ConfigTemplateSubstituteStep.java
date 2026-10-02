@@ -31,10 +31,14 @@ import org.kohsuke.stapler.DataBoundSetter;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -84,8 +88,11 @@ public class ConfigTemplateSubstituteStep extends Step {
     private String file;
     private String redeployFromRun;
     private Boolean useBase;
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     private String configKey;
     private Integer version;
+    private String encoding;
 
     @DataBoundConstructor
     public ConfigTemplateSubstituteStep() {
@@ -144,9 +151,19 @@ public class ConfigTemplateSubstituteStep extends Step {
         this.version = version;
     }
 
+    /** Charset of the target file; {@code null} = UTF-8 with fallback to the agent default. */
+    public String getEncoding() {
+        return encoding;
+    }
+
+    @DataBoundSetter
+    public void setEncoding(String encoding) {
+        this.encoding = encoding == null || encoding.trim().isEmpty() ? null : encoding.trim();
+    }
+
     @Override
     public StepExecution start(StepContext context) {
-        return new Execution(context, file, redeployFromRun, useBase, configKey, version);
+        return new Execution(context, file, redeployFromRun, useBase, configKey, version, encoding);
     }
 
     static class Execution extends SynchronousNonBlockingStepExecution<Void> {
@@ -156,8 +173,21 @@ public class ConfigTemplateSubstituteStep extends Step {
         private final String file;
         private final String redeployFromRun;
         private final Boolean useBase;
+        // Identifier of a config set/chain, not a credential or secret.
+        @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
         private final String configKey;
         private final Integer version;
+        /**
+         * Added after the first release: absent (null) in executions serialized by older builds,
+         * which means "UTF-8 with fallback to the agent default". Keep non-final and null-tolerant.
+         */
+        private String encoding;
+
+        Execution(StepContext context, String file, String redeployFromRun, Boolean useBase, String configKey,
+                  Integer version, String encoding) {
+            this(context, file, redeployFromRun, useBase, configKey, version);
+            this.encoding = encoding;
+        }
 
         Execution(StepContext context, String file, String redeployFromRun, Boolean useBase, String configKey,
                   Integer version) {
@@ -278,10 +308,12 @@ public class ConfigTemplateSubstituteStep extends Step {
             }
 
             FilePath target = workspace.child(params.file);
+            TargetFileIO.warnIfOutsideWorkspace(workspace, params.file, listener);
             if (!target.exists()) {
                 throw new AbortException("Target config file not found: " + params.file);
             }
-            String originalContent = target.readToString();
+            TargetFileIO.Content fileContent = TargetFileIO.read(target, encoding, listener, params.file);
+            String originalContent = fileContent.text;
 
             // Defensive re-check, reusing the exact same drift comparison as validate, rather
             // than trusting that configTemplateValidate already ran earlier in this pipeline. When
@@ -314,7 +346,7 @@ public class ConfigTemplateSubstituteStep extends Step {
                         "[configTemplateSync] Substitution incomplete — tokens remain unresolved: " + wrapped);
             }
 
-            target.write(substituted, null);
+            TargetFileIO.write(target, substituted, fileContent.charset);
             listener.getLogger().println(
                     "[configTemplateSync] Substituted " + params.file + " for Job '" + job.getFullName()
                             + "' using base chain [" + joinChain(resolvedBaseChain)
@@ -442,14 +474,55 @@ public class ConfigTemplateSubstituteStep extends Step {
             return sb.toString();
         }
 
+        /**
+         * Replaces every {@code #{path}#} whose dotted path is a key of {@code valuesByDottedPath} in
+         * one left-to-right scan. Replacement text is appended literally (no group-reference
+         * semantics for {@code $} or backslash) and is never scanned again; unknown tokens are left
+         * untouched.
+         */
+        static String replaceTokens(String content, Map<String, String> valuesByDottedPath) {
+            if (valuesByDottedPath.isEmpty()) {
+                return content;
+            }
+            Map<String, String> valueByToken = new HashMap<>();
+            List<String> tokens = new ArrayList<>();
+            for (Map.Entry<String, String> e : valuesByDottedPath.entrySet()) {
+                String token = "#{" + e.getKey() + "}#";
+                valueByToken.put(token, e.getValue());
+                tokens.add(token);
+            }
+            // Longest first so the alternation prefers the most specific literal at a given position.
+            tokens.sort((x, y) -> y.length() - x.length());
+            StringBuilder regex = new StringBuilder();
+            for (String token : tokens) {
+                if (regex.length() > 0) {
+                    regex.append('|');
+                }
+                regex.append(Pattern.quote(token));
+            }
+            Matcher m = Pattern.compile(regex.toString()).matcher(content);
+            StringBuilder out = new StringBuilder(content.length());
+            int last = 0;
+            while (m.find()) {
+                out.append(content, last, m.start());
+                out.append(valueByToken.get(m.group()));
+                last = m.end();
+            }
+            out.append(content, last, content.length());
+            return out.toString();
+        }
+
         private String substitute(TreeNode effective, String content, EnvVars envVars,
                                    Map<String, String> secretsManifest, Run<?, ?> run) throws AbortException {
             Map<String, TreeNode> flattened = TreePaths.flatten(effective);
-            String result = content;
+            // Single pass (hosting hardening): only tokens present in the ORIGINAL file are resolved (in
+            // flattened order, as before), then all are replaced in one scan, so a substituted value
+            // (a secret, an env var, a JSON leaf) is never re-expanded or re-scanned.
+            Map<String, String> valuesByDottedPath = new LinkedHashMap<>();
             for (Map.Entry<String, TreeNode> entry : flattened.entrySet()) {
                 String dottedPath = entry.getKey();
                 String token = "#{" + dottedPath + "}#";
-                if (!result.contains(token)) {
+                if (!content.contains(token)) {
                     continue;
                 }
                 String value;
@@ -468,9 +541,9 @@ public class ConfigTemplateSubstituteStep extends Step {
                 } else {
                     value = TreePaths.leafAsString(entry.getValue());
                 }
-                result = result.replace(token, value);
+                valuesByDottedPath.put(dottedPath, value);
             }
-            return result;
+            return replaceTokens(content, valuesByDottedPath);
         }
     }
 
