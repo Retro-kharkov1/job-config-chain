@@ -26,7 +26,7 @@ import java.util.Objects;
 
 /**
  * Job-scoped sibling of {@code ConfigSet} (tech-lead design contract, 2026-09-09): holds a single
- * {@link Job}'s own Config Templates content directly as a {@link JobProperty}, rather than
+ * {@link Job}'s own Config Chain content directly as a {@link JobProperty}, rather than
  * associating the job with a separate {@code (projectKey, role, environment)}-keyed {@code
  * ConfigSet} elsewhere. Replaces {@code ConfigTemplatesJobProperty} (the old association-only
  * property) wholesale.
@@ -160,7 +160,7 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
         TreeNode root = TreeFormats.forType(type).parse(content);
         if (!root.isObject()) {
             throw new IllegalArgumentException(
-                    "Config Templates content must be a " + type + " object/root element");
+                    "Config Chain content must be a " + type + " object/root element");
         }
         for (String dottedPath : secretsManifest.keySet()) {
             TreeNode leaf = TreePaths.get(root, dottedPath);
@@ -211,7 +211,7 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
         /**
          * Always {@code true} so that this descriptor takes part in the property rebuild done on every
          * job Configure -> Save; with {@code false} the property would be silently dropped. The content
-         * is still viewed and edited only on the job's own {@code /job/<name>/configTemplates} page (see
+         * is still viewed and edited only on the job's own {@code /job/<name>/configChains} page (see
          * {@link ConfigTemplatesJobAction}): the descriptor is an "invisible property" (core's
          * {@code ReconfigurableDescribable} pattern) — an empty {@code config.jelly}, a
          * {@link HideFromJobConfigure} visibility filter, {@link #newInstance} returning {@code null}

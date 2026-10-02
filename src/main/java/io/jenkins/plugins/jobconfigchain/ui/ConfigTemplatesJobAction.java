@@ -43,10 +43,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * The job-scoped Config Templates admin page at {@code /job/&lt;name&gt;/configTemplates}
+ * The job-scoped Config Chains admin page at {@code /job/&lt;name&gt;/configChains}
  * (tech-lead design contract, 2026-09-09). Replaces the old association-only flow
  * ({@code doSaveAssociation}/{@code doAssociateEnvironment}/the per-environment sub-page) wholesale
- * — this page now holds a {@link Job}'s OWN Config Templates content directly, via
+ * — this page now holds a {@link Job}'s OWN Config Chain content directly, via
  * {@link JobConfigTemplateProperty}, rather than pointing at a separate global {@code ConfigSet}.
  *
  * <p><b>Shared surface with EnvConfigSetPage:</b> both host classes expose the SAME set of
@@ -65,6 +65,9 @@ import java.util.stream.Collectors;
  * an empty base chain unambiguously means "no bases," never a synthesized self-referencing default.</p>
  */
 public class ConfigTemplatesJobAction implements Action {
+
+    /** URL segment of the job page (renamed from {@code configTemplates}; old GETs redirect). */
+    public static final String URL_NAME = "configChains";
 
     private final Job<?, ?> job;
     private final ConfigSetRepository repository = new ConfigSetRepository();
@@ -94,7 +97,7 @@ public class ConfigTemplatesJobAction implements Action {
 
     @Override
     public String getUrlName() {
-        return "configTemplates";
+        return URL_NAME;
     }
 
     /**
@@ -183,7 +186,7 @@ public class ConfigTemplatesJobAction implements Action {
     /**
      * Bug 6.2 fix (tech-lead contract, 2026-09-10): identically-named counterpart to
      * EnvConfigSetPage#getOwnScopeLabel() (which returns {@code "layer"}) — this host's own
-     * Config Templates content is scoped to a {@link Job}, not a layered-override "layer," so the
+     * Config Chain content is scoped to a {@link Job}, not a layered-override "layer," so the
      * shared {@code baseChainBlock.jelly}/{@code editorBlock.jelly} fragments' body text now
      * interpolates {@code ${it.ownScopeLabel}} instead of hardcoding either word.
      */

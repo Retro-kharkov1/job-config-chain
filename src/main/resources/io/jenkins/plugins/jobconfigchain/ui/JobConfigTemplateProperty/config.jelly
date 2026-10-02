@@ -1,4 +1,4 @@
 <?jelly escape-by-default='true'?>
-<!-- Intentionally empty: the property is edited on the job's own Config Templates page. An empty
+<!-- Intentionally empty: the property is edited on the job's own Config Chains page. An empty
      config.jelly makes the descriptor an "invisible property" so Configure -> Save keeps it. -->
 <j:jelly xmlns:j="jelly:core"/>
