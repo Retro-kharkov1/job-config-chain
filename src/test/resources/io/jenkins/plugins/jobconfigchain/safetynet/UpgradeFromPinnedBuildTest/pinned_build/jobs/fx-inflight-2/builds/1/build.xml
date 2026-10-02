@@ -1,0 +1,67 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-build plugin="workflow-job@1602.v2a_70b_80a_2396">
+  <actions>
+    <io.jenkins.plugins.jobconfigchain.steps.ConfigTemplateSetupAction>
+      <file>app.cfg</file>
+      <useBase>false</useBase>
+    </io.jenkins.plugins.jobconfigchain.steps.ConfigTemplateSetupAction>
+  </actions>
+  <queueId>10</queueId>
+  <timestamp>1790895241406</timestamp>
+  <startTime>1790895241432</startTime>
+  <duration>0</duration>
+  <charset>UTF-8</charset>
+  <keepLog>false</keepLog>
+  <execution class="org.jenkinsci.plugins.workflow.cps.CpsFlowExecution">
+    <result>SUCCESS</result>
+    <script>node {
+setupConfigTemplate(file: &apos;app.cfg&apos;)
+writeFile file: &apos;app.cfg&apos;, text: &apos;host=#{Db.Host}# pw=#{Db.Password}# own=#{Own}#&apos;
+configTemplateValidate()
+}
+waitUntil { currentBuild.description == &apos;go&apos; }
+node {
+writeFile file: &apos;app.cfg&apos;, text: &apos;host=#{Db.Host}# pw=#{Db.Password}# own=#{Own}#&apos;
+configTemplateSubstitute()
+echo &quot;BIN:${readFile(file: &apos;app.cfg&apos;, encoding: &apos;Base64&apos;)}&quot;
+}</script>
+    <loadedScripts class="linked-hash-map"/>
+    <persistedClean>true</persistedClean>
+    <durabilityHint>MAX_SURVIVABILITY</durabilityHint>
+    <timings class="map">
+      <entry>
+        <string>flowNode</string>
+        <long>480666503</long>
+      </entry>
+      <entry>
+        <string>classLoad</string>
+        <long>17168352</long>
+      </entry>
+      <entry>
+        <string>runQueue</string>
+        <long>6367081937</long>
+      </entry>
+      <entry>
+        <string>run</string>
+        <long>2868657022</long>
+      </entry>
+      <entry>
+        <string>parse</string>
+        <long>24083652</long>
+      </entry>
+      <entry>
+        <string>saveProgram</string>
+        <long>2304065200</long>
+      </entry>
+    </timings>
+    <internalCalls class="sorted-set"/>
+    <sandbox>true</sandbox>
+    <iota>13</iota>
+    <head>1:13</head>
+    <start>2</start>
+    <done>false</done>
+    <resumeBlocked>false</resumeBlocked>
+  </execution>
+  <completed>false</completed>
+  <checkouts class="hudson.util.PersistedList"/>
+</flow-build>
