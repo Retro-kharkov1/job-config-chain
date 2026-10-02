@@ -92,6 +92,8 @@ public abstract class ConfigSetPage {
     }
 
 
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     final String projectKey;
     final ConfigSetRepository repository;
 

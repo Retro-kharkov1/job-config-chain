@@ -390,6 +390,8 @@ final class StepSupport {
         final String file;
         final String redeployFromRun;
         final boolean useBase;
+        // Identifier of a config set/chain, not a credential or secret.
+        @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
         final String configKey;
         final Integer version;
 
