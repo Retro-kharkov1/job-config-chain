@@ -228,6 +228,13 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <!-- Test-only: supplies the Pipeline `properties([...])` step (JobPropertyStep) so the C11 (P1)
+           tests exercise it against our job property. Version managed by the imported bom. -->
+      <groupId>org.jenkins-ci.plugins.workflow</groupId>
+      <artifactId>workflow-multibranch</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>credentials</artifactId>
     </dependency>
