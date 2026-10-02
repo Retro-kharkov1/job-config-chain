@@ -250,7 +250,7 @@
            ConfigTemplatesRootAction/ConfigTemplatesJobAction#getIconFileName(). Without this as a
            real runtime dependency the symbol cannot be resolved on a live controller and Jenkins
            renders its missing-symbol placeholder instead of the icon (owner report, 2026-09-18:
-           a cross appeared on both "Config Templates" menu entries). Version is managed by the
+           a cross appeared on both "Config Chains" menu entries). Version is managed by the
            imported bom-${jenkins.baseline}.x. -->
       <groupId>io.jenkins.plugins</groupId>
       <artifactId>ionicons-api</artifactId>

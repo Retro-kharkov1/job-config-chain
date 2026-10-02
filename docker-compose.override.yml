@@ -34,7 +34,7 @@ services:
       # /var/jenkins_home/plugins/job-config-chain.hpi. Bind-mounting a file into that
       # directory makes Docker create the directory itself, owned by root — and the container
       # runs as the `jenkins` user, which then cannot mkdir the plugins/<name>/ folder Jenkins
-      # explodes an .hpi into. The plugin silently never loads: /configTemplates 404s and
+      # explodes an .hpi into. The plugin silently never loads: /configChains 404s and
       # init.groovy.d dies with "unable to resolve class" on every plugin class. It only appears
       # to work when the volume already existed (created jenkins-owned by an earlier boot) and
       # breaks on the next `down -v`. Observed 2026-09-05.

@@ -61,7 +61,7 @@ def repository = new ConfigSetRepository()
 // =========================================================================================
 // AREA 1: Multi-format Config Set examples — XML and YAML siblings of "test-app"'s existing
 // JSON common content shape (App.Name / App.Version). Common Config Sets only, no job —
-// independently viewable/editable at /configTemplates/<key>/. The env-overlay sibling this
+// independently viewable/editable at /configChains/<key>/. The env-overlay sibling this
 // used to also seed no longer has a replacement concept (ConfigSetRole.ENV removed in full).
 // =========================================================================================
 def seedMultiFormatCommon = { String projectKey, ContentType contentType, String commonV1, String commonV2 ->
@@ -116,7 +116,7 @@ if (rebuildJob != null) {
     rebuildJob.setDefinition(new CpsFlowDefinition(
             "node {\n" +
                     "  writeFile file: 'app.json', text: 'x=#{a}#'\n" +
-                    "  configTemplateSubstitute(file: 'app.json')\n" +
+                    "  configChainSubstitute(file: 'app.json')\n" +
                     "  echo \"BUILD1:\${readFile('app.json')}\"\n" +
                     "}", true))
     rebuildJob.save()
@@ -134,7 +134,7 @@ if (rebuildJob != null) {
     rebuildJob.setDefinition(new CpsFlowDefinition(
             "node {\n" +
                     "  writeFile file: 'app.json', text: 'x=#{a}#'\n" +
-                    "  configTemplateSubstitute(file: 'app.json')\n" +
+                    "  configChainSubstitute(file: 'app.json')\n" +
                     "  echo \"BUILD2:\${readFile('app.json')}\"\n" +
                     "}", true))
     rebuildJob.save()
@@ -146,7 +146,7 @@ if (rebuildJob != null) {
     rebuildJob.setDefinition(new CpsFlowDefinition(
             "node {\n" +
                     "  writeFile file: 'app.json', text: 'x=#{a}#'\n" +
-                    "  configTemplateSubstitute(file: 'app.json', redeployFromRun: '1')\n" +
+                    "  configChainSubstitute(file: 'app.json', redeployFromRun: '1')\n" +
                     "  echo \"BUILD3:\${readFile('app.json')}\"\n" +
                     "}", true))
     rebuildJob.setDescription(
@@ -192,7 +192,7 @@ if (validationJob != null) {
     validationJob.setDefinition(new CpsFlowDefinition(
             "node {\n" +
                     "  writeFile file: 'app.json', text: 'x=#{a}# y=#{doesNotExist}#'\n" +
-                    "  configTemplateValidate(file: 'app.json')\n" +
+                    "  configChainValidate(file: 'app.json')\n" +
                     "}", true))
     validationJob.save()
     def build1 = validationJob.scheduleBuild2(0).get()
@@ -208,7 +208,7 @@ if (validationJob != null) {
     validationJob.setDefinition(new CpsFlowDefinition(
             "node {\n" +
                     "  writeFile file: 'app.json', text: 'x=#{a}#'\n" +
-                    "  configTemplateValidate(file: 'app.json')\n" +
+                    "  configChainValidate(file: 'app.json')\n" +
                     "}", true))
     validationJob.setDescription(
             "Demonstrates FR-17/18/19 drift validation (see ConfigTemplateValidateStepTest" +
@@ -283,7 +283,7 @@ if (chainJob != null) {
     chainJob.setDefinition(new CpsFlowDefinition(
             "node {\n" +
                     "  writeFile file: 'app.json', text: 'App=#{App}# Database.Host=#{Database.Host}# Logging.Level=#{Logging.Level}#'\n" +
-                    "  configTemplateSubstitute(file: 'app.json')\n" +
+                    "  configChainSubstitute(file: 'app.json')\n" +
                     "  echo \"RESULT:\${readFile('app.json')}\"\n" +
                     "}", true))
     chainJob.setDescription(
@@ -322,7 +322,7 @@ if (chainJob != null) {
 //
 // Each matrix row below is seeded as its OWN separate build (mirrors Area 2/3's proven pattern)
 // rather than multiple stages inside one build. This is deliberate, not just stylistic: every
-// configTemplateSubstitute call that OMITS 'version' (rows 1/4/6) resolves via
+// configChainSubstitute call that OMITS 'version' (rows 1/4/6) resolves via
 // ConfigTemplateSubstituteStep's "own-Run Deployment Binding" branch, which -- once ANY earlier
 // no-version substitute call in the SAME build/Run has already written a binding -- replays that
 // FROZEN chain for every later no-version call in that same build, ignoring that later call's own
@@ -415,7 +415,7 @@ if (matrixJob != null) {
                     "  def cfg = [\n" +
                     "      file: 'app.json'\n" +
                     "  ]\n" +
-                    "  configTemplateSubstitute(cfg)\n" +
+                    "  configChainSubstitute(cfg)\n" +
                     "  echo \"ROW1-DEFAULT(own-ACTIVE-v2,full-effective):\${readFile('app.json')}\"\n" +
                     "}", true))
     matrixJob.save()
@@ -431,7 +431,7 @@ if (matrixJob != null) {
                     "      file: 'app.json',\n" +
                     "      version: 1\n" +
                     "  ]\n" +
-                    "  configTemplateSubstitute(cfg)\n" +
+                    "  configChainSubstitute(cfg)\n" +
                     "  echo \"ROW2-VERSION-PIN(own-v1,full-effective):\${readFile('app.json')}\"\n" +
                     "}", true))
     matrixJob.save()
@@ -447,7 +447,7 @@ if (matrixJob != null) {
                     "      file: 'app.json',\n" +
                     "      useBase: true\n" +
                     "  ]\n" +
-                    "  configTemplateSubstitute(cfg)\n" +
+                    "  configChainSubstitute(cfg)\n" +
                     "  echo \"ROW4-USEBASE(own-ACTIVE-v2-chain-only,override-ignored):\${readFile('app.json')}\"\n" +
                     "}", true))
     matrixJob.save()
@@ -464,7 +464,7 @@ if (matrixJob != null) {
                     "      useBase: true,\n" +
                     "      version: 1\n" +
                     "  ]\n" +
-                    "  configTemplateSubstitute(cfg)\n" +
+                    "  configChainSubstitute(cfg)\n" +
                     "  echo \"ROW5-USEBASE-VERSION-PIN(own-v1-chain-2entries,override-ignored):\${readFile('app.json')}\"\n" +
                     "}", true))
     matrixJob.save()
@@ -481,7 +481,7 @@ if (matrixJob != null) {
                     "      useBase: true,\n" +
                     "      configKey: '${UNRELATED_KEY}'\n" +
                     "  ]\n" +
-                    "  configTemplateSubstitute(cfg)\n" +
+                    "  configChainSubstitute(cfg)\n" +
                     "  echo \"ROW6-USEBASE-CONFIGKEY(direct-global-ACTIVE,not-in-own-chain):\${readFile('app.json')}\"\n" +
                     "}", true))
     matrixJob.save()
@@ -499,7 +499,7 @@ if (matrixJob != null) {
                     "      configKey: '${UNRELATED_KEY}',\n" +
                     "      version: 1\n" +
                     "  ]\n" +
-                    "  configTemplateSubstitute(cfg)\n" +
+                    "  configChainSubstitute(cfg)\n" +
                     "  echo \"ROW7-USEBASE-CONFIGKEY-VERSION-PIN(direct-global-pinned-v1):\${readFile('app.json')}\"\n" +
                     "}", true))
     matrixJob.save()
@@ -517,7 +517,7 @@ if (matrixJob != null) {
                     "      // useBase: true,   // deliberately omitted -- configKey without useBase must fail loud\n" +
                     "  ]\n" +
                     "  try {\n" +
-                    "    configTemplateSubstitute(cfg)\n" +
+                    "    configChainSubstitute(cfg)\n" +
                     "    echo 'ROW3-FAILLOUD: UNEXPECTED — call did not throw'\n" +
                     "  } catch (err) {\n" +
                     "    echo \"ROW3-FAILLOUD-CAUGHT(configKey-without-useBase):\${err.getMessage()}\"\n" +

@@ -62,9 +62,9 @@ docker compose down -v
 - **Credential** `test-app-dev-db-password` (Secret text / `StringCredentialsImpl`,
   global scope) — value `S3cr3tDbPass!`. This is a fake, throwaway value for this local
   test instance only.
-- **Pipeline job** `config-template-sync-e2e` — runs `configTemplateValidate` then
-  `configTemplateSubstitute` against a sample `appsettings.json`-shaped file with matching
-  `#{Path}#` tokens. `configTemplateSubstitute` resolves `Database.Password` exclusively
+- **Pipeline job** `config-template-sync-e2e` — runs `configChainValidate` then
+  `configChainSubstitute` against a sample `appsettings.json`-shaped file with matching
+  `#{Path}#` tokens. `configChainSubstitute` resolves `Database.Password` exclusively
   from the `test-app-dev-db-password` credential above (FR-13/FR-21) — the Jenkinsfile does
   **not** manually inject it via `withCredentials`/`withEnv`, proving the step resolves the
   manifest-declared secret itself. **Not auto-triggered** — click **Build Now** on the job
