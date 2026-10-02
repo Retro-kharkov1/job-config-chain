@@ -58,7 +58,7 @@ public class JobConfigTemplatePropertyPersistenceTest {
 
         assertTrue(descriptor.isApplicable(FreeStyleProject.class),
                 "must be applicable, otherwise Job Configure->Save silently drops the property (C11)");
-        assertEquals("Config Templates", descriptor.getDisplayName());
+        assertEquals("Config Chains", descriptor.getDisplayName());
     }
 
     @Test

@@ -660,7 +660,7 @@ public class ConfigTemplateValidateStepTest {
                 + "(Job='validate-uf23-missing-exact-wording', resolved via this Job's own local config, active "
                 + "version) references 1 token with no matching key in the "
                 + "effective configuration: [#{doesNotExist}#]. Check for a typo in the token's dotted path, or add "
-                + "this key to the resolved source (this Job's own Config Templates, or the global COMMON "
+                + "this key to the resolved source (this Job's own Config Chain, or the global COMMON "
                 + "Config Set referenced via useBase/configKey).", run);
     }
 
@@ -706,7 +706,7 @@ public class ConfigTemplateValidateStepTest {
                 + "(Job='validate-uf23-usebase-configkey-wording', resolved via global Config Set "
                 + "'uf23usebaseproj', active version) references 1 token with no matching key in the "
                 + "effective configuration: [#{doesNotExist}#]. Check for a typo in the token's dotted path, or add "
-                + "this key to the resolved source (this Job's own Config Templates, or the global COMMON "
+                + "this key to the resolved source (this Job's own Config Chain, or the global COMMON "
                 + "Config Set referenced via useBase/configKey).", run);
     }
 }

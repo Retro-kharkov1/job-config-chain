@@ -165,7 +165,7 @@ public class JobPropertyConfigureP1Test {
         HtmlPage page = j.createWebClient().getPage(job, "configure");
         String html = page.asXml();
         assertFalse(html.contains("JobConfigTemplateProperty"), "no control/block named after the property");
-        assertFalse(html.contains("Config Templates"), "no visible block titled after the property");
+        assertFalse(html.contains("Config Chains"), "no visible block titled after the property");
 
         j.submit(page.getFormByName("config"));
         assertEquals(2, propertyOf(j, "p1-hidden").getVersions().size());

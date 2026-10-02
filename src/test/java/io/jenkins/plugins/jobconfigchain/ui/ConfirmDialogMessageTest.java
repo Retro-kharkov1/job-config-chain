@@ -60,7 +60,7 @@ public class ConfirmDialogMessageTest {
         wc.getOptions().setJavaScriptEnabled(true);
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
         wc.setCssErrorHandler(new SilentCssErrorHandler());
-        HtmlPage page = wc.goTo("manage/configTemplates/");
+        HtmlPage page = wc.goTo("manage/configChains/");
         wc.waitForBackgroundJavaScript(3000);
         return page;
     }
