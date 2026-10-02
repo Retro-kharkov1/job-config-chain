@@ -442,7 +442,7 @@ public class ConfigTemplatesJobActionTest {
             Pattern.compile("<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern EXTERNAL_SCRIPT_SRC =
-            Pattern.compile("<script src=\"([^\"]+)\"");
+            Pattern.compile("<script src=[\"']([^\"']+)[\"']");
 
     /**
      * CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): every
@@ -484,7 +484,7 @@ public class ConfigTemplatesJobActionTest {
     }
 
     private static final Pattern EXTERNAL_STYLESHEET_HREF =
-            Pattern.compile("<link rel=\"stylesheet\" href=\"([^\"]+)\"");
+            Pattern.compile("<link rel=[\"']stylesheet[\"'] href=[\"']([^\"']+)[\"']");
 
     /**
      * CSP migration counterpart to {@link #fetchExternalScripts} for this page's own inline
