@@ -25,6 +25,8 @@ final class ConfigTemplateSetupAction extends InvisibleAction implements Seriali
     private final String file;
     private final String redeployFromRun;
     private final boolean useBase;
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     private final String configKey;
     private final Integer version;
 

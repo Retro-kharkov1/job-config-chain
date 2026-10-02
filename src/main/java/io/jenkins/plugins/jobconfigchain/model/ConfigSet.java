@@ -25,6 +25,8 @@ public class ConfigSet implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /** Structural identifier tying a common Config Set to its env Config Sets. */
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     private final String projectKey;
 
     private final ConfigSetRole role;

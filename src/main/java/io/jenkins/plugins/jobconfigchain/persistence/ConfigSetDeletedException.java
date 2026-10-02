@@ -15,6 +15,8 @@ public class ConfigSetDeletedException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     private final String storageKey;
 
     public ConfigSetDeletedException(String storageKey) {

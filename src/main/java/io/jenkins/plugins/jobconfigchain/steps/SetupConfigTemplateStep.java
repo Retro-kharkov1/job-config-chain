@@ -34,6 +34,8 @@ public class SetupConfigTemplateStep extends Step {
     private String file;
     private String redeployFromRun;
     private Boolean useBase;
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     private String configKey;
     private Integer version;
 
@@ -103,6 +105,8 @@ public class SetupConfigTemplateStep extends Step {
         private final String file;
         private final String redeployFromRun;
         private final boolean useBase;
+        // Identifier of a config set/chain, not a credential or secret.
+        @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
         private final String configKey;
         private final Integer version;
 
