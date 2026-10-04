@@ -17,7 +17,7 @@
 
       <div class="ctsync-page">
 
-      <h1>${%title}</h1>
+      <l:app-bar title="${%title}"/>
       <p>
         Global (common) Config Sets. Click a row to open its editor; open a project's env layer
         from that project's page.
@@ -140,7 +140,7 @@
                       >${%restore.label}</button>
               <button type="button" class="jenkins-button jenkins-button--destructive ctsync-purge-btn"
                       data-project-key="${cs.projectKey}" title="${%purge.title}"
-                      >&#128465; ${%purge.label}</button>
+                      ><l:icon src="symbol-trash" class="icon-sm"/> ${%purge.label}</button>
             </td>
           </tr>
         </j:forEach>
@@ -164,7 +164,7 @@
           </f:entry>
           <div>
             <label class="ctsync-content-type-label">${%contentType.label}</label>
-            <div class="ctsync-content-type-hint">&#9432; ${%contentType.chooseOnceHelp}</div>
+            <div class="ctsync-content-type-hint"><l:icon src="symbol-information-circle" class="icon-sm"/> ${%contentType.chooseOnceHelp}</div>
             <div class="ctsync-content-type-radios" id="newContentTypeGroup">
               <label><input type="radio" name="newContentTypeRadio" value="JSON" id="newContentTypeJson" checked="checked"/> JSON</label>
               <label><input type="radio" name="newContentTypeRadio" value="XML" id="newContentTypeXml"/> XML</label>

@@ -27,6 +27,9 @@
 
       <div class="ctsync-page">
 
+      <l:app-bar title="${it.displayName}"/>
+      <jc:iconsBlock/>
+
       <j:if test="${!it.exists}">
         <!-- Bug fix (2026-09-28): id added so the first Save's in-place-update response (see
              index.js's saveClicked) can hide this banner without a page reload — mirrors the

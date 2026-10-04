@@ -22,10 +22,10 @@
 
       <div class="ctsync-page">
 
+      <jc:iconsBlock/>
       <jc:confirmByNameBlock/>
 
-      <div class="ctsync-page-header">
-        <h1>${it.displayName}</h1>
+      <l:app-bar title="${it.displayName}">
         <!-- id added (bug fix, 2026-09-28): a first Save's in-place-update response (see
              index.js's applyConfigSetNowExists) builds and inserts deleteConfigSetBtn into this
              row without a page reload. The button itself stays absent from the DOM entirely
@@ -34,7 +34,7 @@
              (theDeleteButtonRendersOnALiveConfigSetAndNotOnAnAbsentOne) — it is BUILT, not
              revealed, exactly like applyContentTypeLocked below already does for the content-type
              picker's own locked/unlocked swap. -->
-        <div class="ctsync-btn-row" id="pageHeaderBtnRow">
+        <div class="ctsync-btn-row ctsync-btn-row--flush" id="pageHeaderBtnRow">
           <j:choose>
             <j:when test="${it.deleted}">
               <button type="button" id="restoreConfigSetBtn" class="jenkins-button"
@@ -43,17 +43,17 @@
               <button type="button" id="purgeConfigSetBtn"
                       class="jenkins-button jenkins-button--destructive"
                       title="${%purge.title}"
-                      >&#128465; ${%purge.label}</button>
+                      ><l:icon src="symbol-trash" class="icon-sm"/> ${%purge.label}</button>
             </j:when>
             <j:when test="${it.exists}">
               <button type="button" id="deleteConfigSetBtn"
                       class="jenkins-button jenkins-button--destructive"
                       title="${%deleteConfigSet.title}"
-                      >&#128465; ${%deleteConfigSet.label}</button>
+                      ><l:icon src="symbol-trash" class="icon-sm"/> ${%deleteConfigSet.label}</button>
             </j:when>
           </j:choose>
         </div>
-      </div>
+      </l:app-bar>
 
       <div id="deleteBlockedBanner" class="jenkins-alert jenkins-alert-danger ctsync-blocked-banner"
            style="display:none"/>
@@ -81,7 +81,7 @@
       <template id="deleteConfigSetBtnTemplate">
         <button type="button" id="deleteConfigSetBtn"
                 class="jenkins-button jenkins-button--destructive"
-                title="${%deleteConfigSet.title}">&#128465; ${%deleteConfigSet.label}</button>
+                title="${%deleteConfigSet.title}"><l:icon src="symbol-trash" class="icon-sm"/> ${%deleteConfigSet.label}</button>
       </template>
 
       <j:choose>
@@ -124,7 +124,7 @@
                              delegation, keyed off data-secret-path. -->
                         <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
                                 data-secret-path="${entry.key}"
-                                title="${%removeSecret.title}">&#128465; ${%removeSecret.label}</button>
+                                title="${%removeSecret.title}"><l:icon src="symbol-trash" class="icon-sm"/> ${%removeSecret.label}</button>
                       </td>
                     </tr>
                   </j:forEach>
@@ -147,7 +147,7 @@
             <td class="js-secret-cred"/>
             <td>
               <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn">
-                &#128465; ${%removeSecret.label}</button>
+                <l:icon src="symbol-trash" class="icon-sm"/> ${%removeSecret.label}</button>
             </td>
           </tr>
         </template>
@@ -194,7 +194,7 @@
                   <td data-th="${%column.note}">${v.note}</td>
                   <td data-th="${%column.active}">
                     <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
-                      &#9679; ${%activeStatus}
+                      <span class="ctsync-icon-text"><l:icon src="symbol-checkmark-circle plugin-ionicons-api" class="icon-sm"/> ${%activeStatus}</span>
                     </j:if>
                   </td>
                   <td data-th="${%column.actions}">
@@ -250,17 +250,17 @@
         <div class="ctsync-btn-row">
           <button type="button" id="modeEditBtn"
                  class="jenkins-button jenkins-button--primary" title="${%modeEdit.title}"
-                 >&#9998; ${%modeEdit.label}</button>
+                 ><l:icon src="symbol-edit" class="icon-sm"/> ${%modeEdit.label}</button>
           <j:choose>
             <j:when test="${it.templateAvailable}">
               <button type="button" id="modeGenerateBtn"
                      class="jenkins-button" title="${%generateTemplate.title}"
-                     >&#128203; ${%generateTemplate.label}</button>
+                     ><l:icon src="symbol-document-text" class="icon-sm"/> ${%generateTemplate.label}</button>
             </j:when>
             <j:otherwise>
               <button type="button" id="modeGenerateBtn"
                      class="jenkins-button" disabled="disabled"
-                     title="${%generateTemplate.disabledTitle}">&#128203; ${%generateTemplate.label}</button>
+                     title="${%generateTemplate.disabledTitle}"><l:icon src="symbol-document-text" class="icon-sm"/> ${%generateTemplate.label}</button>
             </j:otherwise>
           </j:choose>
         </div>
@@ -271,11 +271,11 @@
              value the moment a first version exists. CSP migration: per-radio onclick removed — a
              single index.js listener on input[name=contentTypeRadio] (any of these three) reads
              this.value, exactly mirroring the three separate handlers it replaces. -->
-        <div class="ctsync-btn-row" id="contentTypeRow">
-          <label style="font-weight:600;margin-right:8px">${%contentType.label}</label>
+        <div class="ctsync-content-type-row" id="contentTypeRow">
+          <label class="ctsync-content-type-label">${%contentType.label}</label>
           <j:choose>
             <j:when test="${it.contentTypeLocked}">
-              <span id="contentTypeLockedDisplay">${it.contentTypeValue}&#160;&#128274; (locked — set at first Save, immutable)</span>
+              <span class="ctsync-icon-text" id="contentTypeLockedDisplay">${it.contentTypeValue}<l:icon src="symbol-lock-closed" class="icon-sm"/> (locked — set at first Save, immutable)</span>
             </j:when>
             <j:otherwise>
               <!-- Pre-selects whichever radio matches getPreselectedContentTypeValue() (see
@@ -294,8 +294,8 @@
                      label -> hint -> radios (a decision reached first, then reused here) instead
                      of radios -> trailing hint, since a trailing hint reads as a squeezed-in
                      afterthought rather than something read before making the choice. -->
-                <span style="color:#666;display:block;margin-bottom:4px">&#9432; choose once — locked forever after the first Save</span>
-                <label style="margin-right:8px">
+                <span class="ctsync-content-type-hint"><l:icon src="symbol-information-circle" class="icon-sm"/> choose once — locked forever after the first Save</span>
+                <label class="ctsync-radio-label">
                   <j:choose>
                     <j:when test="${preselectedContentType == 'JSON'}">
                       <input type="radio" name="contentTypeRadio" value="JSON" checked="checked"/>
@@ -305,7 +305,7 @@
                     </j:otherwise>
                   </j:choose>
                   JSON</label>
-                <label style="margin-right:8px">
+                <label class="ctsync-radio-label">
                   <j:choose>
                     <j:when test="${preselectedContentType == 'XML'}">
                       <input type="radio" name="contentTypeRadio" value="XML" checked="checked"/>
@@ -315,7 +315,7 @@
                     </j:otherwise>
                   </j:choose>
                   XML</label>
-                <label style="margin-right:8px">
+                <label class="ctsync-radio-label">
                   <j:choose>
                     <j:when test="${preselectedContentType == 'YAML'}">
                       <input type="radio" name="contentTypeRadio" value="YAML" checked="checked"/>
@@ -328,7 +328,7 @@
               </span>
             </j:otherwise>
           </j:choose>
-          <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
+          <span id="checkingIndicator" class="ctsync-muted ctsync-icon-text" style="display:none"><l:icon src="symbol-hourglass" class="icon-sm"/> Checking YAML…</span>
         </div>
 
         <div id="compareBanner" class="jenkins-alert jenkins-alert-info ctsync-banner-row" style="display:none">
@@ -345,11 +345,11 @@
         <div id="generateBanner" class="jenkins-alert jenkins-alert-info" style="display:none">
           Common-only template from the ACTIVE version — NOT this box's unsaved edits, if any.
         </div>
-        <div id="monacoEditor" style="height:420px;border:1px solid #ccc;margin-bottom:16px"/>
-        <div id="generateCopyRow" style="display:none;margin-top:4px;margin-bottom:16px">
+        <div id="monacoEditor" class="ctsync-editor-frame ctsync-editor-frame--tall ctsync-spaced"/>
+        <div id="generateCopyRow" class="ctsync-btn-row ctsync-spaced" style="display:none">
           <button type="button" id="copyTemplateBtn" class="jenkins-button"
                   title="${%copyTemplate.title}"
-                  >&#128203; ${%copyTemplate.label}</button>
+                  ><l:icon src="symbol-duplicate" class="icon-sm"/> ${%copyTemplate.label}</button>
         </div>
 
         <!-- No longer a &lt;form&gt; (2026-09-02 in-place-update pass): Save/Save &amp; Activate now

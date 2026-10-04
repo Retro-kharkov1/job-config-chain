@@ -366,3 +366,78 @@
   }
 })();
 
+
+/* ---- Icons for script-built markup (iconsBlock tag) ---- */
+(function () {
+  // Clone of a symbol Jenkins rendered into #ctsyncIcons (see iconsBlock.jelly), or null when the
+  // page does not carry the template. The symbols are real SVG, so they inherit currentColor and
+  // follow the active theme.
+  function icon(name) {
+    var tpl = document.getElementById('ctsyncIcons');
+    if (!tpl || !tpl.content) { return null; }
+    var holder = tpl.content.querySelector('[data-icon="' + name + '"]');
+    return holder && holder.firstElementChild ? holder.firstElementChild.cloneNode(true) : null;
+  }
+
+  // Replace the element's content with [icon] + text, keeping the text label (glyph plus words).
+  function setIconText(el, name, text) {
+    while (el.firstChild) { el.removeChild(el.firstChild); }
+    var svg = icon(name);
+    if (svg) { el.appendChild(svg); }
+    if (text) { el.appendChild(document.createTextNode(svg ? ' ' + text : text)); }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.ctsyncIcon = icon;
+    window.ctsyncSetIconText = setIconText;
+  }
+})();
+
+/* ---- Monaco theme taken from the Jenkins theme ----
+   Monaco's stock vs/vs-dark themes carry their own neutral greys, which sit beside the Jenkins
+   page as a foreign block. This defines a derived theme whose editor background and foreground are
+   the page's own --input-color / --text-color, resolved through a probe element, so it follows
+   whichever theme Jenkins is showing. Returns the theme name to pass to monaco.editor.setTheme. */
+function ctsyncMonacoTheme(dark) {
+  var base = dark ? 'vs-dark' : 'vs';
+  try {
+    if (!window.monaco || !monaco.editor || !monaco.editor.defineTheme) { return base; }
+    var probe = document.createElement('div');
+    probe.className = 'ctsync-theme-probe';
+    document.body.appendChild(probe);
+    var cs = window.getComputedStyle(probe);
+    var bg = ctsyncCssColorToHex(cs.backgroundColor);
+    var fg = ctsyncCssColorToHex(cs.color);
+    var line = ctsyncCssColorToHex(cs.borderTopColor);
+    document.body.removeChild(probe);
+    if (!bg) { return base; }
+    var colors = { 'editor.background': bg, 'editorGutter.background': bg };
+    if (fg) { colors['editor.foreground'] = fg; }
+    if (line) { colors['editorWidget.border'] = line; }
+    var name = dark ? 'ctsync-dark' : 'ctsync-light';
+    monaco.editor.defineTheme(name, { base: base, inherit: true, rules: [], colors: colors });
+    return name;
+  } catch (e) {
+    return base;
+  }
+}
+
+// Any CSS colour (rgb, color(), oklch, color-mix result) to #rrggbb through a 1x1 canvas, which
+// converts for us; null when the colour is transparent or cannot be parsed.
+function ctsyncCssColorToHex(css) {
+  try {
+    var canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = css;
+    ctx.fillRect(0, 0, 1, 1);
+    var d = ctx.getImageData(0, 0, 1, 1).data;
+    if (d[3] === 0) { return null; }
+    var h = function (n) { return ('0' + n.toString(16)).slice(-2); };
+    return '#' + h(d[0]) + h(d[1]) + h(d[2]);
+  } catch (e) {
+    return null;
+  }
+}

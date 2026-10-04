@@ -1,9 +1,34 @@
 /*
  * Styling shared by all three plugin pages (Config Sets list, job-level Config Chains page, common
- * Config Set editor): the table-filter controls and the blocked-delete banner. Pulled in by each
- * page's own style adjunct via an include directive, so it is emitted once per page, before the
- * page-specific rules.
+ * Config Set editor). Pulled in by each page's own style adjunct via an include directive, so it is
+ * emitted once per page, before the page-specific rules.
+ *
+ * Principle: Jenkins core already styles sections, tables, buttons, inputs and alerts, in both the
+ * light and the dark theme. This file only adds what core has no component for (the capped scrolling
+ * table shell, row selection, the editor frame) and every colour in it comes from a token that core
+ * really defines (--card-border-color, --jenkins-border-color--subtle, --table-background,
+ * --table-body-background, --accent-color, --text-color, --text-color-secondary, --error-color ...)
+ * so the theme plugin re-colours it for free. Never use a variable core does not define with a
+ * hard-coded fallback: the fallback then wins in every theme.
  */
+
+/* ---- Button rows ---- */
+.ctsync-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.75rem;
+}
+.ctsync-btn-row--right { justify-content: flex-end; }
+.ctsync-page .jenkins-button svg { flex: none; width: 1rem; height: 1rem; }
+
+/* ---- Muted / state text ---- */
+.ctsync-muted { color: var(--text-color-secondary); }
+.ctsync-stale { color: var(--error-color); }
+.ctsync-label-strong { font-weight: var(--font-bold-weight); }
+.ctsync-icon-text { display: inline-flex; align-items: center; gap: 0.35em; vertical-align: middle; }
+.ctsync-icon-text svg { width: 1.1em; height: 1.1em; flex: none; }
 
 /* ---- Table filtering (tableToolsBlock tag) ---- */
 .ctsync-filter-input {
@@ -13,19 +38,160 @@
   box-sizing: border-box;
   margin-top: 4px;
   padding: 2px 6px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: normal;
 }
 .ctsync-filter-status {
   margin: 4px 2px 0;
-  font-size: 12px;
-  color: var(--text-color-secondary, #666);
+  font-size: var(--font-size-sm);
+  color: var(--text-color-secondary);
 }
 .ctsync-filter-status[hidden] { display: none; }
 
 /* ---- Blocked-delete banner (confirmByNameBlock tag) ---- */
-.ctsync-blocked-banner { margin: 8px 0; }
 .ctsync-blocked-banner ul { margin: 6px 0 0 18px; }
 .ctsync-blocked-banner li { margin: 2px 0; }
-.ctsync-blocked-note { margin-top: 8px; font-size: 12px; }
+.ctsync-blocked-note { margin-top: 8px; font-size: var(--font-size-sm); }
 
+/* ---- Table shell (admin-ui.md table-shell contract) ----
+   A wrapper div (never the table itself: overflow on a table element has sticky-header/border
+   quirks) caps the height at 50vh, scrolls, frames the table with core's own card border, and keeps
+   the header row sticky. Core's jenkins-table draws its own frame through a ::before pseudo-element,
+   so that one is switched off here to avoid a doubled border. */
+.ctsync-scroll-table {
+  max-height: 50vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: var(--table-background);
+  border: var(--jenkins-border-width) solid var(--card-border-color);
+  border-radius: var(--table-border-radius);
+  margin-bottom: var(--section-padding);
+  scrollbar-width: thin;
+  scrollbar-color: var(--jenkins-border-color) transparent;
+}
+.ctsync-scroll-table--full-width { width: 100%; max-width: 100%; }
+.ctsync-scroll-table table.jenkins-table {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  border-spacing: 0;
+}
+.ctsync-scroll-table table.jenkins-table::before { display: none; }
+.ctsync-scroll-table::-webkit-scrollbar { width: 10px; }
+.ctsync-scroll-table::-webkit-scrollbar-track { background: transparent; }
+.ctsync-scroll-table::-webkit-scrollbar-thumb {
+  background-color: var(--jenkins-border-color);
+  border-radius: var(--form-input-border-radius);
+  border: 2px solid var(--table-background);
+}
+.ctsync-scroll-table::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-color-secondary);
+}
+/* position: sticky on the header cells themselves (not the row group) is the most reliable
+   cross-browser form; the wrapper div is each cell's nearest scrolling ancestor. A box-shadow, not a
+   border-bottom, draws the rule so the sticky cell's border does not double-count in the height. */
+.ctsync-scroll-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: var(--table-background);
+  box-shadow: 0 var(--jenkins-border-width) 0 0 var(--card-border-color);
+}
+.ctsync-scroll-table tbody > tr + tr > td {
+  border-top: var(--jenkins-border-width) solid var(--jenkins-border-color--subtle);
+}
+/* Empty-state row: a zero-row table keeps its header and renders ONE spanning row in the body. */
+.ctsync-scroll-table tbody > tr.ctsync-empty-state-row > td {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-color-secondary);
+  font-size: var(--font-size-sm);
+  border: none;
+}
+
+/* ---- Selectable version-history rows ----
+   Hover and selected tints are the accent colour mixed into the table's own body background, so they
+   are visibly distinct in both themes without inventing a colour. */
+.ctsync-history-row { cursor: pointer; }
+.jenkins-table > tbody > tr.ctsync-history-row:hover > td {
+  background-color: color-mix(in srgb, var(--accent-color) 8%, var(--table-body-background));
+}
+.jenkins-table > tbody > tr.ctsync-history-row--selected > td,
+.jenkins-table > tbody > tr.ctsync-history-row--selected:hover > td {
+  background-color: color-mix(in srgb, var(--accent-color) 18%, var(--table-body-background));
+}
+.ctsync-history-row:focus-visible { outline: 2px solid var(--accent-color); outline-offset: -2px; }
+.ctsync-history-row .jenkins-button { white-space: nowrap; }
+
+/* ---- Secret binding form ---- */
+.ctsync-secret-form { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+.ctsync-secret-form-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; width: 100%; }
+.ctsync-secret-form .ctsync-secret-path-input { flex: 1 1 160px; min-width: 120px; width: auto !important; }
+.ctsync-secret-form .jenkins-select { flex: 1 1 320px; width: auto !important; }
+.ctsync-secret-form .jenkins-select__input { width: 100% !important; }
+
+/* ---- Compare / generate banners ---- */
+.ctsync-banner-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.ctsync-banner-row > #compareBannerText { margin-right: 1rem; }
+.ctsync-banner-row .jenkins-button { margin: 0; }
+
+/* ---- Code-editor frame (Monaco host boxes) ---- */
+.ctsync-editor-frame {
+  height: 380px;
+  box-sizing: border-box;
+  border: var(--jenkins-border-width) solid var(--card-border-color);
+  border-radius: var(--form-input-border-radius);
+  overflow: hidden;
+}
+.ctsync-editor-frame--tall { height: 420px; }
+.ctsync-editor-frame--short { height: 260px; }
+
+/* ---- Content-type picker ---- */
+.ctsync-content-type-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0.25rem 0 0.75rem; }
+.ctsync-content-type-label { font-weight: var(--font-bold-weight); }
+.ctsync-content-type-hint { display: flex; align-items: center; gap: 0.35em; flex-basis: 100%; color: var(--text-color-secondary); }
+.ctsync-content-type-hint svg { width: 1.1em; height: 1.1em; flex: none; }
+.ctsync-content-type-radios { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+.ctsync-content-type-radios label { display: inline-flex; align-items: center; gap: 0.35em; cursor: pointer; }
+
+/* ---- Narrow viewports: the history table collapses to stacked cards ---- */
+@media (max-width: 768px) {
+  .ctsync-page .ctsync-history-table thead { display: none; }
+  .ctsync-page .ctsync-history-table,
+  .ctsync-page .ctsync-history-table tbody,
+  .ctsync-page .ctsync-history-table tr,
+  .ctsync-page .ctsync-history-table td { display: block; width: 100% !important; }
+  .ctsync-page .ctsync-history-table tr { border-bottom: var(--jenkins-border-width) solid var(--jenkins-border-color--subtle); padding: 6px 0; }
+  .ctsync-page .ctsync-history-table td { padding: 2px 4px; height: auto; border: none !important; }
+  .ctsync-page .ctsync-history-table td[data-th]::before {
+    content: attr(data-th) ": ";
+    font-weight: var(--font-bold-weight);
+    display: inline-block;
+    min-width: 90px;
+  }
+  .ctsync-banner-row > #compareBannerText { margin-right: 0; margin-bottom: 8px; display: block; }
+}
+
+/* Probe read by ctsyncMonacoTheme (ctsyncSharedScript.js): carries the theme's input surface, text
+   and border colours so the script can hand real values to Monaco. */
+.ctsync-theme-probe {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+  background-color: var(--input-color);
+  color: var(--text-color);
+  border: 1px solid var(--card-border-color);
+}
+
+/* ---- Small layout helpers ---- */
+.ctsync-spaced { margin-bottom: 1rem; }
+.ctsync-generated-panel { margin-bottom: 1rem; }
+.ctsync-btn-row--flush { margin: 0; }
+.ctsync-radio-label { display: inline-flex; align-items: center; gap: 0.35em; margin-right: 0.75rem; cursor: pointer; }
+.ctsync-section-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }

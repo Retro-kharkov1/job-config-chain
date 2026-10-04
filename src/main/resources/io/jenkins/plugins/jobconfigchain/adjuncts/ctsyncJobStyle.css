@@ -2,115 +2,25 @@
 /*
  * Job-level Config Chains page-level styling (on top of ctsyncSharedStyle). Loaded via
  * <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncJobStyle"/>.
+ * Sections, buttons, inputs, alerts and the page header are Jenkins core's own components; only the
+ * merge grid and the base-chain table (no core equivalent) are styled here, with core tokens.
  */
 
-/* ---- This page's own rules ---- */
-
-/* Same page-level styling as EnvConfigSetPage/index.jelly — kept in sync deliberately,
-   since both host the same _shared/*.jelly fragments. */
-.ctsync-page .jenkins-button { margin: 4px 6px 4px 0; }
-.ctsync-page table.jenkins-table .jenkins-button { margin: 2px 4px; }
-.ctsync-section-header { margin: 12px 0 4px; }
-.ctsync-btn-row { margin: 4px 0 12px; }
-.ctsync-secret-form { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 8px 0 16px; }
-.ctsync-secret-form-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
-.ctsync-secret-form .ctsync-secret-path-input { flex: 1 1 160px; min-width: 120px; width: auto !important; }
-.ctsync-secret-form .jenkins-select { flex: 1 1 320px; width: auto !important; }
-.ctsync-secret-form .jenkins-select__input { width: 100% !important; }
-.ctsync-secret-form .jenkins-button { margin-top: 4px; }
-.ctsync-history-row { cursor: pointer; }
-.ctsync-history-row:hover { background-color: var(--table-hover-color, #f0f6ff); }
-.ctsync-history-row--selected,
-.ctsync-history-row--selected:hover { background-color: var(--table-highlight-color, #d9edf7); }
-.ctsync-btn-row--right { text-align: right; }
-.ctsync-banner-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.ctsync-banner-row > #compareBannerText { margin-right: 16px; }
-.ctsync-editor-toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
-.ctsync-merge-grid { max-width: 100%; box-sizing: border-box; }
-.ctsync-merge-top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-width: 0; align-items: stretch; }
-.ctsync-merge-full { margin-top: 12px; }
+/* ---- Merge grid (Merged bases / Own override / Merged result) ---- */
+.ctsync-editor-toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+.ctsync-merge-grid { max-width: 100%; box-sizing: border-box; margin-bottom: 1rem; }
+.ctsync-merge-top { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; min-width: 0; align-items: stretch; }
+.ctsync-merge-full { margin-top: 0.75rem; }
 .ctsync-merge-pane { min-width: 0; max-width: 100%; overflow-x: auto; box-sizing: border-box; }
+.ctsync-merge-pane h3 { margin: 0 0 0.5rem; font-size: 1rem; }
 @media (max-width: 768px) {
   .ctsync-merge-top { grid-template-columns: 1fr; }
-  .ctsync-page .ctsync-history-table thead { display: none; }
-  .ctsync-page .ctsync-history-table,
-  .ctsync-page .ctsync-history-table tbody,
-  .ctsync-page .ctsync-history-table tr,
-  .ctsync-page .ctsync-history-table td { display: block; width: 100% !important; }
-  .ctsync-page .ctsync-history-table tr { border-bottom: 1px solid var(--table-border-color, #ddd); padding: 6px 0; }
-  .ctsync-page .ctsync-history-table td { padding: 2px 4px; }
-  .ctsync-page .ctsync-history-table td[data-th]::before {
-    content: attr(data-th) ": ";
-    font-weight: 600;
-    display: inline-block;
-    min-width: 90px;
-  }
   .ctsync-editor-toolbar-row { justify-content: flex-start; }
-  .ctsync-banner-row > #compareBannerText { margin-right: 0; margin-bottom: 8px; display: block; }
 }
-.ctsync-page .jenkins-section,
-.ctsync-page .jenkins-section:first-of-type,
-.ctsync-page .jenkins-section:last-child {
-  border: 1px solid var(--table-border-color, #ddd);
-  border-radius: var(--form-input-border-radius, 6px);
-  padding: 1.25rem;
-  margin: 0 0 32px;
-}
-.ctsync-page .jenkins-section__title {
-  font-weight: 700;
-  font-size: 1.15em;
-  margin-bottom: 14px;
-}
-.ctsync-scroll-table {
-  max-height: 50vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  width: fit-content;
-  max-width: 100%;
-  border: 1px solid var(--table-border-color, #ddd);
-  border-radius: var(--form-input-border-radius, 6px);
-  box-sizing: border-box;
-}
-.ctsync-scroll-table table.jenkins-table {
-  border: none;
-  border-radius: 0;
-  margin: 0;
-  border-spacing: 0;
-}
-.ctsync-scroll-table--full-width {
-  width: 100%;
-  max-width: 100%;
-}
-.ctsync-scroll-table {
-  scrollbar-width: thin;
-  scrollbar-color: var(--text-color-secondary, #8c8c8c) transparent;
-}
-.ctsync-scroll-table::-webkit-scrollbar { width: 10px; }
-.ctsync-scroll-table::-webkit-scrollbar-track { background: transparent; }
-.ctsync-scroll-table::-webkit-scrollbar-thumb {
-  background-color: var(--text-color-secondary, #8c8c8c);
-  border-radius: var(--form-input-border-radius, 6px);
-  border: 2px solid var(--table-background, #fff);
-}
-.ctsync-scroll-table::-webkit-scrollbar-thumb:hover {
-  background-color: var(--table-hover-color, #f0f6ff);
-}
-.ctsync-scroll-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background-color: var(--table-background, #fff);
-  box-shadow: 0 2px 0 0 var(--table-border-color, #ddd);
-}
-.ctsync-empty-state-row td {
-  padding: 32px 16px;
-  text-align: center;
-  color: var(--text-color-secondary, #666);
-  font-size: 0.95em;
-  border: none;
-}
-.ctsync-basechain-table { width: 100%; margin-bottom: 8px; }
-.ctsync-basechain-table th, .ctsync-basechain-table td { padding: 4px 6px; text-align: left; }
+
+/* ---- Base-chain table ---- */
+.ctsync-basechain-table { width: 100%; }
+.ctsync-basechain-table th, .ctsync-basechain-table td { text-align: left; }
 .ctsync-basechain-table select.jenkins-select__input { width: 100%; max-width: 200px; }
 .ctsync-basechain-row select, .ctsync-basechain-row input[type="radio"] { vertical-align: middle; }
 .ctsync-basechain-row input[type="radio"],
@@ -120,104 +30,83 @@
 #contentTypeUnlockedGroup input[type="radio"],
 #contentTypeUnlockedGroup label { cursor: pointer; }
 .ctsync-basechain-reorder-btn, .ctsync-basechain-remove-btn { min-width: 28px; }
-.ctsync-basechain-row-toggle {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px;
-  color: var(--text-color, #333); text-decoration: none; cursor: pointer;
-  background-color: var(--table-hover-color, #f0f6ff);
-  border: 1px solid var(--table-border-color, #ccc);
-  border-radius: 50%;
-  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-}
-.ctsync-basechain-row-toggle:hover {
-  background-color: var(--table-highlight-color, #d9edf7);
-  border-color: var(--link-color, #0059b3);
-  color: var(--link-color, #0059b3);
-}
-.ctsync-basechain-row-toggle:active { transform: scale(0.92); }
-.ctsync-basechain-row-toggle:focus-visible {
-  outline: 2px solid var(--link-color, #0059b3);
-  outline-offset: 2px;
-}
-.ctsync-basechain-resolved-pre { max-height: 220px; overflow: auto; background: #f6f6f6; padding: 6px; }
-.ctsync-basechain-resolved-caption { font-size: 0.9em; color: #555; margin-bottom: 4px; }
-.ctsync-basechain-history-detail { margin-top: 4px; padding-left: 16px; font-size: 0.9em; }
-.ctsync-basechain-diff-container { max-width: 100%; overflow-x: auto; box-sizing: border-box; }
-.ctsync-basechain-drag-cell { width: 32px; padding: 4px; text-align: center; }
-.ctsync-basechain-drag-handle {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 32px; color: var(--text-color-secondary, #999); cursor: grab;
-  -webkit-user-drag: element;
-}
-.ctsync-basechain-drag-handle svg { -webkit-user-drag: element; pointer-events: none; }
-.ctsync-basechain-drag-handle:hover { color: var(--link-color, #0059b3); }
-.ctsync-basechain-row select,
-.ctsync-basechain-row input[type="radio"],
-.ctsync-basechain-row button,
+.ctsync-basechain-actions-cell { white-space: nowrap; }
+.ctsync-basechain-actions-cell .jenkins-button { margin-right: 0.25rem; }
+
+/* Round icon affordances next to / inside a row: expand chevron, open-in-new-tab, version info.
+   Transparent at rest, the core subtle border, the accent colour on hover. */
 .ctsync-basechain-row-toggle,
-.ctsync-basechain-open-link { -webkit-user-drag: none; }
-.ctsync-basechain-open-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  margin-left: 6px;
-  color: var(--text-color-secondary, #666);
-  text-decoration: none;
-  cursor: pointer;
-  background-color: transparent;
-  border: 1px solid var(--table-border-color, #ccc);
-  border-radius: 50%;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-.ctsync-basechain-open-link:hover {
-  background-color: var(--table-hover-color, #f0f6ff);
-  border-color: var(--table-border-color, #ccc);
-  color: var(--link-color, #0059b3);
-}
-.ctsync-basechain-open-link:focus-visible {
-  outline: 2px solid var(--link-color, #0059b3);
-  outline-offset: 2px;
-}
-.ctsync-basechain-version-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.ctsync-basechain-version-cell select {
-  min-width: 0;
-  flex: 0 1 auto;
-}
+.ctsync-basechain-open-link,
 .ctsync-basechain-version-info {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  font-size: 12px;
-  font-style: italic;
-  font-weight: 600;
-  color: var(--text-color-secondary, #666);
-  cursor: help;
+  box-sizing: border-box;
+  color: var(--text-color-secondary);
   background-color: transparent;
-  border: 1px solid var(--table-border-color, #ccc);
+  border: var(--jenkins-border-width) solid var(--jenkins-border-color);
   border-radius: 50%;
+  text-decoration: none;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
+.ctsync-basechain-row-toggle { width: 26px; height: 26px; cursor: pointer; color: var(--text-color); }
+.ctsync-basechain-open-link { width: 22px; height: 22px; margin-left: 6px; cursor: pointer; }
+.ctsync-basechain-version-info { width: 22px; height: 22px; cursor: help; }
+.ctsync-basechain-row-toggle svg,
+.ctsync-basechain-open-link svg,
+.ctsync-basechain-version-info svg { width: 14px; height: 14px; pointer-events: none; }
+.ctsync-basechain-row-toggle:hover,
+.ctsync-basechain-open-link:hover,
 .ctsync-basechain-version-info:hover {
-  background-color: var(--table-hover-color, #f0f6ff);
-  color: var(--link-color, #0059b3);
+  background-color: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
 }
-.ctsync-basechain-actions-cell,
+.ctsync-basechain-row-toggle:active { transform: scale(0.92); }
+.ctsync-basechain-row-toggle:focus-visible,
+.ctsync-basechain-open-link:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.ctsync-basechain-resolved-pre {
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px;
+  color: var(--text-color);
+  background: var(--table-background);
+  border-radius: var(--form-input-border-radius);
+}
+.ctsync-basechain-resolved-caption { font-size: var(--font-size-sm); color: var(--text-color-secondary); margin-bottom: 4px; }
+.ctsync-basechain-history-detail { margin-top: 4px; padding-left: 16px; font-size: var(--font-size-sm); }
+.ctsync-basechain-diff-container { max-width: 100%; overflow-x: auto; box-sizing: border-box; }
+.ctsync-basechain-drag-cell { width: 32px; padding: 4px; text-align: center; }
+.ctsync-basechain-drag-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 32px; color: var(--text-color-secondary); cursor: grab;
+  -webkit-user-drag: element;
+}
+.ctsync-basechain-drag-handle svg { -webkit-user-drag: element; pointer-events: none; }
+.ctsync-basechain-drag-handle:hover { color: var(--accent-color); }
+.ctsync-basechain-row select,
+.ctsync-basechain-row input[type="radio"],
+.ctsync-basechain-row button,
+.ctsync-basechain-row-toggle,
+.ctsync-basechain-open-link { -webkit-user-drag: none; }
+.ctsync-basechain-version-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ctsync-basechain-version-cell select { min-width: 0; flex: 0 1 auto; }
 .ctsync-basechain-mode-cell { white-space: nowrap; }
+.ctsync-basechain-mode-cell label { margin-right: 8px; }
+.ctsync-basechain-config-key { display: flex; align-items: center; gap: 6px; }
+.ctsync-basechain-config-key select { flex: 1 1 auto; }
 .ctsync-basechain-row.ctsync-basechain-row--dragging { opacity: 0.5; cursor: grabbing; }
-.ctsync-basechain-row.ctsync-basechain-row--drop-target { border-top: 2px solid var(--link-color, #0059b3); }
+.ctsync-basechain-row.ctsync-basechain-row--drop-target > td { border-top: 2px solid var(--accent-color); }
+.ctsync-standalone-badge { display: inline-flex; align-items: center; gap: 0.35em; }
+.ctsync-standalone-badge svg { width: 1.1em; height: 1.1em; }
 @media (max-width: 480px) {
   .ctsync-basechain-table, .ctsync-basechain-table tbody, .ctsync-basechain-table tr,
   .ctsync-basechain-table td { display: block; width: 100% !important; }
-  .ctsync-basechain-row { border-bottom: 1px solid var(--table-border-color, #ddd); padding: 6px 0; }
+  .ctsync-basechain-row { border-bottom: var(--jenkins-border-width) solid var(--jenkins-border-color--subtle); padding: 6px 0; }
   .ctsync-basechain-drag-cell { display: none; }
 }

@@ -214,7 +214,7 @@ function jenkinsPrefersDark() {
 
 function applyMonacoTheme() {
   if (window.monaco && monaco.editor) {
-    monaco.editor.setTheme(jenkinsPrefersDark() ? 'vs-dark' : 'vs');
+    monaco.editor.setTheme(ctsyncMonacoTheme(jenkinsPrefersDark()));
   }
 }
 
@@ -389,7 +389,11 @@ function applyContentTypeLocked(type) {
   if (!unlockedGroup) { return; }
   var locked = document.createElement('span');
   locked.id = 'contentTypeLockedDisplay';
-  locked.textContent = type + ' 🔒 (locked — set at first Save, immutable)';
+  locked.className = 'ctsync-icon-text';
+  locked.appendChild(document.createTextNode(type));
+  var lockIcon = window.ctsyncIcon && window.ctsyncIcon('lock');
+  if (lockIcon) { locked.appendChild(lockIcon); }
+  locked.appendChild(document.createTextNode('(locked — set at first Save, immutable)'));
   unlockedGroup.parentNode.replaceChild(locked, unlockedGroup);
   currentContentType = type;
   document.getElementById('contentTypeField').value = type;
@@ -484,7 +488,8 @@ function buildHistoryRowElement(v) {
   tr.querySelector('.js-createdBy').textContent = v.author;
   tr.querySelector('.js-note').textContent = v.note;
   var badge = tr.querySelector('.js-activeBadge');
-  badge.textContent = v.active ? ('● ' + tpl.dataset.activeLabel) : '';
+  badge.textContent = '';
+  if (v.active) { ctsyncSetIconText(badge, 'active', tpl.dataset.activeLabel); }
   var btn = tr.querySelector('.js-activate-btn');
   if (v.active) {
     btn.disabled = true;

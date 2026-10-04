@@ -173,7 +173,7 @@ function jenkinsPrefersDark() {
 
 function applyMonacoTheme() {
   if (window.monaco && monaco.editor) {
-    monaco.editor.setTheme(jenkinsPrefersDark() ? 'vs-dark' : 'vs');
+    monaco.editor.setTheme(ctsyncMonacoTheme(jenkinsPrefersDark()));
   }
 }
 
@@ -239,7 +239,11 @@ function applyContentTypeLocked(type) {
   if (!unlockedGroup) { return; }
   var locked = document.createElement('span');
   locked.id = 'contentTypeLockedDisplay';
-  locked.textContent = type + ' 🔒 (locked — set at first Save, immutable)';
+  locked.className = 'ctsync-icon-text';
+  locked.appendChild(document.createTextNode(type));
+  var lockIcon = window.ctsyncIcon && window.ctsyncIcon('lock');
+  if (lockIcon) { locked.appendChild(lockIcon); }
+  locked.appendChild(document.createTextNode('(locked — set at first Save, immutable)'));
   unlockedGroup.parentNode.replaceChild(locked, unlockedGroup);
   currentContentType = type;
 }
@@ -515,9 +519,9 @@ function buildBaseChainRowElement(row, index) {
   toggleLink.setAttribute('role', 'button');
   toggleLink.setAttribute('aria-expanded', baseChainRowExpanded[index] ? 'true' : 'false');
   toggleLink.title = baseChainRowExpanded[index] ? 'Collapse resolved content' : 'Expand resolved content';
-  toggleLink.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">'
-      + '<path d="' + (baseChainRowExpanded[index] ? 'M4 6l4 4 4-4' : 'M6 4l4 4-4 4') + '" '
-      + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  toggleLink.setAttribute('aria-label', toggleLink.title);
+  var chevron = ctsyncIcon(baseChainRowExpanded[index] ? 'expanded' : 'collapsed');
+  if (chevron) { toggleLink.appendChild(chevron); }
   toggleLink.onclick = (function (idx) {
     return function (e) { e.preventDefault(); toggleBaseChainRowExpanded(idx); };
   })(index);
@@ -546,10 +550,7 @@ function buildBaseChainRowElement(row, index) {
   // inside its td, which pushed the open-link anchor onto its own line below it instead
   // of sitting beside it — wrap both in a flex row so they render side by side.
   var configKeyWrap = document.createElement('div');
-  configKeyWrap.style.display = 'flex';
-  configKeyWrap.style.alignItems = 'center';
-  configKeyWrap.style.gap = '6px';
-  projectSelect.style.flex = '1 1 auto';
+  configKeyWrap.className = 'ctsync-basechain-config-key';
   configKeyWrap.appendChild(projectSelect);
   // Open-in-new-tab link next to the Config Key select (docs/design/job-wireframe.md,
   // Block 3) — same convention as EnvConfigSetPage's identical row builder. Small
@@ -561,11 +562,10 @@ function buildBaseChainRowElement(row, index) {
     openLink.target = '_blank';
     openLink.rel = 'noopener noreferrer';
     openLink.className = 'ctsync-basechain-open-link';
-    openLink.style.flex = '0 0 auto';
     openLink.title = baseChainFormat('openInNewTabTitle', row.projectKey);
-    openLink.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">'
-        + '<path d="M6.5 3H3.5C3.22 3 3 3.22 3 3.5v9c0 .28.22.5.5.5h9c.28 0 .5-.22.5-.5v-3M9 3h4v4M13 3L7 9" '
-        + 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    openLink.setAttribute('aria-label', openLink.title);
+    var externalIcon = ctsyncIcon('external');
+    if (externalIcon) { openLink.appendChild(externalIcon); }
     configKeyWrap.appendChild(openLink);
   }
   projectTd.appendChild(configKeyWrap);
@@ -606,7 +606,8 @@ function buildBaseChainRowElement(row, index) {
     var infoIcon = document.createElement('span');
     infoIcon.className = 'ctsync-basechain-version-info';
     infoIcon.setAttribute('aria-hidden', 'true');
-    infoIcon.textContent = 'i';
+    var infoSvg = ctsyncIcon('info');
+    if (infoSvg) { infoIcon.appendChild(infoSvg); }
     versionCell.appendChild(infoIcon);
 
     var syncVersionInfo = function () {
@@ -633,7 +634,8 @@ function buildBaseChainRowElement(row, index) {
   upBtn.type = 'button';
   upBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
   upBtn.title = baseChainText('moveUpTitle');
-  upBtn.innerHTML = '&#9650;';
+  upBtn.setAttribute('aria-label', upBtn.title);
+  { var ic_upBtn = ctsyncIcon('up'); if (ic_upBtn) { upBtn.appendChild(ic_upBtn); } }
   upBtn.disabled = (index === 0);
   upBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, -1); }; })(index);
   actionsTd.appendChild(upBtn);
@@ -642,7 +644,8 @@ function buildBaseChainRowElement(row, index) {
   downBtn.type = 'button';
   downBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
   downBtn.title = baseChainText('moveDownTitle');
-  downBtn.innerHTML = '&#9660;';
+  downBtn.setAttribute('aria-label', downBtn.title);
+  { var ic_downBtn = ctsyncIcon('down'); if (ic_downBtn) { downBtn.appendChild(ic_downBtn); } }
   downBtn.disabled = (index === baseChainRows.length - 1);
   downBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, 1); }; })(index);
   actionsTd.appendChild(downBtn);
@@ -651,7 +654,8 @@ function buildBaseChainRowElement(row, index) {
   removeBtn.type = 'button';
   removeBtn.className = 'jenkins-button jenkins-button--destructive ctsync-basechain-remove-btn';
   removeBtn.title = baseChainText('removeTitle');
-  removeBtn.innerHTML = '&#10005;';
+  removeBtn.setAttribute('aria-label', removeBtn.title);
+  { var ic_removeBtn = ctsyncIcon('remove'); if (ic_removeBtn) { removeBtn.appendChild(ic_removeBtn); } }
   removeBtn.onclick = (function (idx) { return function () { removeBaseChainRow(idx); }; })(index);
   actionsTd.appendChild(removeBtn);
 
@@ -673,9 +677,7 @@ function buildBaseChainRowElement(row, index) {
         curRef.pinMode, curRef.resolvedVersionNumber);
     detailTd.appendChild(caption);
     var diffContainer = document.createElement('div');
-    diffContainer.className = 'ctsync-basechain-diff-container';
-    diffContainer.style.height = '260px';
-    diffContainer.style.border = '1px solid #ccc';
+    diffContainer.className = 'ctsync-basechain-diff-container ctsync-editor-frame ctsync-editor-frame--short';
     detailTd.appendChild(diffContainer);
     var leftContent = index === 0 ? '{}' : lastPerReference[index - 1].cumulativeJson;
     var rightContent = curRef.cumulativeJson;
@@ -698,7 +700,6 @@ function buildBaseChainRowElement(row, index) {
 
 function buildModeRadio(row, index, value, label) {
   var wrapper = document.createElement('label');
-  wrapper.style.marginRight = '8px';
   var radio = document.createElement('input');
   radio.type = 'radio';
   radio.name = 'baseChainMode-' + index;
@@ -1008,7 +1009,8 @@ function buildHistoryRowElement(v) {
   }
 
   var activeBadge = tr.querySelector('.js-activeBadge');
-  activeBadge.textContent = v.active ? ('● ' + tpl.dataset.activeLabel) : '';
+  activeBadge.textContent = '';
+  if (v.active) { ctsyncSetIconText(activeBadge, 'active', tpl.dataset.activeLabel); }
   var btn = tr.querySelector('.js-activate-btn');
   if (v.active) {
     btn.disabled = true;

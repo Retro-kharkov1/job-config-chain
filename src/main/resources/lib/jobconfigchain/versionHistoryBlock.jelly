@@ -9,7 +9,7 @@
   toggleBaseChainDetail, activateVersion, formatTimestamp) must be defined by BOTH hosts' own
   page-level <script> — see each host's index.jelly for its own copy of that wiring.
 -->
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form">
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form" xmlns:l="/lib/layout">
   <div id="versionHistoryDetails">
   <f:section title="${%versionHistory.heading}">
     <p>Click a row to compare it against the editor's current draft (no checkbox required — click
@@ -46,12 +46,12 @@
                 <j:choose>
                   <j:when test="${it.explicitlyStandaloneSupported and v.explicitlyStandalone}">
                     <span class="ctsync-standalone-badge" title="Declared zero base configs on purpose (see base-chains.md's Standalone env Config Sets section)">
-                      &#9873; Standalone
+                      <l:icon src="symbol-flag-outline plugin-ionicons-api" class="icon-sm"/> Standalone
                     </span>
                   </j:when>
                   <j:otherwise>
                     <a href="#" class="ctsync-basechain-toggle" data-version-number="${v.versionNumber}">
-                      &#9656; ${v.baseChain.size()} <j:choose>
+                      <l:icon src="symbol-chevron-forward" class="icon-sm"/> ${v.baseChain.size()} <j:choose>
                         <j:when test="${v.baseChain.size() == 1}">base</j:when>
                         <j:otherwise>bases</j:otherwise>
                       </j:choose>
@@ -76,7 +76,7 @@
               </td>
               <td data-th="${%column.active}">
                 <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
-                  &#9679; ${%activeStatus}
+                  <span class="ctsync-icon-text"><l:icon src="symbol-checkmark-circle plugin-ionicons-api" class="icon-sm"/> ${%activeStatus}</span>
                 </j:if>
               </td>
               <td data-th="${%column.actions}">
@@ -112,9 +112,9 @@
         <td data-th="${%column.note}" class="js-note"/>
         <td data-th="${%column.baseChain}">
           <span class="ctsync-standalone-badge js-standalone-badge" style="display:none"
-                title="Declared zero base configs on purpose (see base-chains.md's Standalone env Config Sets section)">&#9873; Standalone</span>
+                title="Declared zero base configs on purpose (see base-chains.md's Standalone env Config Sets section)"><l:icon src="symbol-flag-outline plugin-ionicons-api" class="icon-sm"/> Standalone</span>
           <a href="#" class="ctsync-basechain-toggle js-basechain-toggle">
-            &#9656; <span class="js-basechain-count"/> bases</a>
+            <l:icon src="symbol-chevron-forward" class="icon-sm"/> <span class="js-basechain-count"/> bases</a>
           <div class="ctsync-basechain-history-detail js-basechain-detail" style="display:none"/>
         </td>
         <td data-th="${%column.active}" class="js-activeBadge"/>
