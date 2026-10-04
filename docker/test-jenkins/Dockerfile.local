@@ -1,0 +1,15 @@
+# LOCAL-ONLY, untracked helper — NOT part of the committed build. Assembles the same
+# stage-2 Jenkins image as docker/test-jenkins/Dockerfile, but skips stage 1 (which runs
+# `mvn -B clean verify` inside the image build) entirely. This repo's hard rule forbids
+# compiling/testing the plugin on this local machine; the actual plugin .hpi always comes
+# from a tower-docker build and is injected at container-start time by
+# docker-compose.override.yml's bind mount + entrypoint script, not baked into this image.
+FROM jenkins/jenkins:lts-jdk21
+
+ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
+
+COPY --chown=jenkins:jenkins docker/test-jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+COPY --chown=jenkins:jenkins docker/test-jenkins/init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
+COPY --chown=jenkins:jenkins docker/test-jenkins/fixtures/ /opt/job-config-chain-e2e/
