@@ -10,14 +10,14 @@
   off cumulativeJson — see BOTH hosts' own page-level <script> for that logic; this fragment is
   only the static table shell + the explicitlyStandalone checkbox (guarded, EnvConfigSetPage only).
 -->
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form">
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form" xmlns:l="/lib/layout">
   <f:section title="${%baseChain.heading}">
     <div id="baseChainEditor">
       <p>Ordered list of base Config Sets folded left-to-right before this ${it.ownScopeLabel}'s own
          override is applied — later rows win on overlapping keys. Each row either always tracks its project's
          currently-ACTIVE version, or pins to one specific historical version. Drag a row by its
-         &#8942;&#8942; handle (or use the &#9650;/&#9660; buttons) to reorder. Click a row's chevron button
-         to expand its resolved (read-only) content, or click &#8599; to open that base project's own
+         grip handle (or use the move-up/move-down buttons) to reorder. Click a row's chevron button
+         to expand its resolved (read-only) content, or click the open-in-new-tab icon to open that base project's own
          admin page in a new tab.</p>
       <!-- Requirement history, EnvConfigSetPage only (see base-chains.md's "Standalone env Config
            Sets" section): mutually exclusive with having any base-chain rows —
@@ -67,7 +67,7 @@
       </div>
       <div class="ctsync-btn-row">
         <button type="button" id="addBaseChainRowBtn" class="jenkins-button"
-                title="${%addBase.title}">&#10133; ${%addBase.label}</button>
+                title="${%addBase.title}"><l:icon src="symbol-add" class="icon-sm"/> ${%addBase.label}</button>
       </div>
     </div>
   </f:section>

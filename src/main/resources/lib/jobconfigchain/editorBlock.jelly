@@ -20,7 +20,7 @@
   discardAllBtn) or by `input[name=contentTypeRadio]` selector, exactly mirroring the removed
   inline handlers.
 -->
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form">
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form" xmlns:l="/lib/layout">
   <div id="editorDetails">
   <!-- Header row (owner report, 2026-09-14): f:section's own title markup (lib/form/section.jelly,
        Jenkins core) renders the title as its own sibling <div class="jenkins-section__title">,
@@ -33,7 +33,7 @@
        typography) is preserved unchanged. f:rowSet (also inside f:section) is a documented no-op
        here since no @name/@ref is passed, so dropping it changes nothing. -->
   <section class="jenkins-section">
-    <div class="jenkins-section__title" style="display:flex;align-items:center;justify-content:space-between">
+    <div class="jenkins-section__title ctsync-section-title-row">
       <span>${%editor.heading}</span>
       <!-- Always enabled (owner requirement, 2026-09-12): "Generate Template" now generates from the
            caller's CURRENT, possibly-unsaved override/base-chain draft (see showGeneratedTemplateView()
@@ -43,28 +43,28 @@
            ${it.templateAvailable}-gated disabled branch is removed; templateAvailable is kept on both
            hosts purely so this button's Jelly-visible contract stays mirrored across
            ConfigTemplatesJobAction/EnvConfigSetPage. -->
-      <div class="ctsync-btn-row" style="margin:0">
+      <div class="ctsync-btn-row ctsync-btn-row--flush">
         <button type="button" id="generateTemplateBtn" class="jenkins-button"
                title="${%generateTemplate.title(it.ownScopeLabel)}"
-               >&#128203; ${%generateTemplate.label}</button>
+               ><l:icon src="symbol-document-text" class="icon-sm"/> ${%generateTemplate.label}</button>
         <button type="button" id="backTo3PanelBtn" class="jenkins-button" style="display:none"
                title="${%backTo3Panel.title}"
-               >&#8592; ${%backTo3Panel.label}</button>
+               ><l:icon src="symbol-arrow-left" class="icon-sm"/> ${%backTo3Panel.label}</button>
       </div>
     </div>
 
     <div id="generateBanner" class="jenkins-alert jenkins-alert-info" style="display:none">
-      Effective template from the current base chain &#8853; this ${it.ownScopeLabel}'s own override
+      Effective template from the current base chain + this ${it.ownScopeLabel}'s own override
       draft — reflects whatever is currently in the editor below, whether saved or not.
     </div>
 
-    <div id="generatedTemplatePanel" style="display:none;margin-bottom:16px">
+    <div id="generatedTemplatePanel" class="ctsync-generated-panel" style="display:none">
       <h3>Generated template (read-only)</h3>
-      <div id="generatedTemplateEditor" style="height:420px;border:1px solid #ccc"/>
-      <div style="margin-top:4px">
+      <div id="generatedTemplateEditor" class="ctsync-editor-frame ctsync-editor-frame--tall"/>
+      <div class="ctsync-btn-row">
         <button type="button" id="copyTemplateBtn" class="jenkins-button"
                 title="${%copyTemplate.title}"
-                >&#128203; ${%copyTemplate.label}</button>
+                ><l:icon src="symbol-duplicate" class="icon-sm"/> ${%copyTemplate.label}</button>
       </div>
     </div>
 
@@ -73,7 +73,7 @@
          grid itself (rather than margin-top on the f:entry, which f:entry doesn't expose a hook
          for) reliably creates the gap regardless of which layout (table-row vs. div-based) this
          Jenkins baseline renders f:entry as. -->
-    <div id="mergeLayout" class="ctsync-merge-grid" style="margin-bottom:16px">
+    <div id="mergeLayout" class="ctsync-merge-grid">
       <!-- Compare-mode banner must render OUTSIDE/ABOVE .ctsync-merge-top (full width, sibling of
            the grid, not nested inside #envOverridePane) — same convention as #generateBanner above.
            Nesting it inside one column only pushed that column's title down and unbalanced the
@@ -102,18 +102,18 @@
            this row's visibility by id ("contentTypeRow"); moving its DOM position does not affect
            that lookup. The locked/unlocked markup itself (${it.contentTypeLocked}) is identical on
            both hosts. -->
-      <div class="ctsync-btn-row" id="contentTypeRow" style="display:none">
-        <label style="font-weight:600;margin-right:8px">${%contentType.label}</label>
+      <div class="ctsync-content-type-row" id="contentTypeRow" style="display:none">
+        <label class="ctsync-content-type-label">${%contentType.label}</label>
         <j:choose>
           <j:when test="${it.contentTypeLocked}">
-            <span id="contentTypeLockedDisplay">${it.contentTypeValue}&#160;&#128274; (locked — set at first Save, immutable)</span>
+            <span class="ctsync-icon-text" id="contentTypeLockedDisplay">${it.contentTypeValue}<l:icon src="symbol-lock-closed" class="icon-sm"/> (locked — set at first Save, immutable)</span>
           </j:when>
           <j:otherwise>
             <span id="contentTypeUnlockedGroup">
-              <span style="color:#666;display:block;margin-bottom:4px">&#9432; choose once — locked forever after the first Save</span>
-              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="JSON" checked="checked"/> JSON</label>
-              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="XML"/> XML</label>
-              <label style="margin-right:8px"><input type="radio" name="contentTypeRadio" value="YAML"/> YAML</label>
+              <span class="ctsync-content-type-hint"><l:icon src="symbol-information-circle" class="icon-sm"/> choose once — locked forever after the first Save</span>
+              <label class="ctsync-radio-label"><input type="radio" name="contentTypeRadio" value="JSON" checked="checked"/> JSON</label>
+              <label class="ctsync-radio-label"><input type="radio" name="contentTypeRadio" value="XML"/> XML</label>
+              <label class="ctsync-radio-label"><input type="radio" name="contentTypeRadio" value="YAML"/> YAML</label>
             </span>
           </j:otherwise>
         </j:choose>
@@ -122,7 +122,7 @@
       <div class="ctsync-merge-top">
         <div class="ctsync-merge-pane" id="mergedBasesPane">
           <h3>${%mergedBases.heading}</h3>
-          <div id="mergedBasesEditor" style="height:380px;border:1px solid #ccc"/>
+          <div id="mergedBasesEditor" class="ctsync-editor-frame"/>
         </div>
         <div class="ctsync-merge-pane" id="envOverridePane">
           <h3>${%envOverride.heading}</h3>
@@ -130,7 +130,7 @@
           <!-- Save-result feedback (owner requirement, 2026-09-14): no longer an inline banner div
                here — both hosts' own saveClicked() now call window.notificationBar.show(...), the
                same native Jenkins toast used by "Apply" on /job/&lt;name&gt;/configure. -->
-          <div id="overrideEditor" style="height:380px;border:1px solid #ccc"/>
+          <div id="overrideEditor" class="ctsync-editor-frame"/>
 
           <!-- Moved out of the header row (owner report, 2026-09-11): the header row must be a
                bare, title-only h3 identical in structure to "Merged bases"'s own header, so both
@@ -149,15 +149,15 @@
             <button type="button" id="modeEditBtn"
                    class="jenkins-button jenkins-button--primary" title="${%modeEdit.title}"
                    style="${it.versions.size() &lt; 2 ? 'display:none' : ''}"
-                   >&#9998; ${%modeEdit.label}</button>
-            <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
+                   ><l:icon src="symbol-edit" class="icon-sm"/> ${%modeEdit.label}</button>
+            <span id="checkingIndicator" class="ctsync-muted ctsync-icon-text" style="display:none"><l:icon src="symbol-hourglass" class="icon-sm"/> Checking YAML…</span>
           </div>
         </div>
       </div>
       <div class="ctsync-merge-pane ctsync-merge-full" id="mergedResultPane">
         <h3>${%mergedResult.heading}</h3>
-        <div id="mergedEditor" style="height:380px;border:1px solid #ccc"/>
-        <div id="mergedStaleIndicator" style="display:none;color:#a33">
+        <div id="mergedEditor" class="ctsync-editor-frame"/>
+        <div id="mergedStaleIndicator" class="ctsync-stale" style="display:none">
           showing last valid merge — override content is currently invalid
         </div>
       </div>
