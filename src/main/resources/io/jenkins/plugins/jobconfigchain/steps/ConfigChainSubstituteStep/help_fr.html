@@ -1,0 +1,6 @@
+<div>
+  Remplace chaque jeton <code>#{Dotted.Path}#</code> du fichier cible par sa valeur issue de la configuration effective et réécrit le fichier. Les valeurs secrètes proviennent des identifiants Jenkins liés dans le manifeste des secrets du jeu de configuration, jamais d&#39;un texte stocké.
+  <p>La substitution se fait en une seule passe : chaque jeton est remplacé une fois et le texte inséré n&#39;est jamais réanalysé. Le build échoue si un jeton reste non résolu ou si un identifiant lié est manquant. En cas de succès, le build enregistre un Deployment Binding des versions exactes utilisées, afin de pouvoir rejouer plus tard la même configuration avec <b>Redéployer à partir de l&#39;exécution</b>.</p>
+  <p>Remarque : lorsque des configurations sont superposées, les tableaux JSON sont remplacés en bloc par la couche supérieure et jamais fusionnés élément par élément.</p>
+  <p>Appelez-la avec une Map, par exemple <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. L&#39;ancien nom <code>configTemplateSubstitute</code> fonctionne toujours comme alias obsolète.</p>
+</div>

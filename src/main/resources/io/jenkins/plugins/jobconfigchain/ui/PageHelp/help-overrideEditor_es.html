@@ -1,0 +1,4 @@
+<div>
+  El contenido de este editor se aplica sobre los conjuntos de configuración base combinados. Escriba solo lo que difiere de las bases; toda clave que omita se hereda. En JSON y YAML, asignar <code>null</code> a una clave la elimina del resultado.
+  <p><b>Los arrays se reemplazan por completo.</b> Los objetos se combinan clave por clave, pero una lista (un array JSON, una secuencia YAML o elementos hermanos repetidos en XML) nunca se combina elemento por elemento. Si una base tiene <code>[1, 2, 3]</code> y este editor define <code>[4]</code>, el resultado es <code>[4]</code>, no <code>[1, 2, 3, 4]</code>. Para cambiar un elemento de una lista, repita aquí la lista completa.</p>
+</div>
