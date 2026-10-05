@@ -1,0 +1,4 @@
+<div>
+  Obsah tohto editora sa použije nad zlúčenými základnými sadami konfigurácie. Zapíšte len to, čo sa od základní líši; každý vynechaný kľúč sa zdedí. V JSON a YAML nastavenie kľúča na <code>null</code> odstráni kľúč z výsledku.
+  <p><b>Polia sa nahrádzajú celé.</b> Objekty sa zlučujú kľúč po kľúči, ale zoznam (pole JSON, sekvencia YAML alebo opakované súrodenecké elementy v XML) sa nikdy nezlúči prvok po prvku. Ak základňa má <code>[1, 2, 3]</code> a tento editor nastaví <code>[4]</code>, výsledkom je <code>[4]</code>, nie <code>[1, 2, 3, 4]</code>. Ak chcete zmeniť jeden prvok zoznamu, zopakujte tu celý zoznam.</p>
+</div>

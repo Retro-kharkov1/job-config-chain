@@ -1,0 +1,6 @@
+<div>
+  Zamenja vsak žeton <code>#{Dotted.Path}#</code> v ciljni datoteki z njegovo vrednostjo iz dejanske konfiguracije in datoteko zapiše nazaj. Vrednosti skrivnosti prihajajo iz poverilnic Jenkinsa, vezanih v manifestu skrivnosti nabora konfiguracij, nikoli iz shranjenega besedila.
+  <p>Zamenjava poteka v enem prehodu: vsak žeton se zamenja enkrat, vstavljeno besedilo pa se ne pregleduje znova. Gradnja spodleti, če žeton ostane nerazrešen ali če vezana poverilnica manjka. Ob uspehu gradnja zabeleži vezavo razmestitve (Deployment Binding) z natančnimi uporabljenimi različicami, tako da je isto konfiguracijo pozneje mogoče ponovno predvajati z možnostjo <b>Ponovno razmesti iz zagona</b>.</p>
+  <p>Opomba: pri plastenju konfiguracij prekrivna plast polja JSON nadomesti v celoti in jih nikoli ne združi element za elementom.</p>
+  <p>Pokličite ga z mapo, na primer <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Prejšnje ime <code>configTemplateSubstitute</code> še vedno deluje kot zastarel vzdevek.</p>
+</div>

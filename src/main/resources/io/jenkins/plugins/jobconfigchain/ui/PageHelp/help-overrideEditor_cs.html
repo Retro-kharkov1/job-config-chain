@@ -1,0 +1,4 @@
+<div>
+  Obsah tohoto editoru se použije nad sloučenými základními sadami konfigurace. Zapište jen to, co se od základen liší; každý vynechaný klíč se zdědí. V JSON a YAML nastavení klíče na <code>null</code> odstraní klíč z výsledku.
+  <p><b>Pole se nahrazují celá.</b> Objekty se slučují klíč po klíči, ale seznam (pole JSON, sekvence YAML nebo opakované sourozenecké elementy v XML) se nikdy nesloučí prvek po prvku. Pokud základna má <code>[1, 2, 3]</code> a tento editor nastaví <code>[4]</code>, výsledkem je <code>[4]</code>, nikoli <code>[1, 2, 3, 4]</code>. Chcete-li změnit jeden prvek seznamu, zopakujte zde celý seznam.</p>
+</div>
