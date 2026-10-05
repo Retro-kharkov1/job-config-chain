@@ -1,0 +1,6 @@
+<div>
+  Zastępuje każdy token <code>#{Dotted.Path}#</code> w pliku docelowym jego wartością z efektywnej konfiguracji i zapisuje plik z powrotem. Wartości sekretów pochodzą z poświadczeń Jenkinsa powiązanych w manifeście sekretów zestawu konfiguracji, nigdy z zapisanego tekstu.
+  <p>Podstawianie odbywa się w jednym przebiegu: każdy token jest zastępowany raz, a wstawiony tekst nie jest ponownie skanowany. Budowanie kończy się błędem, jeśli token pozostaje nierozwiązany lub brakuje powiązanego poświadczenia. Po sukcesie budowanie zapisuje powiązanie wdrożenia (Deployment Binding) z dokładnymi użytymi wersjami, dzięki czemu tę samą konfigurację można później odtworzyć za pomocą opcji <b>Wdróż ponownie z uruchomienia</b>.</p>
+  <p>Uwaga: gdy konfiguracje są nakładane warstwowo, tablice JSON są w całości zastępowane przez nakładkę i nigdy nie są scalane element po elemencie.</p>
+  <p>Wywołaj go z mapą, na przykład <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Dawna nazwa <code>configTemplateSubstitute</code> nadal działa jako przestarzały alias.</p>
+</div>

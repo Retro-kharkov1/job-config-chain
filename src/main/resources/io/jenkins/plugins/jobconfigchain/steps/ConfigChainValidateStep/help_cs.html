@@ -1,0 +1,4 @@
+<div>
+  Zkontroluje cílový soubor proti efektivní konfiguraci před nasazením a nic nemění. Sestavení selže, pokud soubor obsahuje token <code>#{Dotted.Path}#</code>, který nemá odpovídající klíč (překlep nebo chybějící klíč). Klíče, které žádný token nepoužívá, se pouze hlásí jako varování.
+  <p>Obvykle se volá těsně před <code>configChainSubstitute</code> se stejnými parametry, například <code>configChainValidate(file: &#39;app.json&#39;)</code>. Dřívější název <code>configTemplateValidate</code> stále funguje jako zastaralý alias.</p>
+</div>
