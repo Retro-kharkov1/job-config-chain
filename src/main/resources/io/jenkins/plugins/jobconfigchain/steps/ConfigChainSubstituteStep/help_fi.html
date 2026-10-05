@@ -1,0 +1,12 @@
+<div>
+  Korvaa jokaisen kohdetiedoston <code>#{Dotted.Path}#</code>-tokenin sen arvolla tehokkaasta konfiguraatiosta
+  ja kirjoittaa tiedoston takaisin. Salaiset arvot tulevat asetusjoukon salaisuuksien manifestiin sidotuista Jenkinsin tunnistetiedoista,
+  eivät koskaan tallennetusta tekstistä.
+  <p>Korvaus tehdään yhdellä läpikäynnillä: jokainen token korvataan kerran, eikä lisättyä tekstiä koskaan skannata uudelleen. Build epäonnistuu,
+  jos token jää ratkaisematta tai sidottu tunnistetieto puuttuu. Onnistuessaan build tallentaa käyttöönottosidonnan (Deployment Binding)
+  käytetyistä tarkoista versioista, jotta sama konfiguraatio voidaan toistaa myöhemmin valinnalla <b>Ota uudelleen käyttöön ajosta</b>.</p>
+  <p>Huomaa: kun konfiguraatioita asetetaan kerroksittain, päällimmäinen kerros korvaa JSON-taulukot kokonaan, eikä niitä koskaan yhdistetä
+  alkio alkiolta.</p>
+  <p>Kutsu sitä Map-arvolla, esimerkiksi <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Entinen nimi
+  <code>configTemplateSubstitute</code> toimii edelleen vanhentuneena aliaksena.</p>
+</div>

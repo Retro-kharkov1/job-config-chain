@@ -1,0 +1,4 @@
+<div>
+  Ennek a szerkesztőnek a tartalma az egyesített alap konfigurációs készletek tetején alkalmazódik. Csak azt írja le, ami eltér az alapoktól; minden kihagyott kulcs öröklődik. JSON-ban és YAML-ban egy kulcs <code>null</code>-ra állítása eltávolítja azt az eredményből.
+  <p><b>A tömbök teljes egészében lecserélődnek.</b> Az objektumok kulcsonként egyesülnek, de a lista (JSON-tömb, YAML-sorozat vagy ismétlődő testvérelemek XML-ben) soha nem egyesül elemenként. Ha egy alap értéke <code>[1, 2, 3]</code>, és ez a szerkesztő <code>[4]</code>-et állít be, az eredmény <code>[4]</code>, nem <code>[1, 2, 3, 4]</code>. Egy listaelem módosításához ismételje meg itt a teljes listát.</p>
+</div>

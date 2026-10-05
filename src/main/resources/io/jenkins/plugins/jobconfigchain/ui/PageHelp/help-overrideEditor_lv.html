@@ -1,0 +1,8 @@
+<div>
+  Šī redaktora saturs tiek piemērots virs apvienotajām bāzes konfigurācijas kopām. Rakstiet tikai to, kas atšķiras no
+  bāzēm; katra izlaistā atslēga tiek mantota. JSON un YAML atslēgu no rezultāta var noņemt, iestatot to uz <code>null</code>.
+  <p><b>Masīvi tiek aizstāti pilnībā.</b> Objekti tiek apvienoti pa atslēgām, bet sarakstu (JSON masīvu, YAML
+  secību vai atkārtotus vienlīmeņa elementus XML) nekad neapvieno pa elementiem. Ja bāzē ir
+  <code>[1, 2, 3]</code> un šis redaktors iestata <code>[4]</code>, rezultāts ir <code>[4]</code>, nevis
+  <code>[1, 2, 3, 4]</code>. Lai mainītu vienu saraksta elementu, atkārtojiet šeit visu sarakstu.</p>
+</div>

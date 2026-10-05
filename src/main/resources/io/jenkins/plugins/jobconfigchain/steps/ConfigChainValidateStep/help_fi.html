@@ -1,0 +1,8 @@
+<div>
+  Tarkistaa kohdetiedoston tehokasta konfiguraatiota vasten ennen käyttöönottoa eikä muuta mitään. Build epäonnistuu, jos
+  tiedosto sisältää <code>#{Dotted.Path}#</code>-tokenin, jolle ei ole vastaavaa avainta (kirjoitusvirhe tai puuttuva avain). Avaimista, joita mikään token
+  ei käytä, ilmoitetaan vain varoitus.
+  <p>Kutsutaan tyypillisesti juuri ennen vaihetta <code>configChainSubstitute</code> samoilla parametreilla, esimerkiksi
+  <code>configChainValidate(file: &#39;app.json&#39;)</code>. Entinen nimi <code>configTemplateValidate</code> toimii edelleen
+  vanhentuneena aliaksena.</p>
+</div>

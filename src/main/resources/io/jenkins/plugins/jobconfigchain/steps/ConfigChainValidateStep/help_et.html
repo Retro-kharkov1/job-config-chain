@@ -1,0 +1,8 @@
+<div>
+  Kontrollib sihtfaili toimiva konfiguratsiooni vastu enne juurutamist ega muuda midagi. Build ebaõnnestub, kui
+  fail sisaldab <code>#{Dotted.Path}#</code>-märgendit, millel pole vastavat võtit (kirjaviga või puuduv võti). Võtmetest, mida ükski märgend
+  ei kasuta, antakse teada ainult hoiatusega.
+  <p>Kutsutakse tavaliselt vahetult enne <code>configChainSubstitute</code> samade parameetritega, näiteks
+  <code>configChainValidate(file: &#39;app.json&#39;)</code>. Endine nimi <code>configTemplateValidate</code> töötab endiselt
+  iganenud aliasena.</p>
+</div>
