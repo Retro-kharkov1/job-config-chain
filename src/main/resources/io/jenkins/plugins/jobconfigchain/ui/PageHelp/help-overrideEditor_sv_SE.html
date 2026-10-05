@@ -1,0 +1,8 @@
+<div>
+  Innehållet i den här redigeraren tillämpas ovanpå de sammanfogade basuppsättningarna. Skriv bara det som skiljer sig från
+  baserna; varje nyckel du utelämnar ärvs. I JSON och YAML tar du bort en nyckel från resultatet genom att sätta den till <code>null</code>.
+  <p><b>Matriser ersätts i sin helhet.</b> Objekt slås ihop nyckel för nyckel, men en lista (en JSON-matris, en YAML-
+  sekvens eller upprepade syskonelement i XML) slås aldrig ihop element för element. Om en bas har
+  <code>[1, 2, 3]</code> och den här redigeraren sätter <code>[4]</code> blir resultatet <code>[4]</code>, inte
+  <code>[1, 2, 3, 4]</code>. Om du vill ändra ett enda element i en lista upprepar du hela listan här.</p>
+</div>

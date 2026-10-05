@@ -1,0 +1,8 @@
+<div>
+  Innholdet i denne editoren brukes oppå de sammenslåtte basiskonfigurasjonssettene. Skriv bare det som avviker fra
+  basene; hver nøkkel du utelater, arves. I JSON og YAML fjerner du en nøkkel fra resultatet ved å sette den til <code>null</code>.
+  <p><b>Matriser erstattes i sin helhet.</b> Objekter slås sammen nøkkel for nøkkel, men en liste (en JSON-matrise, en YAML-
+  sekvens eller gjentatte søskenelementer i XML) slås aldri sammen element for element. Hvis en base har
+  <code>[1, 2, 3]</code> og denne editoren setter <code>[4]</code>, blir resultatet <code>[4]</code>, ikke
+  <code>[1, 2, 3, 4]</code>. Hvis du vil endre ett element i en liste, må du gjenta hele listen her.</p>
+</div>
