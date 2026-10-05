@@ -88,7 +88,6 @@
          artifactId are both derived from it below so the two never drift apart. -->
     <jenkins.baseline>2.568</jenkins.baseline>
     <jenkins.version>${jenkins.baseline}.3</jenkins.version>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- maven.compiler.source/target/release and java.level are intentionally NOT redeclared
          here (Jenkins Hosting Checker requirement) — the parent POM
          (org.jenkins-ci.plugins:plugin) already declares maven.compiler.release=17 for this
