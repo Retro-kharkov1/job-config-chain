@@ -1,0 +1,6 @@
+<div>
+  Substitueix cada token <code>#{Dotted.Path}#</code> del fitxer de destinació pel seu valor de la configuració efectiva i torna a escriure el fitxer. Els valors secrets provenen de les credencials de Jenkins vinculades al manifest de secrets del conjunt de configuració, mai de text emmagatzemat.
+  <p>La substitució es fa en una sola passada: cada token se substitueix una vegada i el text inserit mai no es torna a analitzar. La compilació falla si un token queda sense resoldre o si falta una credencial vinculada. Si té èxit, la compilació registra un Deployment Binding de les versions exactes utilitzades, de manera que la mateixa configuració es pugui reproduir més tard amb <b>Torna a desplegar des de l&#39;execució</b>.</p>
+  <p>Nota: quan se superposen configuracions, la capa superior substitueix els arrays JSON sencers i mai no es combinen element per element.</p>
+  <p>Crideu-lo amb un Map, per exemple <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. El nom anterior <code>configTemplateSubstitute</code> continua funcionant com a àlies obsolet.</p>
+</div>
