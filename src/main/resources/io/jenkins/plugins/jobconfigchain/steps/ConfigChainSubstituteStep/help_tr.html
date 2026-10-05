@@ -1,0 +1,6 @@
+<div>
+  Hedef dosyadaki her <code>#{Dotted.Path}#</code> belirtecini fiili yapılandırmadaki değeriyle değiştirir ve dosyayı geri yazar. Gizli bilgi değerleri, Yapılandırma Kümesinin gizli bilgi bildiriminde bağlanan Jenkins kimlik bilgilerinden gelir, saklanan metinden asla gelmez.
+  <p>Değiştirme tek geçişlidir: her belirteç bir kez değiştirilir ve eklenen metin bir daha taranmaz. Bir belirteç çözümlenmeden kalırsa veya bağlı bir kimlik bilgisi eksikse derleme başarısız olur. Başarılı olursa derleme, kullanılan kesin versiyonların bir Dağıtım Bağlamasını kaydeder; böylece aynı yapılandırma daha sonra <b>Çalıştırmadan yeniden dağıt</b> ile yeniden oynatılabilir.</p>
+  <p>Not: yapılandırmalar katmanlandığında JSON dizileri bindirme tarafından tümüyle değiştirilir ve öğe öğe birleştirilmez.</p>
+  <p>Bir Map ile çağırın, örneğin <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Eski ad <code>configTemplateSubstitute</code>, kullanımdan kaldırılmış bir takma ad olarak hâlâ çalışır.</p>
+</div>
