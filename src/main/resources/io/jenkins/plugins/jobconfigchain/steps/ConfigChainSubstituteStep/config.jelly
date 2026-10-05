@@ -1,21 +1,21 @@
 <?jelly escape-by-default='true'?>
 <j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
-  <f:entry title="${%File}" field="file">
+  <f:entry title="${%file}" field="file">
     <f:textbox/>
   </f:entry>
   <f:entry field="useBase">
-    <f:checkbox title="${%Use a global base Config Set}"/>
+    <f:checkbox title="${%useBase}"/>
   </f:entry>
-  <f:entry title="${%Config key}" field="configKey">
+  <f:entry title="${%configKey}" field="configKey">
     <f:textbox/>
   </f:entry>
-  <f:entry title="${%Version}" field="version">
+  <f:entry title="${%version}" field="version">
     <f:number min="1" step="1"/>
   </f:entry>
-  <f:entry title="${%Redeploy from run}" field="redeployFromRun">
+  <f:entry title="${%redeployFromRun}" field="redeployFromRun">
     <f:textbox/>
   </f:entry>
-  <f:entry title="${%Encoding}" field="encoding">
+  <f:entry title="${%encoding}" field="encoding">
     <f:textbox/>
   </f:entry>
 </j:jelly>

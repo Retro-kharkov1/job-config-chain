@@ -111,7 +111,7 @@ final class XmlTreeAdapter implements TreeFormat {
             // satisfy TreeFormat#parse's documented contract (matches JsonSyntaxException's unchecked
             // shape for the JSON adapter, so validateSyntaxOrFail's single catch(RuntimeException) works
             // uniformly across all three formats).
-            throw new XmlSyntaxException("Malformed XML: " + e.getMessage(), e);
+            throw new XmlSyntaxException(io.jenkins.plugins.jobconfigchain.model.Messages.Xml_Malformed(e.getMessage()), e);
         }
     }
 

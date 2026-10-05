@@ -160,7 +160,7 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
         TreeNode root = TreeFormats.forType(type).parse(content);
         if (!root.isObject()) {
             throw new IllegalArgumentException(
-                    "Config Chain content must be a " + type + " object/root element");
+                    io.jenkins.plugins.jobconfigchain.model.Messages.JobProperty_ContentMustBeObject(type));
         }
         for (String dottedPath : secretsManifest.keySet()) {
             TreeNode leaf = TreePaths.get(root, dottedPath);
@@ -170,9 +170,7 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
             String asString = !leaf.isObject() && !leaf.isNull() ? leaf.leafAsString() : null;
             if (asString == null || !asString.equals(SecretPlaceholder.VALUE)) {
                 throw new IllegalArgumentException(
-                        "Manifest-declared secret path '" + dottedPath
-                                + "' must hold the placeholder '" + SecretPlaceholder.VALUE
-                                + "', not a real value");
+                        io.jenkins.plugins.jobconfigchain.model.Messages.SecretPath_MustHoldPlaceholder(dottedPath, SecretPlaceholder.VALUE));
             }
         }
     }
@@ -183,7 +181,7 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
      */
     public void activate(int versionNumber) {
         if (getVersion(versionNumber) == null) {
-            throw new IllegalArgumentException("No such version: " + versionNumber);
+            throw new IllegalArgumentException(io.jenkins.plugins.jobconfigchain.model.Messages.Version_NotFound(versionNumber));
         }
         this.activeVersionNumber = versionNumber;
     }

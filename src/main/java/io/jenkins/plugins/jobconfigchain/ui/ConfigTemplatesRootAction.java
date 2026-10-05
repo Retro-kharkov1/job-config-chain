@@ -234,7 +234,7 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         String key = readProjectKey(payloadJson);
         if (key == null) {
-            return lifecycleError("NOT_FOUND", "No Config Set named.");
+            return lifecycleError("NOT_FOUND", Messages.Page_NoNameGiven());
         }
         return new CommonConfigSetPage(key, repository).jsRestoreConfigSet();
     }
@@ -245,7 +245,7 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         String key = readProjectKey(payloadJson);
         if (key == null) {
-            return lifecycleError("NOT_FOUND", "No Config Set named.");
+            return lifecycleError("NOT_FOUND", Messages.Page_NoNameGiven());
         }
         return new CommonConfigSetPage(key, repository).jsPurgePreflight();
     }
@@ -256,7 +256,7 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         String key = readProjectKey(payloadJson);
         if (key == null) {
-            return lifecycleError("NOT_FOUND", "No Config Set named.");
+            return lifecycleError("NOT_FOUND", Messages.Page_NoNameGiven());
         }
         return new CommonConfigSetPage(key, repository).jsPurgeConfigSet(payloadJson);
     }

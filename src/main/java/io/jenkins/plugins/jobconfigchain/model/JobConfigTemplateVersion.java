@@ -37,7 +37,7 @@ public class JobConfigTemplateVersion implements Serializable {
                                      long timestampEpochMillis, List<BaseConfigReference> baseChain) {
         if (note == null || note.trim().isEmpty()) {
             // Same non-empty-note rule as ConfigSetVersion.
-            throw new IllegalArgumentException("Change note must not be empty");
+            throw new IllegalArgumentException(Messages.ChangeNote_Required());
         }
         this.versionNumber = versionNumber;
         this.contentJson = Objects.requireNonNull(contentJson, "contentJson");

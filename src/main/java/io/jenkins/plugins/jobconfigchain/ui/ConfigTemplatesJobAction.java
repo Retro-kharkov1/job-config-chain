@@ -340,7 +340,7 @@ public class ConfigTemplatesJobAction implements Action {
         } catch (Failure f) {
             return SaveOutcome.error(f.getMessage());
         } catch (IOException e) {
-            return SaveOutcome.error("Failed to save job: " + e.getMessage());
+            return SaveOutcome.error(Messages.Page_FailedToSaveJob(e.getMessage()));
         }
     }
 
@@ -498,7 +498,7 @@ public class ConfigTemplatesJobAction implements Action {
         JobConfigTemplateVersion activated = property == null ? null : property.getVersion(version);
         if (activated == null) {
             result.put("ok", false);
-            result.put("error", "No such version: " + version);
+            result.put("error", Messages.Page_NoSuchVersion(version));
             return result;
         }
         property.activate(version);
@@ -506,7 +506,7 @@ public class ConfigTemplatesJobAction implements Action {
             job.save();
         } catch (IOException e) {
             result.put("ok", false);
-            result.put("error", "Failed to save job: " + e.getMessage());
+            result.put("error", Messages.Page_FailedToSaveJob(e.getMessage()));
             return result;
         }
         result.put("ok", true);
@@ -554,13 +554,12 @@ public class ConfigTemplatesJobAction implements Action {
         JSONObject result = new JSONObject();
         if (path == null || path.trim().isEmpty() || credentialId == null || credentialId.trim().isEmpty()) {
             result.put("ok", false);
-            result.put("error", "Both a dotted path and a credential ID are required");
+            result.put("error", Messages.Page_PathAndCredentialRequired());
             return result;
         }
         if (!getAvailableCredentialIds().contains(credentialId)) {
             result.put("ok", false);
-            result.put("error", "No such credential: " + credentialId
-                    + " — pick one of the credentials currently registered in Jenkins");
+            result.put("error", Messages.Page_NoSuchCredential(credentialId));
             return result;
         }
         JobConfigTemplateProperty property = getProperty();
@@ -583,7 +582,7 @@ public class ConfigTemplatesJobAction implements Action {
             job.save();
         } catch (IOException e) {
             result.put("ok", false);
-            result.put("error", "Failed to save job: " + e.getMessage());
+            result.put("error", Messages.Page_FailedToSaveJob(e.getMessage()));
             return result;
         }
         result.put("ok", true);
@@ -616,13 +615,13 @@ public class ConfigTemplatesJobAction implements Action {
         JSONObject result = new JSONObject();
         if (path == null || path.trim().isEmpty()) {
             result.put("ok", false);
-            result.put("error", "A dotted path is required");
+            result.put("error", Messages.Page_PathRequired());
             return result;
         }
         JobConfigTemplateProperty property = getProperty();
         if (property == null || !property.getSecretsManifest().containsKey(path)) {
             result.put("ok", false);
-            result.put("error", "No such secret path bound: " + path);
+            result.put("error", Messages.Page_NoSuchSecretPath(path));
             return result;
         }
         property.removeSecretManifestEntry(path);
@@ -630,7 +629,7 @@ public class ConfigTemplatesJobAction implements Action {
             job.save();
         } catch (IOException e) {
             result.put("ok", false);
-            result.put("error", "Failed to save job: " + e.getMessage());
+            result.put("error", Messages.Page_FailedToSaveJob(e.getMessage()));
             return result;
         }
         result.put("ok", true);
@@ -690,13 +689,13 @@ public class ConfigTemplatesJobAction implements Action {
         JobConfigTemplateProperty property = getProperty();
         if (property == null) {
             result.put("ok", false);
-            result.put("error", "No such Config Set");
+            result.put("error", Messages.Page_NoSuchConfigSet());
             return result;
         }
         JobConfigTemplateVersion v = property.getVersion(version);
         if (v == null) {
             result.put("ok", false);
-            result.put("error", "No such version: " + version);
+            result.put("error", Messages.Page_NoSuchVersion(version));
             return result;
         }
         result.put("ok", true);
@@ -746,10 +745,15 @@ public class ConfigTemplatesJobAction implements Action {
      * pre-first-save empty-chain content-type picker's fallback, exactly like
      * EnvConfigSetPage's equivalent parameter.
      */
+    /** The localized word for a base-chain row's mode, as shown on the page. */
+    private static String pinModeLabel(io.jenkins.plugins.jobconfigchain.model.PinMode mode) {
+        return mode == io.jenkins.plugins.jobconfigchain.model.PinMode.PINNED ? Messages.Mode_Pin() : Messages.Mode_Active();
+    }
+
     private ChainResolution resolveChain(String baseChainJson, String standaloneContentType) {
         List<BaseConfigReference> chain = ConfigSetPage.tryParseBaseChain(baseChainJson);
         if (chain == null) {
-            return ChainResolution.error("Malformed base chain");
+            return ChainResolution.error(Messages.Job_MalformedBaseChain());
         }
         // No backward-compatibility default substitution here (see base-chains.md) — an empty job
         // chain stays empty and resolves to {}.
@@ -759,16 +763,15 @@ public class ConfigTemplatesJobAction implements Action {
         List<String> typeReport = new ArrayList<>();
         for (BaseChainResolver.ResolvedReference r : resolved) {
             if (r.configSet == null || r.version == null) {
-                return ChainResolution.error("Cannot resolve base chain entry '" + r.reference.getProjectKey()
-                        + "' (" + r.reference.getPinMode() + ") — "
-                        + (r.configSet == null ? "no such common Config Set" : "no such version"));
+                return ChainResolution.error(r.configSet == null
+                        ? Messages.Job_CannotResolveEntryNoSet(r.reference.getProjectKey(), pinModeLabel(r.reference.getPinMode()))
+                        : Messages.Job_CannotResolveEntryNoVersion(r.reference.getProjectKey(), pinModeLabel(r.reference.getPinMode())));
             }
             distinctTypes.add(r.configSet.getContentType());
             typeReport.add(r.reference.getProjectKey() + " (" + r.configSet.getContentType() + ")");
         }
         if (distinctTypes.size() > 1) {
-            return ChainResolution.error("Mismatched content types in base chain — " + String.join(", ", typeReport)
-                    + " must all share one content type.");
+            return ChainResolution.error(Messages.Job_MismatchedTypes(String.join(", ", typeReport)));
         }
         ContentType type = !distinctTypes.isEmpty()
                 ? distinctTypes.iterator().next()
@@ -816,7 +819,7 @@ public class ConfigTemplatesJobAction implements Action {
             overlay = format.parse(overlayRaw == null ? format.serialize(format.emptyObject()) : overlayRaw);
             if (!overlay.isObject()) {
                 result.put("ok", false);
-                result.put("error", "Override content must be a " + type + " object/root element");
+                result.put("error", Messages.Job_OverrideMustBeObject(type));
                 return result;
             }
         } catch (RuntimeException e) {
@@ -876,7 +879,7 @@ public class ConfigTemplatesJobAction implements Action {
             overlay = format.parse(overlayRaw == null ? format.serialize(format.emptyObject()) : overlayRaw);
             if (!overlay.isObject()) {
                 result.put("ok", false);
-                result.put("error", "Override content must be a " + type + " object/root element");
+                result.put("error", Messages.Job_OverrideMustBeObject(type));
                 return result;
             }
         } catch (RuntimeException e) {
