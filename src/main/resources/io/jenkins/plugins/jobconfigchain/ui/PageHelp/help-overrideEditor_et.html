@@ -1,0 +1,8 @@
+<div>
+  Selle redaktori sisu rakendatakse ühendatud alusekonfiguratsioonikomplektide peale. Kirjuta ainult see, mis erineb
+  alustest; iga välja jäetud võti päritakse. JSON-is ja YAML-is eemaldad võtme tulemusest, määrates selle väärtuseks <code>null</code>.
+  <p><b>Massiivid asendatakse tervikuna.</b> Objekte ühendatakse võti võtme haaval, kuid loendit (JSON-massiivi, YAML-
+  jada või XML-i korduvaid naaberelemente) ei ühendata kunagi elemendi kaupa. Kui alusel on
+  <code>[1, 2, 3]</code> ja see redaktor määrab <code>[4]</code>, on tulemus <code>[4]</code>, mitte
+  <code>[1, 2, 3, 4]</code>. Loendi ühe elemendi muutmiseks korda siin kogu loendit.</p>
+</div>

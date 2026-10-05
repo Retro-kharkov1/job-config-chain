@@ -1,0 +1,12 @@
+<div>
+  Asendab sihtfailis iga <code>#{Dotted.Path}#</code>-märgendi selle väärtusega toimivast konfiguratsioonist
+  ja kirjutab faili tagasi. Salajased väärtused pärinevad konfiguratsioonikomplekti saladuste manifestis seotud Jenkinsi mandaatidest,
+  mitte kunagi salvestatud tekstist.
+  <p>Asendus toimub ühe läbimisega: iga märgend asendatakse üks kord ja lisatud teksti ei skannita kunagi uuesti. Build ebaõnnestub,
+  kui märgend jääb lahendamata või seotud mandaat puudub. Õnnestumise korral salvestab build kasutatud täpsete versioonide
+  juurutussidestuse (Deployment Binding), et sama konfiguratsiooni saaks hiljem uuesti esitada valikuga <b>Juuruta uuesti käivitusest</b>.</p>
+  <p>Märkus: kui konfiguratsioonid on kihiti, asendab pealmine kiht JSON-massiivid tervikuna ega ühenda neid kunagi
+  elemendi kaupa.</p>
+  <p>Kutsu seda Mapiga, näiteks <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Endine nimi
+  <code>configTemplateSubstitute</code> töötab endiselt iganenud aliasena.</p>
+</div>

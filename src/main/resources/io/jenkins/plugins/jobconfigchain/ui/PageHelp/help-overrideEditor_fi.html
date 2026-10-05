@@ -1,0 +1,8 @@
+<div>
+  Tämän muokkaimen sisältö otetaan käyttöön yhdistettyjen perusasetusjoukkojen päälle. Kirjoita vain se, mikä poikkeaa
+  perusasetusjoukoista; jokainen pois jättämäsi avain periytyy. JSONissa ja YAMLissa avaimen voi poistaa tuloksesta asettamalla sen arvoksi <code>null</code>.
+  <p><b>Taulukot korvataan kokonaan.</b> Objektit yhdistetään avain avaimelta, mutta luetteloa (JSON-taulukkoa, YAML-
+  sekvenssiä tai toistuvia sisarelementtejä XML:ssä) ei koskaan yhdistetä alkio alkiolta. Jos perusasetusjoukossa on
+  <code>[1, 2, 3]</code> ja tämä muokkain asettaa arvon <code>[4]</code>, tulos on <code>[4]</code>, ei
+  <code>[1, 2, 3, 4]</code>. Jos haluat muuttaa yhtä luettelon alkiota, toista koko luettelo tässä.</p>
+</div>

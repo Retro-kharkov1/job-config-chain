@@ -1,0 +1,12 @@
+<div>
+  Aizstāj katru <code>#{Dotted.Path}#</code> marķieri mērķa failā ar tā vērtību no efektīvās konfigurācijas
+  un ieraksta failu atpakaļ. Slepenās vērtības tiek ņemtas no Jenkins akreditācijas datiem, kas piesaistīti konfigurācijas kopas noslēpumu manifestā,
+  nekad no saglabāta teksta.
+  <p>Aizstāšana notiek vienā piegājienā: katrs marķieris tiek aizstāts vienu reizi, un ievietotais teksts nekad netiek skenēts atkārtoti. Būvējums neizdodas,
+  ja marķieris paliek neatrisināts vai piesaistīto akreditācijas datu nav. Veiksmes gadījumā būvējums reģistrē izmantoto precīzo versiju
+  izvietošanas saistījumu (Deployment Binding), lai to pašu konfigurāciju vēlāk varētu atkārtot ar <b>Izvietot atkārtoti no palaišanas</b>.</p>
+  <p>Piezīme: ja konfigurācijas tiek kārtotas slāņos, augšējais slānis JSON masīvus aizstāj pilnībā un nekad tos neapvieno
+  pa elementiem.</p>
+  <p>Izsauciet to ar Map, piemēram, <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Agrākais nosaukums
+  <code>configTemplateSubstitute</code> joprojām darbojas kā novecojis alias.</p>
+</div>
