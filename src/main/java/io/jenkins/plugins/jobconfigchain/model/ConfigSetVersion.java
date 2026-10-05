@@ -43,7 +43,7 @@ public class ConfigSetVersion implements Serializable {
                              boolean explicitlyStandalone) {
         if (note == null || note.trim().isEmpty()) {
             // Non-empty change note is mandatory on every saved version.
-            throw new IllegalArgumentException("Change note must not be empty");
+            throw new IllegalArgumentException(Messages.ChangeNote_Required());
         }
         this.versionNumber = versionNumber;
         this.contentJson = Objects.requireNonNull(contentJson, "contentJson");

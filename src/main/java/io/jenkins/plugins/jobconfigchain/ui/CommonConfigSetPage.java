@@ -84,7 +84,7 @@ public class CommonConfigSetPage extends ConfigSetPage {
         ConfigSetVersion active = getActiveVersion();
         if (active == null) {
             result.put("ok", false);
-            result.put("error", "No active version yet — nothing to template.");
+            result.put("error", Messages.CommonConfigSetPage_NoActiveVersion());
             return result;
         }
         ContentType type = getConfigSet().getContentType();
@@ -123,7 +123,7 @@ public class CommonConfigSetPage extends ConfigSetPage {
         if (!isExists()) {
             result.put("ok", false);
             result.put("errorCode", "NOT_FOUND");
-            result.put("error", "No such Config Set: " + projectKey);
+            result.put("error", Messages.Page_NoSuchConfigSetNamed(projectKey));
             return result;
         }
         return usageResult(ConfigSetUsageScanner.scan(projectKey), false);
@@ -145,8 +145,8 @@ public class CommonConfigSetPage extends ConfigSetPage {
         }
         if (!isExists()) {
             return simpleError("NOT_FOUND", isDeleted()
-                    ? "This Config Set is already deleted."
-                    : "No such Config Set: " + projectKey);
+                    ? Messages.Page_AlreadyDeleted()
+                    : Messages.Page_NoSuchConfigSetNamed(projectKey));
         }
         ConfigSetUsageScanner.Usage usage = ConfigSetUsageScanner.scan(projectKey);
         if (usage.blocksDelete()) {
@@ -164,7 +164,7 @@ public class CommonConfigSetPage extends ConfigSetPage {
     public JSONObject jsRestoreConfigSet() {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         if (!isDeleted()) {
-            return simpleError("NOT_DELETED", "This Config Set is not deleted.");
+            return simpleError("NOT_DELETED", Messages.Page_NotDeleted());
         }
         repository.restoreCommon(projectKey);
         JSONObject result = new JSONObject();
@@ -178,7 +178,7 @@ public class CommonConfigSetPage extends ConfigSetPage {
     public JSONObject jsPurgePreflight() {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         if (!isDeleted()) {
-            return simpleError("NOT_DELETED", "Only a deleted Config Set can be purged.");
+            return simpleError("NOT_DELETED", Messages.Page_OnlyDeletedCanBePurged());
         }
         JSONObject result = usageResult(ConfigSetUsageScanner.scan(projectKey), false);
         result.put("blocked", ConfigSetUsageScanner.scan(projectKey).blocksPurge());
@@ -200,7 +200,7 @@ public class CommonConfigSetPage extends ConfigSetPage {
             return nameCheck;
         }
         if (!isDeleted()) {
-            return simpleError("NOT_DELETED", "Only a deleted Config Set can be purged.");
+            return simpleError("NOT_DELETED", Messages.Page_OnlyDeletedCanBePurged());
         }
         ConfigSetUsageScanner.Usage usage = ConfigSetUsageScanner.scan(projectKey);
         if (usage.blocksPurge()) {
@@ -231,7 +231,7 @@ public class CommonConfigSetPage extends ConfigSetPage {
         // different Config Set.
         if (typed == null || !typed.trim().equals(projectKey)) {
             return simpleError("NAME_MISMATCH",
-                    "The typed name does not match " + projectKey + ". Nothing was changed.");
+                    Messages.Page_NameMismatch(projectKey));
         }
         return null;
     }
@@ -250,7 +250,7 @@ public class CommonConfigSetPage extends ConfigSetPage {
         result.put("ok", !blocked);
         if (blocked) {
             result.put("errorCode", "REFERENCED");
-            result.put("error", "This Config Set is still in use.");
+            result.put("error", Messages.Page_StillInUse());
         }
         result.put("blocked", blocked);
         result.put("projectKey", projectKey);

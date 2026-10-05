@@ -46,7 +46,7 @@ public final class TemplateGenerator {
         TreeFormat format = TreeFormats.forType(type);
         TreeNode parsed = format.parse(content);
         if (!parsed.isObject()) {
-            throw new IllegalArgumentException("Content must have a top-level object/root element");
+            throw new IllegalArgumentException(io.jenkins.plugins.jobconfigchain.model.Messages.Content_NeedsRoot());
         }
         return tokenize(parsed, "", format);
     }
