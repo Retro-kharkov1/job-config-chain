@@ -1,0 +1,7 @@
+<div>
+  Deklarerer målfilen og oppløsningsinnstillingene én gang for resten av bygget, slik at senere
+  kall til <code>configChainValidate</code> og <code>configChainSubstitute</code> kan utelate dem. En verdi som oppgis eksplisitt i
+  et senere kall, overstyrer den lagrede, parameter for parameter.
+  <p>Er ikke tillatt i en <code>parallel</code>-blokk, fordi den lagrede tilstanden deles av hele bygget. Det
+  tidligere navnet <code>setupConfigTemplate</code> fungerer fortsatt som et utdatert alias.</p>
+</div>

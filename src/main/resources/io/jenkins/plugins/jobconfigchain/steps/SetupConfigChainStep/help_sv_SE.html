@@ -1,0 +1,7 @@
+<div>
+  Deklarerar målfilen och uppslagsinställningarna en gång för resten av bygget, så att senare
+  anrop av <code>configChainValidate</code> och <code>configChainSubstitute</code> kan utelämna dem. Ett värde som anges uttryckligen i
+  ett senare anrop åsidosätter det lagrade, parameter för parameter.
+  <p>Tillåts inte i ett <code>parallel</code>-block, eftersom det lagrade tillståndet delas av hela bygget. Det
+  tidigare namnet <code>setupConfigTemplate</code> fungerar fortfarande som ett föråldrat alias.</p>
+</div>

@@ -1,0 +1,7 @@
+<div>
+  Declares the target file and resolution settings once for the rest of the build, so later
+  <code>configChainValidate</code> and <code>configChainSubstitute</code> calls can omit them. A value given explicitly on
+  a later call overrides the stored one, parameter by parameter.
+  <p>Not allowed inside a <code>parallel</code> block, because the stored state is shared by the whole build. The
+  former name <code>setupConfigTemplate</code> still works as a deprecated alias.</p>
+</div>

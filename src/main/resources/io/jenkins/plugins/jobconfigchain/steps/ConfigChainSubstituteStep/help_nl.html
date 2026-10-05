@@ -1,0 +1,12 @@
+<div>
+  Vervangt elk <code>#{Dotted.Path}#</code>-token in het doelbestand door de waarde uit de effectieve configuratie
+  en schrijft het bestand terug. Geheime waarden komen uit de Jenkins-inloggegevens die zijn gekoppeld in het geheimenmanifest van de configuratieset,
+  nooit uit opgeslagen tekst.
+  <p>Het vervangen gebeurt in één doorgang: elk token wordt één keer vervangen en ingevoegde tekst wordt nooit opnieuw gescand. De build mislukt
+  als een token onopgelost blijft of gekoppelde inloggegevens ontbreken. Bij succes legt de build een uitrolbinding (Deployment Binding) vast van
+  de exact gebruikte versies, zodat dezelfde configuratie later opnieuw kan worden afgespeeld met <b>Opnieuw uitrollen vanuit run</b>.</p>
+  <p>Let op: wanneer configuraties gelaagd zijn, worden JSON-arrays door de bovenliggende laag in hun geheel vervangen en nooit
+  element voor element samengevoegd.</p>
+  <p>Roep de stap aan met een Map, bijvoorbeeld <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. De voormalige naam
+  <code>configTemplateSubstitute</code> werkt nog als verouderde alias.</p>
+</div>

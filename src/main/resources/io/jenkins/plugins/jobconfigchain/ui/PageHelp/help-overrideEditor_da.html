@@ -1,0 +1,8 @@
+<div>
+  Indholdet af denne editor anvendes oven på de sammenflettede basiskonfigurationssæt. Skriv kun det, der afviger fra
+  baserne; hver nøgle, du udelader, nedarves. I JSON og YAML fjerner du en nøgle fra resultatet ved at sætte den til <code>null</code>.
+  <p><b>Arrays erstattes i deres helhed.</b> Objekter flettes nøgle for nøgle, men en liste (et JSON-array, en YAML-
+  sekvens eller gentagne søskendeelementer i XML) flettes aldrig element for element. Hvis en base har
+  <code>[1, 2, 3]</code>, og denne editor sætter <code>[4]</code>, bliver resultatet <code>[4]</code>, ikke
+  <code>[1, 2, 3, 4]</code>. Hvis du vil ændre ét element i en liste, skal du gentage hele listen her.</p>
+</div>

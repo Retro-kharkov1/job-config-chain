@@ -1,0 +1,12 @@
+<div>
+  Erstatter hvert <code>#{Dotted.Path}#</code>-token i målfilen med dets værdi fra den effektive konfiguration
+  og skriver filen tilbage. Hemmelige værdier kommer fra de Jenkins-legitimationsoplysninger, der er bundet i konfigurationssættets manifest over hemmeligheder,
+  aldrig fra gemt tekst.
+  <p>Erstatningen sker i ét gennemløb: hvert token erstattes én gang, og indsat tekst gennemsøges aldrig igen. Buildet fejler,
+  hvis et token forbliver uløst, eller en bundet legitimationsoplysning mangler. Ved succes registrerer buildet en udrulningsbinding (Deployment Binding) af
+  de præcise versioner, der blev brugt, så den samme konfiguration kan afspilles igen senere med <b>Udrul igen fra kørsel</b>.</p>
+  <p>Bemærk: når konfigurationer lægges i lag, erstattes JSON-arrays i deres helhed af det overliggende lag og flettes aldrig
+  element for element.</p>
+  <p>Kald det med et Map, for eksempel <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Det tidligere navn
+  <code>configTemplateSubstitute</code> virker stadig som et udfaset alias.</p>
+</div>

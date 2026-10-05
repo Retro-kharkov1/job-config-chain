@@ -1,0 +1,8 @@
+<div>
+  Kontrollerer målfilen mot den effektive konfigurasjonen før distribusjon og endrer ingenting. Bygget feiler hvis
+  filen inneholder et <code>#{Dotted.Path}#</code>-token uten tilsvarende nøkkel (skrivefeil eller manglende nøkkel). Nøkler som ingen token
+  bruker, rapporteres bare som en advarsel.
+  <p>Kalles vanligvis rett før <code>configChainSubstitute</code> med de samme parameterne, for eksempel
+  <code>configChainValidate(file: &#39;app.json&#39;)</code>. Det tidligere navnet <code>configTemplateValidate</code> fungerer fortsatt
+  som et utdatert alias.</p>
+</div>
