@@ -2,9 +2,7 @@
 
 [Back to the README](../README.md) · [Pipeline step reference](pipeline-steps.md) · [Use cases](use-cases.md)
 
-A from-scratch walkthrough, from install to the first successful build. The screenshots were taken with
-an earlier release and may still show the old "Config Templates" page title and the old `configTemplate*`
-step names; the current names are `Config Chains` and `configChain*`.
+A from-scratch walkthrough, from install to the first successful build.
 
 **1. Install the plugin.** See [Install](../README.md#install).
 
