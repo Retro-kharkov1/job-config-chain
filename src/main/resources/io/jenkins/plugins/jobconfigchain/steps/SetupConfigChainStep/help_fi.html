@@ -1,0 +1,7 @@
+<div>
+  Määrittää kohdetiedoston ja ratkaisuasetukset kerran buildin loppuosaa varten, jotta myöhemmät
+  <code>configChainValidate</code>- ja <code>configChainSubstitute</code>-kutsut voivat jättää ne pois. Myöhemmässä kutsussa nimenomaisesti annettu arvo
+  ohittaa tallennetun arvon parametri kerrallaan.
+  <p>Ei sallittu <code>parallel</code>-lohkon sisällä, koska tallennettu tila on koko buildin yhteinen. Entinen
+  nimi <code>setupConfigTemplate</code> toimii edelleen vanhentuneena aliaksena.</p>
+</div>

@@ -1,0 +1,62 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@1602.v2a_70b_80a_2396">
+  <actions/>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty>
+      <versions>
+        <io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion>
+          <versionNumber>1</versionNumber>
+          <contentJson>{&quot;Own&quot;:&quot;own-v1&quot;}</contentJson>
+          <note>first version café</note>
+          <author>safety-net</author>
+          <timestampEpochMillis>1</timestampEpochMillis>
+          <baseChain class="java.util.Collections$UnmodifiableRandomAccessList" resolves-to="java.util.Collections$UnmodifiableList">
+            <c class="list">
+              <io.jenkins.plugins.jobconfigchain.model.BaseConfigReference>
+                <projectKey>fx-base</projectKey>
+                <pinMode>ACTIVE</pinMode>
+                <pinnedVersionNumber>0</pinnedVersionNumber>
+              </io.jenkins.plugins.jobconfigchain.model.BaseConfigReference>
+              <io.jenkins.plugins.jobconfigchain.model.BaseConfigReference>
+                <projectKey>fx-base2</projectKey>
+                <pinMode>PINNED</pinMode>
+                <pinnedVersionNumber>1</pinnedVersionNumber>
+              </io.jenkins.plugins.jobconfigchain.model.BaseConfigReference>
+            </c>
+            <list reference="../c"/>
+          </baseChain>
+        </io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion>
+        <io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion>
+          <versionNumber>2</versionNumber>
+          <contentJson>{&quot;Own&quot;:&quot;own-v2&quot;}</contentJson>
+          <note>bump</note>
+          <author>safety-net</author>
+          <timestampEpochMillis>1790895231349</timestampEpochMillis>
+          <baseChain class="java.util.Collections$UnmodifiableRandomAccessList" resolves-to="java.util.Collections$UnmodifiableList">
+            <c class="list">
+              <io.jenkins.plugins.jobconfigchain.model.BaseConfigReference reference="../../../../io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion/baseChain/c/io.jenkins.plugins.jobconfigchain.model.BaseConfigReference"/>
+              <io.jenkins.plugins.jobconfigchain.model.BaseConfigReference reference="../../../../io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion/baseChain/c/io.jenkins.plugins.jobconfigchain.model.BaseConfigReference[2]"/>
+            </c>
+            <list reference="../c"/>
+          </baseChain>
+        </io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion>
+      </versions>
+      <activeVersionNumber>2</activeVersionNumber>
+      <contentType>JSON</contentType>
+      <secretsManifest class="linked-hash-map"/>
+    </io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@4383.v04fa_a_3d67b_d9">
+    <script>node {
+setupConfigTemplate(file: &apos;app.cfg&apos;, redeployFromRun: &apos;1&apos;)
+writeFile file: &apos;app.cfg&apos;, text: &apos;host=#{Db.Host}# port=#{Db.Port}# pw=#{Db.Password}# name=#{App.Name}# own=#{Own}#&apos;
+configTemplateValidate(version: 1)
+configTemplateSubstitute()
+echo &quot;BIN:${readFile(file: &apos;app.cfg&apos;, encoding: &apos;Base64&apos;)}&quot;
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

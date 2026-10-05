@@ -43,10 +43,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * The job-scoped Config Templates admin page at {@code /job/&lt;name&gt;/configTemplates}
+ * The job-scoped Config Chains admin page at {@code /job/&lt;name&gt;/configChains}
  * (tech-lead design contract, 2026-09-09). Replaces the old association-only flow
  * ({@code doSaveAssociation}/{@code doAssociateEnvironment}/the per-environment sub-page) wholesale
- * — this page now holds a {@link Job}'s OWN Config Templates content directly, via
+ * — this page now holds a {@link Job}'s OWN Config Chain content directly, via
  * {@link JobConfigTemplateProperty}, rather than pointing at a separate global {@code ConfigSet}.
  *
  * <p><b>Shared surface with EnvConfigSetPage:</b> both host classes expose the SAME set of
@@ -65,6 +65,9 @@ import java.util.stream.Collectors;
  * an empty base chain unambiguously means "no bases," never a synthesized self-referencing default.</p>
  */
 public class ConfigTemplatesJobAction implements Action {
+
+    /** URL segment of the job page (renamed from {@code configTemplates}; old GETs redirect). */
+    public static final String URL_NAME = "configChains";
 
     private final Job<?, ?> job;
     private final ConfigSetRepository repository = new ConfigSetRepository();
@@ -94,7 +97,7 @@ public class ConfigTemplatesJobAction implements Action {
 
     @Override
     public String getUrlName() {
-        return "configTemplates";
+        return URL_NAME;
     }
 
     /**
@@ -109,16 +112,6 @@ public class ConfigTemplatesJobAction implements Action {
     /** The job this action was contributed to — read fresh, never cached. Exposed for the Jelly view. */
     public Job<?, ?> getJob() {
         return job;
-    }
-
-    /**
-     * Resolved {@link SharedBlocks} class, bound into the Jelly view's {@code st:include class="${it.sharedBlocksClass}"}
-     * attribute instead of a literal string — avoids Commons BeanUtils' String→Class conversion,
-     * which in the live Jenkins-plugin runtime resolves against the core WebAppClassLoader rather
-     * than this plugin's own PluginClassLoader and can never find a plugin-defined class this way.
-     */
-    public Class<SharedBlocks> getSharedBlocksClass() {
-        return SharedBlocks.class;
     }
 
     /**
@@ -183,7 +176,7 @@ public class ConfigTemplatesJobAction implements Action {
     /**
      * Bug 6.2 fix (tech-lead contract, 2026-09-10): identically-named counterpart to
      * EnvConfigSetPage#getOwnScopeLabel() (which returns {@code "layer"}) — this host's own
-     * Config Templates content is scoped to a {@link Job}, not a layered-override "layer," so the
+     * Config Chain content is scoped to a {@link Job}, not a layered-override "layer," so the
      * shared {@code baseChainBlock.jelly}/{@code editorBlock.jelly} fragments' body text now
      * interpolates {@code ${it.ownScopeLabel}} instead of hardcoding either word.
      */
@@ -347,7 +340,7 @@ public class ConfigTemplatesJobAction implements Action {
         } catch (Failure f) {
             return SaveOutcome.error(f.getMessage());
         } catch (IOException e) {
-            return SaveOutcome.error("Failed to save job: " + e.getMessage());
+            return SaveOutcome.error(Messages.Page_FailedToSaveJob(e.getMessage()));
         }
     }
 
@@ -505,7 +498,7 @@ public class ConfigTemplatesJobAction implements Action {
         JobConfigTemplateVersion activated = property == null ? null : property.getVersion(version);
         if (activated == null) {
             result.put("ok", false);
-            result.put("error", "No such version: " + version);
+            result.put("error", Messages.Page_NoSuchVersion(version));
             return result;
         }
         property.activate(version);
@@ -513,7 +506,7 @@ public class ConfigTemplatesJobAction implements Action {
             job.save();
         } catch (IOException e) {
             result.put("ok", false);
-            result.put("error", "Failed to save job: " + e.getMessage());
+            result.put("error", Messages.Page_FailedToSaveJob(e.getMessage()));
             return result;
         }
         result.put("ok", true);
@@ -561,13 +554,12 @@ public class ConfigTemplatesJobAction implements Action {
         JSONObject result = new JSONObject();
         if (path == null || path.trim().isEmpty() || credentialId == null || credentialId.trim().isEmpty()) {
             result.put("ok", false);
-            result.put("error", "Both a dotted path and a credential ID are required");
+            result.put("error", Messages.Page_PathAndCredentialRequired());
             return result;
         }
         if (!getAvailableCredentialIds().contains(credentialId)) {
             result.put("ok", false);
-            result.put("error", "No such credential: " + credentialId
-                    + " — pick one of the credentials currently registered in Jenkins");
+            result.put("error", Messages.Page_NoSuchCredential(credentialId));
             return result;
         }
         JobConfigTemplateProperty property = getProperty();
@@ -590,7 +582,7 @@ public class ConfigTemplatesJobAction implements Action {
             job.save();
         } catch (IOException e) {
             result.put("ok", false);
-            result.put("error", "Failed to save job: " + e.getMessage());
+            result.put("error", Messages.Page_FailedToSaveJob(e.getMessage()));
             return result;
         }
         result.put("ok", true);
@@ -623,13 +615,13 @@ public class ConfigTemplatesJobAction implements Action {
         JSONObject result = new JSONObject();
         if (path == null || path.trim().isEmpty()) {
             result.put("ok", false);
-            result.put("error", "A dotted path is required");
+            result.put("error", Messages.Page_PathRequired());
             return result;
         }
         JobConfigTemplateProperty property = getProperty();
         if (property == null || !property.getSecretsManifest().containsKey(path)) {
             result.put("ok", false);
-            result.put("error", "No such secret path bound: " + path);
+            result.put("error", Messages.Page_NoSuchSecretPath(path));
             return result;
         }
         property.removeSecretManifestEntry(path);
@@ -637,7 +629,7 @@ public class ConfigTemplatesJobAction implements Action {
             job.save();
         } catch (IOException e) {
             result.put("ok", false);
-            result.put("error", "Failed to save job: " + e.getMessage());
+            result.put("error", Messages.Page_FailedToSaveJob(e.getMessage()));
             return result;
         }
         result.put("ok", true);
@@ -697,13 +689,13 @@ public class ConfigTemplatesJobAction implements Action {
         JobConfigTemplateProperty property = getProperty();
         if (property == null) {
             result.put("ok", false);
-            result.put("error", "No such Config Set");
+            result.put("error", Messages.Page_NoSuchConfigSet());
             return result;
         }
         JobConfigTemplateVersion v = property.getVersion(version);
         if (v == null) {
             result.put("ok", false);
-            result.put("error", "No such version: " + version);
+            result.put("error", Messages.Page_NoSuchVersion(version));
             return result;
         }
         result.put("ok", true);
@@ -753,10 +745,15 @@ public class ConfigTemplatesJobAction implements Action {
      * pre-first-save empty-chain content-type picker's fallback, exactly like
      * EnvConfigSetPage's equivalent parameter.
      */
+    /** The localized word for a base-chain row's mode, as shown on the page. */
+    private static String pinModeLabel(io.jenkins.plugins.jobconfigchain.model.PinMode mode) {
+        return mode == io.jenkins.plugins.jobconfigchain.model.PinMode.PINNED ? Messages.Mode_Pin() : Messages.Mode_Active();
+    }
+
     private ChainResolution resolveChain(String baseChainJson, String standaloneContentType) {
         List<BaseConfigReference> chain = ConfigSetPage.tryParseBaseChain(baseChainJson);
         if (chain == null) {
-            return ChainResolution.error("Malformed base chain");
+            return ChainResolution.error(Messages.Job_MalformedBaseChain());
         }
         // No backward-compatibility default substitution here (see base-chains.md) — an empty job
         // chain stays empty and resolves to {}.
@@ -766,16 +763,15 @@ public class ConfigTemplatesJobAction implements Action {
         List<String> typeReport = new ArrayList<>();
         for (BaseChainResolver.ResolvedReference r : resolved) {
             if (r.configSet == null || r.version == null) {
-                return ChainResolution.error("Cannot resolve base chain entry '" + r.reference.getProjectKey()
-                        + "' (" + r.reference.getPinMode() + ") — "
-                        + (r.configSet == null ? "no such common Config Set" : "no such version"));
+                return ChainResolution.error(r.configSet == null
+                        ? Messages.Job_CannotResolveEntryNoSet(r.reference.getProjectKey(), pinModeLabel(r.reference.getPinMode()))
+                        : Messages.Job_CannotResolveEntryNoVersion(r.reference.getProjectKey(), pinModeLabel(r.reference.getPinMode())));
             }
             distinctTypes.add(r.configSet.getContentType());
             typeReport.add(r.reference.getProjectKey() + " (" + r.configSet.getContentType() + ")");
         }
         if (distinctTypes.size() > 1) {
-            return ChainResolution.error("Mismatched content types in base chain — " + String.join(", ", typeReport)
-                    + " must all share one content type.");
+            return ChainResolution.error(Messages.Job_MismatchedTypes(String.join(", ", typeReport)));
         }
         ContentType type = !distinctTypes.isEmpty()
                 ? distinctTypes.iterator().next()
@@ -823,7 +819,7 @@ public class ConfigTemplatesJobAction implements Action {
             overlay = format.parse(overlayRaw == null ? format.serialize(format.emptyObject()) : overlayRaw);
             if (!overlay.isObject()) {
                 result.put("ok", false);
-                result.put("error", "Override content must be a " + type + " object/root element");
+                result.put("error", Messages.Job_OverrideMustBeObject(type));
                 return result;
             }
         } catch (RuntimeException e) {
@@ -883,7 +879,7 @@ public class ConfigTemplatesJobAction implements Action {
             overlay = format.parse(overlayRaw == null ? format.serialize(format.emptyObject()) : overlayRaw);
             if (!overlay.isObject()) {
                 result.put("ok", false);
-                result.put("error", "Override content must be a " + type + " object/root element");
+                result.put("error", Messages.Job_OverrideMustBeObject(type));
                 return result;
             }
         } catch (RuntimeException e) {

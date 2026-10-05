@@ -298,11 +298,11 @@ public class ConfigSetLifecycleUiTest {
     public void theDeleteButtonRendersOnALiveConfigSetAndNotOnAnAbsentOne() throws Exception {
         seed("rendered-app");
 
-        HtmlPage live = markupClient().goTo("manage/configTemplates/rendered-app/");
+        HtmlPage live = markupClient().goTo("manage/configChains/rendered-app/");
         assertNotNull(live.getElementById("deleteConfigSetBtn"),
                 "a live Config Set offers the delete action");
 
-        HtmlPage absent = markupClient().goTo("manage/configTemplates/never-created/");
+        HtmlPage absent = markupClient().goTo("manage/configChains/never-created/");
         assertNull(absent.getElementById("deleteConfigSetBtn"),
                 "there is nothing to delete before the first save");
     }
@@ -312,7 +312,7 @@ public class ConfigSetLifecycleUiTest {
         seed("withdrawn-app");
         page("withdrawn-app").jsDeleteConfigSet(confirm("withdrawn-app").toString());
 
-        HtmlPage rendered = markupClient().goTo("manage/configTemplates/withdrawn-app/");
+        HtmlPage rendered = markupClient().goTo("manage/configChains/withdrawn-app/");
         String text = rendered.asNormalizedText();
 
         assertNotNull(rendered.getElementById("restoreConfigSetBtn"));
@@ -330,7 +330,7 @@ public class ConfigSetLifecycleUiTest {
     public void theJobPageNeverOffersDeletion() throws Exception {
         FreeStyleProject job = jenkins.createFreeStyleProject("untouched-job");
 
-        HtmlPage rendered = markupClient().goTo("job/" + job.getName() + "/configTemplates/");
+        HtmlPage rendered = markupClient().goTo("job/" + job.getName() + "/configChains/");
 
         assertNull(rendered.getElementById("deleteConfigSetBtn"),
                 "deletion is a global Config Set action only");
@@ -342,7 +342,7 @@ public class ConfigSetLifecycleUiTest {
         seed("withdrawn-app");
         page("withdrawn-app").jsDeleteConfigSet(confirm("withdrawn-app").toString());
 
-        HtmlPage list = markupClient().goTo("manage/configTemplates/");
+        HtmlPage list = markupClient().goTo("manage/configChains/");
 
         assertNotNull(list.getElementById("showDeletedToggle"),
                 "the toggle appears only when something is deleted");
@@ -356,12 +356,12 @@ public class ConfigSetLifecycleUiTest {
         seed("withdrawn-app");
         page("withdrawn-app").jsDeleteConfigSet(confirm("withdrawn-app").toString());
 
-        HtmlPage real = markupClient().goTo("manage/configTemplates/?deleted=withdrawn-app");
+        HtmlPage real = markupClient().goTo("manage/configChains/?deleted=withdrawn-app");
         assertTrue(real.asNormalizedText().contains("withdrawn-app"));
 
         // Validated against the repository rather than echoed, so a hand-typed parameter renders
         // nothing at all.
-        HtmlPage invented = markupClient().goTo("manage/configTemplates/?deleted=never-existed");
+        HtmlPage invented = markupClient().goTo("manage/configChains/?deleted=never-existed");
         assertFalse(invented.asNormalizedText().contains("never-existed"));
     }
 }

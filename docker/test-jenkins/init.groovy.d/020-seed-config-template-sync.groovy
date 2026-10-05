@@ -20,7 +20,7 @@
  *     local test value
  *   - the "config-template-sync-e2e" Pipeline job, defined from the fixture Jenkinsfile
  *     baked into the image — NOT auto-triggered; the owner clicks "Build Now" themselves
- *   - the job's OWN Config Templates content (JobConfigTemplateProperty), referencing the
+ *   - the job's OWN Config Chain content (JobConfigTemplateProperty), referencing the
  *     common ConfigSet above via its baseChain — every pipeline call resolves against this
  *     Job-scoped content by construction (2026-09-14: ConfigSetRole.ENV/EnvConfigSetPage
  *     removed in full; there is no more env-Config-Set layer to seed)
@@ -56,7 +56,7 @@ def repository = new ConfigSetRepository()
 
 // ---------------------------------------------------------------------------------------
 // 1) The common ConfigSet (2026-09-14: ConfigSetRole.ENV removed in full — there is no more
-//    env-layer ConfigSet to seed here; the Job's own Config Templates content, seeded in
+//    env-layer ConfigSet to seed here; the Job's own Config Chain content, seeded in
 //    step 4 below, references this common ConfigSet via its own baseChain instead).
 // ---------------------------------------------------------------------------------------
 if (repository.findCommon(PROJECT_KEY) != null) {
@@ -117,15 +117,15 @@ if (job != null) {
     job = jenkins.createProject(WorkflowJob.class, JOB_NAME)
     job.setDefinition(new CpsFlowDefinition(FIXTURE_JENKINSFILE.text, true))
     job.setDescription(
-            "e2e smoke test for the job-config-chain plugin: runs configTemplateValidate then " +
-            "configTemplateSubstitute against this Job's own Config Templates (useBase: true, " +
+            "e2e smoke test for the job-config-chain plugin: runs configChainValidate then " +
+            "configChainSubstitute against this Job's own Config Chain (useBase: true, " +
             "configKey='${PROJECT_KEY}'). Not auto-triggered on startup — click Build Now.")
     job.save()
     logger("Created job '${JOB_NAME}' (not triggered).")
 }
 
 // ---------------------------------------------------------------------------------------
-// 4) The job's OWN Config Templates content (JobConfigTemplateProperty) — replaces the old
+// 4) The job's OWN Config Chain content (JobConfigTemplateProperty) — replaces the old
 //    association-to-a-separate-ConfigSet property wholesale (tech-lead design contract,
 //    2026-09-09). A one-version, one-row-base-chain seed (referencing the common ConfigSet
 //    seeded in step 1, ACTIVE) rather than an empty-chain default: this is deliberately a real,
@@ -141,7 +141,7 @@ if (job != null) {
 if (job != null) {
     def existing = job.getProperty(JobConfigTemplateProperty.class)
     if (existing != null && !existing.getVersions().isEmpty()) {
-        logger("Job '${JOB_NAME}' already has Config Templates content — skipping.")
+        logger("Job '${JOB_NAME}' already has Config Chain content — skipping.")
     } else {
         def property = existing != null ? existing : new JobConfigTemplateProperty()
         def jobBaseChain = [BaseConfigReference.active(PROJECT_KEY)]

@@ -14,6 +14,8 @@ public final class BaseConfigReference implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     private final String projectKey;
     private final PinMode pinMode;
     private final int pinnedVersionNumber;
@@ -21,12 +23,12 @@ public final class BaseConfigReference implements Serializable {
     public BaseConfigReference(String projectKey, PinMode pinMode, int pinnedVersionNumber) {
         this.projectKey = Objects.requireNonNull(projectKey, "projectKey");
         if (projectKey.trim().isEmpty()) {
-            throw new IllegalArgumentException("projectKey must not be empty");
+            throw new IllegalArgumentException(Messages.BaseReference_ConfigKeyRequired());
         }
         this.pinMode = Objects.requireNonNull(pinMode, "pinMode");
         if (pinMode == PinMode.PINNED && pinnedVersionNumber <= 0) {
             throw new IllegalArgumentException(
-                    "pinnedVersionNumber must be a positive version number when pinMode is PINNED");
+                    Messages.BaseReference_PinnedVersionRequired());
         }
         // ACTIVE carries no meaningful pinned number — normalize to 0 so equals()/hashCode()
         // never depend on a value the UI/caller was never asked to supply meaningfully.

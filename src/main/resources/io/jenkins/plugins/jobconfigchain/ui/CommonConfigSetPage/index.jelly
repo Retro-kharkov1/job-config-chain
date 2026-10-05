@@ -1,31 +1,37 @@
 <?jelly escape-by-default='true'?>
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form" xmlns:jc="/lib/jobconfigchain">
   <l:layout title="${it.displayName}">
     <l:main-panel>
       <st:bind var="proxy" value="${it}"/>
 
       <!-- CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): this page's own
            inline <style>/<script> were extracted verbatim into index.css/index.js, sibling files
-           to this index.jelly, loaded via h.getViewResource(it, ...) (resolves relative to this
-           view class — see https://www.jenkins.io/doc/developer/views/exposing-bundled-resources/).
+           to this index.jelly, loaded via st:adjunct (see the ctsyncCommonStyle/CommonScript adjuncts under
+           io/jenkins/plugins/jobconfigchain/adjuncts/).
            Server-side values index.js needs (previously interpolated via ${...}/<j:out> straight
            into the script text) now ride on #ctsyncCommonSeed's data-* attributes instead. -->
-      <link rel="stylesheet" href="${h.getViewResource(it, 'index.css')}"/>
+      <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncCommonStyle"/>
 
-      <div id="ctsyncCommonSeed" style="display:none"
+      <div class="ctsync-hidden" id="ctsyncCommonSeed"
            data-editor-seed="${it.editorSeedJsonForScript}"
            data-project-key="${it.projectKey}"
            data-root-url="${rootURL}"
            data-monaco-base="${rootURL}/plugin/${it.pluginShortName}/monaco/vs"
            data-empty-versions="${%emptyState.noVersions}"
-           data-empty-secrets="${%emptyState.noSecrets}"/>
+           data-empty-secrets="${%emptyState.noSecrets}"
+           data-js-malformed-xml="${%js.malformedXml}"
+           data-js-malformed-yaml="${%js.malformedYaml}"
+           data-js-locked="${%contentType.locked}"
+           data-js-saved="${%js.saved}"
+           data-js-saved-activated="${%js.savedActivated}"
+           data-js-comparing="${%js.comparing}"/>
 
       <div class="ctsync-page">
 
-      <st:include class="${it.sharedBlocksClass}" page="confirmByNameBlock.jelly" it="${it}"/>
+      <jc:iconsBlock/>
+      <jc:confirmByNameBlock/>
 
-      <div class="ctsync-page-header">
-        <h1>${it.displayName}</h1>
+      <l:app-bar title="${it.displayName}">
         <!-- id added (bug fix, 2026-09-28): a first Save's in-place-update response (see
              index.js's applyConfigSetNowExists) builds and inserts deleteConfigSetBtn into this
              row without a page reload. The button itself stays absent from the DOM entirely
@@ -34,7 +40,7 @@
              (theDeleteButtonRendersOnALiveConfigSetAndNotOnAnAbsentOne) — it is BUILT, not
              revealed, exactly like applyContentTypeLocked below already does for the content-type
              picker's own locked/unlocked swap. -->
-        <div class="ctsync-btn-row" id="pageHeaderBtnRow">
+        <div class="ctsync-btn-row ctsync-btn-row--flush" id="pageHeaderBtnRow">
           <j:choose>
             <j:when test="${it.deleted}">
               <button type="button" id="restoreConfigSetBtn" class="jenkins-button"
@@ -43,20 +49,19 @@
               <button type="button" id="purgeConfigSetBtn"
                       class="jenkins-button jenkins-button--destructive"
                       title="${%purge.title}"
-                      >&#128465; ${%purge.label}</button>
+                      ><l:icon src="symbol-trash" class="icon-sm"/> ${%purge.label}</button>
             </j:when>
             <j:when test="${it.exists}">
               <button type="button" id="deleteConfigSetBtn"
                       class="jenkins-button jenkins-button--destructive"
                       title="${%deleteConfigSet.title}"
-                      >&#128465; ${%deleteConfigSet.label}</button>
+                      ><l:icon src="symbol-trash" class="icon-sm"/> ${%deleteConfigSet.label}</button>
             </j:when>
           </j:choose>
         </div>
-      </div>
+      </l:app-bar>
 
-      <div id="deleteBlockedBanner" class="alert alert-danger ctsync-blocked-banner"
-           style="display:none"/>
+      <div id="deleteBlockedBanner" class="jenkins-alert jenkins-alert-danger ctsync-blocked-banner ctsync-hidden"/>
 
       <!-- Localized text for the script-built dialogs. Jelly cannot substitute ${%key} inside a
            script block, so it rides on data-* here, the pattern the row templates already use. -->
@@ -81,7 +86,7 @@
       <template id="deleteConfigSetBtnTemplate">
         <button type="button" id="deleteConfigSetBtn"
                 class="jenkins-button jenkins-button--destructive"
-                title="${%deleteConfigSet.title}">&#128465; ${%deleteConfigSet.label}</button>
+                title="${%deleteConfigSet.title}"><l:icon src="symbol-trash" class="icon-sm"/> ${%deleteConfigSet.label}</button>
       </template>
 
       <j:choose>
@@ -89,7 +94,7 @@
           <!-- Never the "does not exist yet - Save creates it" notice below: a deleted Config Set
                rendering as a blank new one is exactly the invitation to clobber an archive that
                reserving the name exists to prevent. -->
-          <div class="alert alert-warning">
+          <div class="jenkins-alert jenkins-alert-warning">
             ${%deletedState.banner(it.deletion.deletedBy)}
             <span class="ctsync-created-cell" data-epoch="${it.deletion.deletedAtEpochMillis}"
                   >${it.deletion.deletedAtEpochMillis}</span>
@@ -99,18 +104,16 @@
         <j:when test="${!it.exists}">
           <!-- Bug fix (2026-09-28): id added so the first Save's in-place-update response (see
                index.js's saveClicked) can hide this banner without a page reload. -->
-          <div id="notExistYetBanner" class="alert alert-info">${%notExistYet}</div>
+          <div id="notExistYetBanner" class="jenkins-alert jenkins-alert-info">${%notExistYet}</div>
         </j:when>
       </j:choose>
 
       <div id="secretsManifestDetails">
       <f:section title="${%secretsManifest.heading}">
-        <p>A path listed here is structurally locked: the JSON editor below may only hold the literal
-           <code>__SECRET__</code> placeholder at this path — save is rejected otherwise. The real
-           value is supplied only via the Jenkins credential picked below, never typed here.</p>
-        <st:include class="${it.sharedBlocksClass}" page="tableToolsBlock.jelly" it="${it}"/>
+        <p>${%secretsManifest.intro('__SECRET__')}</p>
+        <jc:tableToolsBlock/>
         <div id="secretsManifestTableWrap" class="ctsync-scroll-table">
-          <table class="jenkins-table sortable ctsync-filterable" style="width:100%">
+          <table class="jenkins-table sortable ctsync-filterable ctsync-w-full">
             <thead><tr><th>${%column.dottedPath}</th><th>${%column.credential}</th><th data-sort-disable="true"/></tr></thead>
             <tbody id="secretsManifestTbody">
               <j:choose>
@@ -124,7 +127,7 @@
                              delegation, keyed off data-secret-path. -->
                         <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn"
                                 data-secret-path="${entry.key}"
-                                title="${%removeSecret.title}">&#128465; ${%removeSecret.label}</button>
+                                title="${%removeSecret.title}"><l:icon src="symbol-trash" class="icon-sm"/> ${%removeSecret.label}</button>
                       </td>
                     </tr>
                   </j:forEach>
@@ -147,14 +150,15 @@
             <td class="js-secret-cred"/>
             <td>
               <button type="button" class="jenkins-button jenkins-button--destructive ctsync-remove-secret-btn">
-                &#128465; ${%removeSecret.label}</button>
+                <l:icon src="symbol-trash" class="icon-sm"/> ${%removeSecret.label}</button>
             </td>
           </tr>
         </template>
-        <f:entry title="${%addSecret.entryTitle}">
+        <f:entry title="${%addSecret.entryTitle}"
+                 help="/job-config-chain-help/secretBinding">
           <div class="ctsync-secret-form">
             <div class="ctsync-secret-form-fields">
-              <input class="setting-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
+              <input class="jenkins-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
               <div class="jenkins-select">
                 <select class="jenkins-select__input" id="secretCredentialId">
                   <j:forEach var="cid" items="${it.availableCredentialIds}">
@@ -172,10 +176,9 @@
 
       <div id="versionHistoryDetails">
       <f:section title="${%versionHistory.heading}">
-        <p>Click a row to compare it against the editor's current draft (no checkbox required —
-           click any row again to return to editing).</p>
+        <p>${%versionHistory.hint}</p>
         <div id="versionHistoryTableWrap" class="ctsync-scroll-table">
-          <table class="jenkins-table ctsync-history-table sortable ctsync-filterable" style="width:100%">
+          <table class="jenkins-table ctsync-history-table sortable ctsync-filterable ctsync-w-full">
             <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th data-ctsync-filter="enum">${%column.active}</th><th data-sort-disable="true">${%column.actions}</th></tr></thead>
             <tbody id="versionHistoryTbody">
               <j:if test="${it.versions.isEmpty()}">
@@ -194,7 +197,7 @@
                   <td data-th="${%column.note}">${v.note}</td>
                   <td data-th="${%column.active}">
                     <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
-                      &#9679; ${%activeStatus}
+                      <span class="ctsync-icon-text"><l:icon src="symbol-checkmark-circle plugin-ionicons-api" class="icon-sm"/> ${%activeStatus}</span>
                     </j:if>
                   </td>
                   <td data-th="${%column.actions}">
@@ -207,7 +210,7 @@
                       <j:otherwise>
                         <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
                                 data-version-number="${v.versionNumber}"
-                                title="Activate version ${v.versionNumber} without changing the editor content">${%activate.label}</button>
+                                title="${%activate.title(v.versionNumber)}">${%activate.label}</button>
                       </j:otherwise>
                     </j:choose>
                   </td>
@@ -247,23 +250,25 @@
              this same editor.heading text as its own title bar above — a second bold heading
              here was leftover from before the accordion-to-f:section conversion and is dead
              weight now that no sibling element still needs this row's flex layout. -->
-        <div class="ctsync-btn-row">
+        <div class="ctsync-btn-row help-sibling">
           <button type="button" id="modeEditBtn"
                  class="jenkins-button jenkins-button--primary" title="${%modeEdit.title}"
-                 >&#9998; ${%modeEdit.label}</button>
+                 ><l:icon src="symbol-edit" class="icon-sm"/> ${%modeEdit.label}</button>
           <j:choose>
             <j:when test="${it.templateAvailable}">
               <button type="button" id="modeGenerateBtn"
                      class="jenkins-button" title="${%generateTemplate.title}"
-                     >&#128203; ${%generateTemplate.label}</button>
+                     ><l:icon src="symbol-document-text" class="icon-sm"/> ${%generateTemplate.label}</button>
             </j:when>
             <j:otherwise>
               <button type="button" id="modeGenerateBtn"
                      class="jenkins-button" disabled="disabled"
-                     title="${%generateTemplate.disabledTitle}">&#128203; ${%generateTemplate.label}</button>
+                     title="${%generateTemplate.disabledTitle}"><l:icon src="symbol-document-text" class="icon-sm"/> ${%generateTemplate.label}</button>
             </j:otherwise>
           </j:choose>
+          <f:helpLink url="/job-config-chain-help/commonEditor" featureName="${%editor.heading}"/>
         </div>
+        <f:helpArea/>
 
         <!-- Content-type picker (see multi-format-content.md's "Content type model" section) — its own row directly below the mode-toggle row and
              directly above the Monaco box, per the wireframe. Enabled only while this Config Set does
@@ -271,11 +276,14 @@
              value the moment a first version exists. CSP migration: per-radio onclick removed — a
              single index.js listener on input[name=contentTypeRadio] (any of these three) reads
              this.value, exactly mirroring the three separate handlers it replaces. -->
-        <div class="ctsync-btn-row" id="contentTypeRow">
-          <label style="font-weight:600;margin-right:8px">${%contentType.label}</label>
+        <div class="ctsync-content-type-row" id="contentTypeRow">
+          <span class="help-sibling ctsync-help-row">
+          <label class="ctsync-content-type-label">${%contentType.label}</label>
+          <f:helpLink url="/job-config-chain-help/contentType" featureName="${%contentType.label}"/>
+        </span>
           <j:choose>
             <j:when test="${it.contentTypeLocked}">
-              <span id="contentTypeLockedDisplay">${it.contentTypeValue}&#160;&#128274; (locked — set at first Save, immutable)</span>
+              <span class="ctsync-icon-text" id="contentTypeLockedDisplay">${it.contentTypeValue}<l:icon src="symbol-lock-closed" class="icon-sm"/> ${%contentType.locked}</span>
             </j:when>
             <j:otherwise>
               <!-- Pre-selects whichever radio matches getPreselectedContentTypeValue() (see
@@ -294,8 +302,8 @@
                      label -> hint -> radios (a decision reached first, then reused here) instead
                      of radios -> trailing hint, since a trailing hint reads as a squeezed-in
                      afterthought rather than something read before making the choice. -->
-                <span style="color:#666;display:block;margin-bottom:4px">&#9432; choose once — locked forever after the first Save</span>
-                <label style="margin-right:8px">
+                <span class="ctsync-content-type-hint"><l:icon src="symbol-information-circle" class="icon-sm"/> ${%contentType.chooseOnceHelp}</span>
+                <label class="ctsync-radio-label">
                   <j:choose>
                     <j:when test="${preselectedContentType == 'JSON'}">
                       <input type="radio" name="contentTypeRadio" value="JSON" checked="checked"/>
@@ -305,7 +313,7 @@
                     </j:otherwise>
                   </j:choose>
                   JSON</label>
-                <label style="margin-right:8px">
+                <label class="ctsync-radio-label">
                   <j:choose>
                     <j:when test="${preselectedContentType == 'XML'}">
                       <input type="radio" name="contentTypeRadio" value="XML" checked="checked"/>
@@ -315,7 +323,7 @@
                     </j:otherwise>
                   </j:choose>
                   XML</label>
-                <label style="margin-right:8px">
+                <label class="ctsync-radio-label">
                   <j:choose>
                     <j:when test="${preselectedContentType == 'YAML'}">
                       <input type="radio" name="contentTypeRadio" value="YAML" checked="checked"/>
@@ -328,10 +336,11 @@
               </span>
             </j:otherwise>
           </j:choose>
-          <span id="checkingIndicator" style="display:none;color:#666;margin-left:12px">&#8987; Checking YAML&#8230;</span>
+          <span id="checkingIndicator" class="ctsync-muted ctsync-icon-text ctsync-hidden"><l:icon src="symbol-hourglass" class="icon-sm"/> ${%checking.yaml}</span>
+          <f:helpArea/>
         </div>
 
-        <div id="compareBanner" class="alert alert-info ctsync-banner-row" style="display:none">
+        <div id="compareBanner" class="jenkins-alert jenkins-alert-info ctsync-banner-row ctsync-hidden">
           <span id="compareBannerText"/>
           <span>
             <button type="button" id="loadComparedBtn" class="jenkins-button jenkins-button--primary"
@@ -342,14 +351,14 @@
                    >${%backToEditing.label}</button>
           </span>
         </div>
-        <div id="generateBanner" class="alert alert-info" style="display:none">
-          Common-only template from the ACTIVE version — NOT this box's unsaved edits, if any.
+        <div id="generateBanner" class="jenkins-alert jenkins-alert-info ctsync-hidden">
+          ${%generateBanner.text}
         </div>
-        <div id="monacoEditor" style="height:420px;border:1px solid #ccc;margin-bottom:16px"/>
-        <div id="generateCopyRow" style="display:none;margin-top:4px;margin-bottom:16px">
+        <div id="monacoEditor" class="ctsync-editor-frame ctsync-editor-frame--tall ctsync-spaced"/>
+        <div id="generateCopyRow" class="ctsync-btn-row ctsync-spaced ctsync-hidden">
           <button type="button" id="copyTemplateBtn" class="jenkins-button"
                   title="${%copyTemplate.title}"
-                  >&#128203; ${%copyTemplate.label}</button>
+                  ><l:icon src="symbol-duplicate" class="icon-sm"/> ${%copyTemplate.label}</button>
         </div>
 
         <!-- No longer a &lt;form&gt; (2026-09-02 in-place-update pass): Save/Save &amp; Activate now
@@ -359,8 +368,9 @@
              Spacing fix (owner report, 2026-09-11): margin-bottom above (on #monacoEditor and
              #generateCopyRow, whichever is visible) creates breathing room before this field
              instead of it sitting flush against the coding block. -->
-        <f:entry title="${%changeNote.entryTitle}">
-          <input class="setting-input" type="text" id="noteField" required="required"/>
+        <f:entry title="${%changeNote.entryTitle}"
+                 help="/job-config-chain-help/changeNote">
+          <input class="jenkins-input" type="text" id="noteField" required="required"/>
         </f:entry>
         <input type="hidden" id="contentTypeField" value="${it.preselectedContentTypeValue}"/>
 
@@ -384,7 +394,7 @@
            HTML sits in between. Every script tag here must have an explicit closing tag. -->
       <script src="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/loader.js"></script>
       <link rel="stylesheet" href="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/editor/editor.main.css"/>
-      <script src="${h.getViewResource(it, 'index.js')}"></script>
+      <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncCommonScript"/>
 
       </div>
     </l:main-panel>

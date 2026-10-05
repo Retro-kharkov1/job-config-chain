@@ -1,19 +1,19 @@
 <?jelly escape-by-default='true'?>
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
-  <l:layout title="${it.job.displayName} — Config Templates">
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form" xmlns:jc="/lib/jobconfigchain">
+  <l:layout title="${it.job.displayName} — ${it.displayName}">
     <l:main-panel>
       <st:bind var="proxy" value="${it}"/>
 
       <!-- CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): this page's own
            inline <style>/<script> — and the four SharedBlocks fragments' former inline
            onXxx="..." attributes — were extracted verbatim into index.css/index.js, sibling files
-           to this index.jelly, loaded via h.getViewResource(it, ...) (resolves relative to this
-           view class — see https://www.jenkins.io/doc/developer/views/exposing-bundled-resources/).
+           to this index.jelly, loaded via st:adjunct (see the ctsyncJobStyle/JobScript adjuncts under
+           io/jenkins/plugins/jobconfigchain/adjuncts/).
            Server-side values index.js needs (previously interpolated via ${...}/<j:out> straight
            into the script text) now ride on #ctsyncJobSeed's data-* attributes instead. -->
-      <link rel="stylesheet" href="${h.getViewResource(it, 'index.css')}"/>
+      <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncJobStyle"/>
 
-      <div id="ctsyncJobSeed" style="display:none"
+      <div class="ctsync-hidden" id="ctsyncJobSeed"
            data-editor-seed="${it.editorSeedJsonForScript}"
            data-available-project-keys="${it.availableCommonProjectKeysJsonForScript}"
            data-base-chain-seed="${it.baseChainSeedJsonForScript}"
@@ -23,25 +23,35 @@
            data-monaco-base="${rootURL}/plugin/${it.pluginShortName}/monaco/vs"
            data-empty-versions="${%emptyState.noVersions}"
            data-empty-secrets="${%emptyState.noSecrets}"
-           data-empty-basechain="${%emptyState.noBaseChain}"/>
+           data-empty-basechain="${%emptyState.noBaseChain}"
+           data-js-malformed-xml="${%js.malformedXml}"
+           data-js-malformed-yaml="${%js.malformedYaml}"
+           data-js-locked="${%contentType.locked}"
+           data-js-saved="${%js.saved}"
+           data-js-saved-activated="${%js.savedActivated}"
+           data-js-comparing="${%js.comparing}"
+           data-js-discard-confirm="${%js.discardConfirm}"/>
 
       <div class="ctsync-page">
+
+      <l:app-bar title="${it.displayName}"/>
+      <jc:iconsBlock/>
 
       <j:if test="${!it.exists}">
         <!-- Bug fix (2026-09-28): id added so the first Save's in-place-update response (see
              index.js's saveClicked) can hide this banner without a page reload — mirrors the
              identical fix on CommonConfigSetPage/index.jelly. -->
-        <div id="notExistYetBanner" class="alert alert-info">${%notExistYet}</div>
+        <div id="notExistYetBanner" class="jenkins-alert jenkins-alert-info">${%notExistYet}</div>
       </j:if>
 
       <!-- Same four shared fragments EnvConfigSetPage/index.jelly renders — see this project's
            tech-lead design contract (2026-09-09) and ConfigTemplatesJobAction's own javadoc for the
            method-name-parity guarantee this relies on. -->
-      <st:include class="${it.sharedBlocksClass}" page="tableToolsBlock.jelly" it="${it}"/>
-      <st:include class="${it.sharedBlocksClass}" page="versionHistoryBlock.jelly" it="${it}"/>
-      <st:include class="${it.sharedBlocksClass}" page="secretsManifestBlock.jelly" it="${it}"/>
-      <st:include class="${it.sharedBlocksClass}" page="baseChainBlock.jelly" it="${it}"/>
-      <st:include class="${it.sharedBlocksClass}" page="editorBlock.jelly" it="${it}"/>
+      <jc:tableToolsBlock/>
+      <jc:versionHistoryBlock/>
+      <jc:secretsManifestBlock/>
+      <jc:baseChainBlock/>
+      <jc:editorBlock/>
 
       <!-- HTML5 parsing note: <script> is never a void element - a self-closed <script .../>
            is NOT closed by a real browser's HTML parser, which instead keeps consuming markup
@@ -50,7 +60,7 @@
            HTML sits in between. Every script tag here must have an explicit closing tag. -->
       <script src="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/loader.js"></script>
       <link rel="stylesheet" href="${rootURL}/plugin/${it.pluginShortName}/monaco/vs/editor/editor.main.css"/>
-      <script src="${h.getViewResource(it, 'index.js')}"></script>
+      <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncJobScript"/>
 
       </div>
     </l:main-panel>

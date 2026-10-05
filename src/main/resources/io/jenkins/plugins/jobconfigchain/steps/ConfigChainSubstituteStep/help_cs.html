@@ -1,0 +1,6 @@
+<div>
+  Nahradí každý token <code>#{Dotted.Path}#</code> v cílovém souboru jeho hodnotou z efektivní konfigurace a soubor zapíše zpět. Hodnoty tajných údajů pocházejí z pověření Jenkinsu vázaných v manifestu tajných údajů sady konfigurace, nikdy z uloženého textu.
+  <p>Dosazování probíhá v jednom průchodu: každý token se nahradí jednou a vložený text se již znovu neprohledává. Sestavení selže, pokud token zůstane nevyřešen nebo chybí vázané pověření. Při úspěchu sestavení zaznamená vazbu nasazení (Deployment Binding) s přesnými použitými verzemi, takže stejnou konfiguraci lze později přehrát volbou <b>Znovu nasadit z běhu</b>.</p>
+  <p>Poznámka: při vrstvení konfigurací jsou pole JSON překryvem nahrazena celá a nikdy se nesloučí prvek po prvku.</p>
+  <p>Volejte jej s mapou, například <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Dřívější název <code>configTemplateSubstitute</code> stále funguje jako zastaralý alias.</p>
+</div>

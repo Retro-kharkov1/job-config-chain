@@ -1,6 +1,8 @@
 package io.jenkins.plugins.jobconfigchain.ui;
 
 import hudson.Extension;
+import hudson.model.Descriptor;
+import hudson.model.DescriptorVisibilityFilter;
 import hudson.model.Job;
 import hudson.model.JobProperty;
 import hudson.model.JobPropertyDescriptor;
@@ -12,6 +14,9 @@ import io.jenkins.plugins.jobconfigchain.model.ContentType;
 import io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion;
 import io.jenkins.plugins.jobconfigchain.model.SecretPlaceholder;
 
+import net.sf.json.JSONObject;
+import org.kohsuke.stapler.StaplerRequest2;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -21,7 +26,7 @@ import java.util.Objects;
 
 /**
  * Job-scoped sibling of {@code ConfigSet} (tech-lead design contract, 2026-09-09): holds a single
- * {@link Job}'s own Config Templates content directly as a {@link JobProperty}, rather than
+ * {@link Job}'s own Config Chain content directly as a {@link JobProperty}, rather than
  * associating the job with a separate {@code (projectKey, role, environment)}-keyed {@code
  * ConfigSet} elsewhere. Replaces {@code ConfigTemplatesJobProperty} (the old association-only
  * property) wholesale.
@@ -155,7 +160,7 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
         TreeNode root = TreeFormats.forType(type).parse(content);
         if (!root.isObject()) {
             throw new IllegalArgumentException(
-                    "Config Templates content must be a " + type + " object/root element");
+                    io.jenkins.plugins.jobconfigchain.model.Messages.JobProperty_ContentMustBeObject(type));
         }
         for (String dottedPath : secretsManifest.keySet()) {
             TreeNode leaf = TreePaths.get(root, dottedPath);
@@ -165,9 +170,7 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
             String asString = !leaf.isObject() && !leaf.isNull() ? leaf.leafAsString() : null;
             if (asString == null || !asString.equals(SecretPlaceholder.VALUE)) {
                 throw new IllegalArgumentException(
-                        "Manifest-declared secret path '" + dottedPath
-                                + "' must hold the placeholder '" + SecretPlaceholder.VALUE
-                                + "', not a real value");
+                        io.jenkins.plugins.jobconfigchain.model.Messages.SecretPath_MustHoldPlaceholder(dottedPath, SecretPlaceholder.VALUE));
             }
         }
     }
@@ -178,9 +181,21 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
      */
     public void activate(int versionNumber) {
         if (getVersion(versionNumber) == null) {
-            throw new IllegalArgumentException("No such version: " + versionNumber);
+            throw new IllegalArgumentException(io.jenkins.plugins.jobconfigchain.model.Messages.Version_NotFound(versionNumber));
         }
         this.activeVersionNumber = versionNumber;
+    }
+
+    /**
+     * Keeps the job's own live property across a job Configure -> Save. {@code Job.doConfigSubmit}
+     * rebuilds the property list from the submitted form; for a descriptor with no form entry it calls
+     * {@code reconfigure(req, null)} and keeps whatever is returned. Returning {@code this} (the live
+     * instance, never a snapshot taken when the form was rendered) preserves all versions and a version
+     * added through the plugin's own save endpoints while the Configure page was open.
+     */
+    @Override
+    public JobProperty<?> reconfigure(StaplerRequest2 req, JSONObject form) {
+        return this;
     }
 
     @Extension
@@ -192,17 +207,35 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
         }
 
         /**
-         * Always {@code false} — keeps this property off the generic {@code /job/<name>/configure}
-         * form, exactly for the reason the old {@code ConfigTemplatesJobProperty.DescriptorImpl}
-         * documented: the content is instead viewed AND edited on this job's own dedicated
-         * {@code /job/<name>/configTemplates} page (see {@link ConfigTemplatesJobAction}), reached
-         * from the job's own "Config Templates" sidebar item rather than the generic Configure form.
-         * Do NOT "fix" this back to {@code true} or add a {@code config.jelly} next to this
-         * descriptor to restore a Configure-page block for it.
+         * Always {@code true} so that this descriptor takes part in the property rebuild done on every
+         * job Configure -> Save; with {@code false} the property would be silently dropped. The content
+         * is still viewed and edited only on the job's own {@code /job/<name>/configChains} page (see
+         * {@link ConfigTemplatesJobAction}): the descriptor is an "invisible property" (core's
+         * {@code ReconfigurableDescribable} pattern) — an empty {@code config.jelly}, a
+         * {@link HideFromJobConfigure} visibility filter, {@link #newInstance} returning {@code null}
+         * and {@link JobConfigTemplateProperty#reconfigure} returning the live instance.
          */
         @Override
         public boolean isApplicable(Class<? extends Job> jobType) {
-            return false;
+            return true;
+        }
+
+        /**
+         * Never creates a property from a form: Save must not give a job without the property an empty
+         * one, and the Pipeline {@code properties([...])} generator yields no property.
+         */
+        @Override
+        public JobProperty<?> newInstance(StaplerRequest2 req, JSONObject formData) {
+            return null;
+        }
+    }
+
+    /** Hides the descriptor from rendered descriptor lists (job Configure page); persistence does not depend on it. */
+    @Extension
+    public static class HideFromJobConfigure extends DescriptorVisibilityFilter {
+        @Override
+        public boolean filter(Object context, Descriptor descriptor) {
+            return !(descriptor instanceof DescriptorImpl);
         }
     }
 }

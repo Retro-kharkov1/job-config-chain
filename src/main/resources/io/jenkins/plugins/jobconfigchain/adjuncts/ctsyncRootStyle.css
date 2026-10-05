@@ -1,0 +1,20 @@
+/* @include io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncSharedStyle */
+/*
+ * Global Config Sets list page-level styling (on top of ctsyncSharedStyle). Loaded via
+ * <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncRootStyle"/>.
+ * Sections, buttons, inputs, alerts and the page header are Jenkins core's own components.
+ */
+
+/* Opacity alone is not an accessible signal, which is why the Status column carries the word as
+   well - this only keeps the eye on the live inventory. */
+.ctsync-row--deleted { opacity: 0.62; }
+.ctsync-row--deleted td:first-child a { text-decoration: line-through; }
+
+/* New Config Set form: a stacked column capped at a comfortable reading width. The Create button
+   sits OUTSIDE the section, in its own .ctsync-btn-row, the way a core page separates an input
+   group from its primary action. */
+.ctsync-newconfig-form { display: flex; flex-direction: column; gap: 0.875rem; max-width: 480px; }
+.ctsync-newconfig-form .jenkins-input { width: 100% !important; }
+.ctsync-newconfig-form .ctsync-content-type-row { margin: 0; }
+.ctsync-newconfig-form .ctsync-content-type-label { display: block; margin-bottom: 0.25rem; }
+.ctsync-newconfig-form .ctsync-content-type-hint { margin-bottom: 0.5rem; }

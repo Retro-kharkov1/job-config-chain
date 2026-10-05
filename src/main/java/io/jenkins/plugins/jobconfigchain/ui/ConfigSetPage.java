@@ -82,16 +82,9 @@ import java.util.stream.Collectors;
 // worked fine even when this class was package-private — that asymmetry is exactly what made this
 // bug look like a persistence problem during Milestone-2 UI test-writing, not a visibility one).
 public abstract class ConfigSetPage {
-    /**
-     * Resolved {@link SharedBlocks} class for {@code st:include class="${it.sharedBlocksClass}"},
-     * mirroring {@link ConfigTemplatesJobAction#getSharedBlocksClass()} - see that method for why
-     * the class object is bound rather than a literal String.
-     */
-    public Class<SharedBlocks> getSharedBlocksClass() {
-        return SharedBlocks.class;
-    }
 
-
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     final String projectKey;
     final ConfigSetRepository repository;
 
@@ -307,7 +300,7 @@ public abstract class ConfigSetPage {
             // Also what refuses creating a new Config Set over a withdrawn one name: this page is
             // reached for any key, and a save is how a Config Set comes into existence.
             return SaveOutcome.error(
-                    "This Config Set is deleted. Restore it or purge it before saving to this name.");
+                    Messages.Page_DeletedRestoreOrPurge());
         }
         try {
             ConfigSet configSet = getConfigSet();
@@ -671,7 +664,7 @@ public abstract class ConfigSetPage {
         JSONObject result = new JSONObject();
         result.put("ok", false);
         result.put("errorCode", "DELETED");
-        result.put("error", "This Config Set is deleted. Restore it before editing.");
+        result.put("error", Messages.Page_DeletedRestoreFirst());
         return result;
     }
 
@@ -686,7 +679,7 @@ public abstract class ConfigSetPage {
         ConfigSetVersion activated = configSet == null ? null : configSet.getVersion(version);
         if (activated == null) {
             result.put("ok", false);
-            result.put("error", "No such version: " + version);
+            result.put("error", Messages.Page_NoSuchVersion(version));
             return result;
         }
         configSet.activate(version);
@@ -768,7 +761,7 @@ public abstract class ConfigSetPage {
         JSONObject result = new JSONObject();
         if (path == null || path.trim().isEmpty() || credentialId == null || credentialId.trim().isEmpty()) {
             result.put("ok", false);
-            result.put("error", "Both a dotted path and a credential ID are required");
+            result.put("error", Messages.Page_PathAndCredentialRequired());
             return result;
         }
         // The picker only ever offers real, currently-existing credential IDs, but
@@ -778,8 +771,7 @@ public abstract class ConfigSetPage {
         // break the actual secret-injection pipeline step later, far from where the mistake was made.
         if (!getAvailableCredentialIds().contains(credentialId)) {
             result.put("ok", false);
-            result.put("error", "No such credential: " + credentialId
-                    + " — pick one of the credentials currently registered in Jenkins");
+            result.put("error", Messages.Page_NoSuchCredential(credentialId));
             return result;
         }
         ConfigSet configSet = getConfigSet();
@@ -855,13 +847,13 @@ public abstract class ConfigSetPage {
         JSONObject result = new JSONObject();
         if (path == null || path.trim().isEmpty()) {
             result.put("ok", false);
-            result.put("error", "A dotted path is required");
+            result.put("error", Messages.Page_PathRequired());
             return result;
         }
         ConfigSet configSet = getConfigSet();
         if (configSet == null || !configSet.getSecretsManifest().containsKey(path)) {
             result.put("ok", false);
-            result.put("error", "No such secret path bound: " + path);
+            result.put("error", Messages.Page_NoSuchSecretPath(path));
             return result;
         }
         configSet.removeSecretManifestEntry(path);
@@ -974,13 +966,13 @@ public abstract class ConfigSetPage {
         ConfigSet configSet = getConfigSet();
         if (configSet == null) {
             result.put("ok", false);
-            result.put("error", "No such Config Set");
+            result.put("error", Messages.Page_NoSuchConfigSet());
             return result;
         }
         ConfigSetVersion v = configSet.getVersion(version);
         if (v == null) {
             result.put("ok", false);
-            result.put("error", "No such version: " + version);
+            result.put("error", Messages.Page_NoSuchVersion(version));
             return result;
         }
         result.put("ok", true);
@@ -1090,7 +1082,7 @@ public abstract class ConfigSetPage {
             TreeNode parsed = TreeFormats.forType(type).parse(content == null ? "" : content);
             if (!parsed.isObject()) {
                 result.put("ok", false);
-                result.put("error", "content must have a top-level object/root element");
+                result.put("error", Messages.Page_ContentNeedsRoot());
                 return result;
             }
             result.put("ok", true);

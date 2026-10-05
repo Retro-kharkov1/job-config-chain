@@ -88,7 +88,6 @@
          artifactId are both derived from it below so the two never drift apart. -->
     <jenkins.baseline>2.568</jenkins.baseline>
     <jenkins.version>${jenkins.baseline}.3</jenkins.version>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- maven.compiler.source/target/release and java.level are intentionally NOT redeclared
          here (Jenkins Hosting Checker requirement) — the parent POM
          (org.jenkins-ci.plugins:plugin) already declares maven.compiler.release=17 for this
@@ -228,6 +227,13 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <!-- Test-only: supplies the Pipeline `properties([...])` step (JobPropertyStep) so the C11 (P1)
+           tests exercise it against our job property. Version managed by the imported bom. -->
+      <groupId>org.jenkins-ci.plugins.workflow</groupId>
+      <artifactId>workflow-multibranch</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>credentials</artifactId>
     </dependency>
@@ -243,7 +249,7 @@
            ConfigTemplatesRootAction/ConfigTemplatesJobAction#getIconFileName(). Without this as a
            real runtime dependency the symbol cannot be resolved on a live controller and Jenkins
            renders its missing-symbol placeholder instead of the icon (owner report, 2026-09-18:
-           a cross appeared on both "Config Templates" menu entries). Version is managed by the
+           a cross appeared on both "Config Chains" menu entries). Version is managed by the
            imported bom-${jenkins.baseline}.x. -->
       <groupId>io.jenkins.plugins</groupId>
       <artifactId>ionicons-api</artifactId>

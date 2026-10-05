@@ -1,0 +1,15 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout">
+  <!--
+    Confirm-by-typing-the-name, shared by the Config Set page (delete) and the global list page
+    (purge). Both are destructive to whoever is building against the Config Set, so both make the
+    operator type its name rather than click Yes.
+
+    CSP: no inline &lt;style&gt;/&lt;script&gt;. The CSS/JS for this tag lives in the shared
+    adjuncts ctsyncSharedStyle / ctsyncSharedScript (io.jenkins.plugins.jobconfigchain.adjuncts),
+    which every host page loads once through its own page adjunct.
+  -->
+  <template id="ctsyncConfirmStrings"
+            data-cancel-label="${%confirm.cancelLabel}"
+            data-name-mismatch="${%confirm.nameMismatch}"/>
+</j:jelly>

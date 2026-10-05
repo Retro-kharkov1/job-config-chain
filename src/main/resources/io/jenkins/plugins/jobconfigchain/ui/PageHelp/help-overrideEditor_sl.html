@@ -1,0 +1,4 @@
+<div>
+  Vsebina tega urejevalnika se uporabi povrh združenih osnovnih naborov konfiguracij. Zapišite samo to, kar se razlikuje od osnov; vsak izpuščen ključ se podeduje. V JSON in YAML nastavitev ključa na <code>null</code> odstrani ključ iz rezultata.
+  <p><b>Polja se nadomestijo v celoti.</b> Objekti se združujejo ključ za ključem, vendar se seznam (polje JSON, zaporedje YAML ali ponovljeni sorodni elementi v XML) nikoli ne združi element za elementom. Če ima osnova <code>[1, 2, 3]</code> in ta urejevalnik nastavi <code>[4]</code>, je rezultat <code>[4]</code>, ne <code>[1, 2, 3, 4]</code>. Če želite spremeniti en element seznama, tu ponovite celoten seznam.</p>
+</div>

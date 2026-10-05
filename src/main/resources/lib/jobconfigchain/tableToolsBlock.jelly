@@ -1,0 +1,37 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout">
+  <!--
+    Per-column filtering for the plugin's data tables (owner request, 2026-09-21).
+
+    Sorting itself is core's: Jenkins ships scripts/sortable.js, loads it on every page, and
+    activates it for any table carrying the "sortable" class. This block only adds filtering, which
+    core has no equivalent for - and is shaped around two hard constraints found by reading core's
+    sortable.js (2.555.3) rather than assuming:
+
+      * It sorts `table.rows` from index 1 onward, and that collection spans thead AND tbody. A
+        second header row is therefore treated as data: core physically moves it into tbody and
+        sorts it among the rows. Seen live - an earlier version of this block put the filters in
+        their own thead row, and the first sort dragged that row into the body.
+      * getSorter() reads `rows[1]` to decide whether a column sorts as text, number or date, so an
+        extra row near the top corrupts that detection silently - something no amount of
+        keep-it-pinned styling would fix.
+
+    Hence the filter controls live INSIDE the existing header cells, and the status line lives
+    OUTSIDE the table. Nothing is added to the table's row set at all.
+
+    One implementation, three consumers: the Config Sets list, Version history and Secrets manifest
+    tag their table with ctsync-filterable. The Base chain table deliberately does not - its row
+    order IS the merge-patch precedence, so neither sorting nor filtering may reorder or hide rows
+    there without misrepresenting which value wins.
+  -->
+  <!--
+    CSP: no inline &lt;style&gt;/&lt;script&gt;. The CSS/JS for this tag lives in the shared
+    adjuncts ctsyncSharedStyle / ctsyncSharedScript (io.jenkins.plugins.jobconfigchain.adjuncts),
+    which every host page loads once through its own page adjunct.
+  -->
+  <template id="ctsyncTableToolsStrings"
+            data-filter-placeholder="${%filter.placeholder}"
+            data-count-label="${%filter.count}"
+            data-no-matches="${%filter.noMatches}"
+            data-any-label="${%filter.any}"/>
+</j:jelly>

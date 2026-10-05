@@ -60,7 +60,7 @@ public class TableFilterBehaviourTest {
         // The page pulls core assets irrelevant to this test; a missing one must not fail the run.
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
         wc.setCssErrorHandler(new SilentCssErrorHandler());
-        HtmlPage page = wc.goTo("manage/configTemplates/");
+        HtmlPage page = wc.goTo("manage/configChains/");
         wc.waitForBackgroundJavaScript(3000);
         return page;
     }

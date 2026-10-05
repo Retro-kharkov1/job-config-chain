@@ -1,0 +1,8 @@
+/* @include io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncSharedStyle */
+/*
+ * Common Config Set editor page-level styling (on top of ctsyncSharedStyle). Loaded via
+ * <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncCommonStyle"/>.
+ * Sections, buttons, inputs, alerts and the page header are Jenkins core's own components
+ * (f:section, jenkins-button, jenkins-input, jenkins-alert, l:app-bar); nothing here re-skins them.
+ */
+.ctsync-page .jenkins-section .ctsync-secret-form { margin: 0.5rem 0 0; }

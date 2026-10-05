@@ -1,0 +1,129 @@
+<?jelly escape-by-default='true'?>
+<!--
+  Block 1 of 4: version history. Shared between EnvConfigSetPage/index.jelly and
+  ConfigTemplatesJobAction/index.jelly (tech-lead design contract, 2026-09-09) — rendered via
+  <jc:versionHistoryBlock/>. Relies on ${it} exposing the
+  SAME getter names on both hosts: exists, versions (versionNumber/timestampEpochMillis/author/note/
+  baseChain[projectKey/pinMode/pinnedVersionNumber]), activeVersion, explicitlyStandaloneSupported.
+  Every id/function referenced here (versionHistoryTbody, historyRow-<n>, selectHistoryRow,
+  toggleBaseChainDetail, activateVersion, formatTimestamp) must be defined by BOTH hosts' own
+  page-level <script> — see each host's index.jelly for its own copy of that wiring.
+-->
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form" xmlns:l="/lib/layout">
+  <div id="versionHistoryDetails">
+  <f:section title="${%versionHistory.heading}">
+    <p>${%versionHistory.hint}</p>
+    <!-- Empty-state row (ux-ui-designer correction, 2026-09-11): a version-less Config Set renders
+         as ONE spanning row inside the table body — the column header row stays visible either
+         way. renderVersionHistoryRows (both hosts' own script) inserts/removes this row directly
+         instead of toggling a separate placeholder div. -->
+    <div id="versionHistoryTableWrap" class="ctsync-scroll-table">
+      <table class="jenkins-table ctsync-history-table sortable ctsync-filterable ctsync-w-full">
+        <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th>${%column.baseChain}</th><th data-ctsync-filter="enum">${%column.active}</th><th data-sort-disable="true">${%column.actions}</th></tr></thead>
+        <tbody id="versionHistoryTbody">
+          <j:if test="${it.versions.isEmpty()}">
+            <tr class="ctsync-empty-state-row"><td colspan="7">${%emptyState.noVersions}</td></tr>
+          </j:if>
+          <j:forEach var="v" items="${it.versions}">
+            <!-- CSP migration: onclick/onkeydown removed — ConfigTemplatesJobAction/index.js wires
+                 this via event delegation on #versionHistoryTbody, keyed off data-version-number
+                 (see that file's "Version history row delegation" section). -->
+            <tr id="historyRow-${v.versionNumber}" class="ctsync-history-row"
+                data-version-number="${v.versionNumber}"
+                tabindex="0" role="button">
+              <td data-th="${%column.version}">v${v.versionNumber}</td>
+              <td data-th="${%column.created}" class="ctsync-created-cell" data-epoch="${v.timestampEpochMillis}">${v.timestampEpochMillis}</td>
+              <td data-th="${%column.createdBy}">${v.author}</td>
+              <td data-th="${%column.note}">${v.note}</td>
+              <td data-th="${%column.baseChain}">
+                <!-- Requirement history, EnvConfigSetPage only (see base-chains.md's "Standalone env
+                     Config Sets" section): a version saved as explicitlyStandalone renders a
+                     badge INSTEAD OF the N-bases link. Never reached for a host where
+                     explicitlyStandaloneSupported is false (e.g. ConfigTemplatesJobAction) — guarded
+                     by an outer j:if rather than relying on JEXL short-circuiting, since
+                     v.explicitlyStandalone does not exist at all on a JobConfigTemplateVersion. -->
+                <j:choose>
+                  <j:when test="${it.explicitlyStandaloneSupported and v.explicitlyStandalone}">
+                    <span class="ctsync-standalone-badge" title="${%standalone.title}">
+                      <l:icon src="symbol-flag-outline plugin-ionicons-api" class="icon-sm"/> ${%standalone.label}
+                    </span>
+                  </j:when>
+                  <j:otherwise>
+                    <a href="#" class="ctsync-basechain-toggle" data-version-number="${v.versionNumber}">
+                      <l:icon src="symbol-chevron-forward" class="icon-sm"/> ${%baseChain.count(v.baseChain.size())}
+                    </a>
+                    <div id="baseChainDetail-${v.versionNumber}" class="ctsync-basechain-history-detail ctsync-hidden">
+                      <j:choose>
+                        <j:when test="${v.baseChain.isEmpty()}">
+                          <div>${%baseChain.noneDeclared}</div>
+                        </j:when>
+                        <j:otherwise>
+                          <j:forEach var="ref" items="${v.baseChain}">
+                            <div>
+                              ${ref.projectKey} &#8212;
+                              <j:choose>
+                                <j:when test="${ref.pinMode == 'PINNED'}">${%mode.pin} (v${ref.pinnedVersionNumber})</j:when>
+                                <j:otherwise>${%mode.active}</j:otherwise>
+                              </j:choose>
+                            </div>
+                          </j:forEach>
+                        </j:otherwise>
+                      </j:choose>
+                    </div>
+                  </j:otherwise>
+                </j:choose>
+              </td>
+              <td data-th="${%column.active}">
+                <j:if test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
+                  <span class="ctsync-icon-text"><l:icon src="symbol-checkmark-circle plugin-ionicons-api" class="icon-sm"/> ${%activeStatus}</span>
+                </j:if>
+              </td>
+              <td data-th="${%column.actions}">
+                <j:choose>
+                  <j:when test="${it.activeVersion != null and it.activeVersion.versionNumber == v.versionNumber}">
+                    <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
+                            disabled="disabled" data-always-disabled="true"
+                            title="${%activate.alreadyActiveTitle}">${%activate.label}</button>
+                  </j:when>
+                  <j:otherwise>
+                    <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
+                            data-version-number="${v.versionNumber}"
+                            title="${%activate.title(v.versionNumber)}">${%activate.label}</button>
+                  </j:otherwise>
+                </j:choose>
+              </td>
+            </tr>
+          </j:forEach>
+        </tbody>
+      </table>
+    </div>
+    <template id="historyRowTemplate"
+              data-active-label="${%activeStatus}"
+              data-already-active-title="${%activate.alreadyActiveTitle}"
+              data-base-count="${%baseChain.count}"
+              data-no-declared-chain="${%baseChain.noneDeclared}"
+              data-mode-active="${%mode.active}"
+              data-mode-pin="${%mode.pin}"
+              data-activate-title="${%activate.title}">
+      <tr class="ctsync-history-row" tabindex="0" role="button">
+        <td data-th="${%column.version}" class="js-version"/>
+        <td data-th="${%column.created}" class="js-created"/>
+        <td data-th="${%column.createdBy}" class="js-createdBy"/>
+        <td data-th="${%column.note}" class="js-note"/>
+        <td data-th="${%column.baseChain}">
+          <span class="ctsync-standalone-badge js-standalone-badge ctsync-hidden"
+                title="${%standalone.title}"><l:icon src="symbol-flag-outline plugin-ionicons-api" class="icon-sm"/> ${%standalone.label}</span>
+          <a href="#" class="ctsync-basechain-toggle js-basechain-toggle">
+            <l:icon src="symbol-chevron-forward" class="icon-sm"/> <span class="js-basechain-count"/></a>
+          <div class="ctsync-basechain-history-detail js-basechain-detail ctsync-hidden"/>
+        </td>
+        <td data-th="${%column.active}" class="js-activeBadge"/>
+        <td data-th="${%column.actions}">
+          <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn js-activate-btn">
+            ${%activate.label}</button>
+        </td>
+      </tr>
+    </template>
+  </f:section>
+  </div>
+</j:jelly>

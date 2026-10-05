@@ -1,4 +1,4 @@
-# Disposable e2e-test Jenkins for config-template-sync
+# Disposable e2e-test Jenkins for job-config-chain
 
 A throwaway, single-command Jenkins instance with this repo's plugin built from source,
 installed, and pre-seeded with test data — for manually poking at the plugin in a real
@@ -22,6 +22,8 @@ up` reuses whatever was last built.)
 Open **http://localhost:28080** — no login screen, you land straight on the dashboard.
 
 ## Iterating on the plugin (the fast loop)
+
+For pure UI work without Docker, `mvn hpi:run` is faster still; see [CONTRIBUTING.md](../../CONTRIBUTING.md#fast-loop-for-ui-changes-mvn-hpirun).
 
 `docker compose up --build` rebuilds the image, which means a full dependency download plus the
 entire test suite inside Dockerfile stage 1 — minutes, to look at a one-line Jelly/CSS change.
@@ -53,7 +55,7 @@ docker compose down -v
 
 ## What's pre-seeded (via `init.groovy.d/020-seed-config-template-sync.groovy`)
 
-- **Config Sets** for `projectKey = "test-app"`:
+- **Config Sets** for the config key `test-app` (stored internally as `projectKey`):
   - a **common** Config Set with 2 versions (v2 is active) — `App.Name`, `App.Version`
     (added in v2), and a manifest-declared secret at `Database.Password` (stored as the
     `__SECRET__` placeholder, never a real value)
@@ -62,10 +64,10 @@ docker compose down -v
 - **Credential** `test-app-dev-db-password` (Secret text / `StringCredentialsImpl`,
   global scope) — value `S3cr3tDbPass!`. This is a fake, throwaway value for this local
   test instance only.
-- **Pipeline job** `config-template-sync-e2e` — runs `configTemplateValidate` then
-  `configTemplateSubstitute` against a sample `appsettings.json`-shaped file with matching
-  `#{Path}#` tokens. `configTemplateSubstitute` resolves `Database.Password` exclusively
-  from the `test-app-dev-db-password` credential above (FR-13/FR-21) — the Jenkinsfile does
+- **Pipeline job** `config-template-sync-e2e` — runs `configChainValidate` then
+  `configChainSubstitute` against a sample `appsettings.json`-shaped file with matching
+  `#{Path}#` tokens. `configChainSubstitute` resolves `Database.Password` exclusively
+  from the `test-app-dev-db-password` credential above — the Jenkinsfile does
   **not** manually inject it via `withCredentials`/`withEnv`, proving the step resolves the
   manifest-declared secret itself. **Not auto-triggered** — click **Build Now** on the job
   yourself to watch it run.

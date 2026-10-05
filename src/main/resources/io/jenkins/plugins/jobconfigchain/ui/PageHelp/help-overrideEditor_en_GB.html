@@ -1,0 +1,8 @@
+<div>
+  The content of this editor is applied on top of the merged base Config Sets. Write only what differs from the
+  bases; every key you leave out is inherited. In JSON and YAML, setting a key to <code>null</code> removes it from the result.
+  <p><b>Arrays are replaced wholesale.</b> Objects are merged key by key, but a list (a JSON array, a YAML
+  sequence, or repeated sibling elements in XML) is never merged element by element. If a base has
+  <code>[1, 2, 3]</code> and this editor sets <code>[4]</code>, the result is <code>[4]</code>, not
+  <code>[1, 2, 3, 4]</code>. To change one element of a list, repeat the whole list here.</p>
+</div>

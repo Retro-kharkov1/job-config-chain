@@ -1,0 +1,8 @@
+<div>
+  Pārbauda mērķa failu pret efektīvo konfigurāciju pirms izvietošanas un neko nemaina. Būvējums neizdodas, ja
+  failā ir <code>#{Dotted.Path}#</code> marķieris, kuram nav atbilstošas atslēgas (drukas kļūda vai trūkstoša atslēga). Atslēgas, kuras neviens marķieris
+  neizmanto, tiek ziņotas tikai kā brīdinājums.
+  <p>Parasti tiek izsaukts tieši pirms <code>configChainSubstitute</code> ar tiem pašiem parametriem, piemēram,
+  <code>configChainValidate(file: &#39;app.json&#39;)</code>. Agrākais nosaukums <code>configTemplateValidate</code> joprojām darbojas
+  kā novecojis alias.</p>
+</div>

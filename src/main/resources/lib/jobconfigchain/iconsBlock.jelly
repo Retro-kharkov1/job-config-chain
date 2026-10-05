@@ -1,0 +1,23 @@
+<?jelly escape-by-default='true'?>
+<!--
+  Icon set for the script-built parts of the pages. Rows and badges built in script cannot call
+  l:icon themselves, so the symbols are rendered once here, by Jenkins, as inert template content,
+  and the page script clones them by name (ctsyncIcon in ctsyncSharedScript.js). Same pattern the
+  row templates use for localized text. Core symbols where core has one, ionicons-api otherwise
+  (already a dependency of this plugin). Space-separated "symbol-NAME plugin-ionicons-api", never
+  dash-joined.
+-->
+<j:jelly xmlns:j="jelly:core" xmlns:l="/lib/layout">
+  <template id="ctsyncIcons">
+    <span data-icon="up"><l:icon src="symbol-chevron-up" class="icon-sm"/></span>
+    <span data-icon="down"><l:icon src="symbol-chevron-down" class="icon-sm"/></span>
+    <span data-icon="remove"><l:icon src="symbol-close" class="icon-sm"/></span>
+    <span data-icon="expanded"><l:icon src="symbol-chevron-down" class="icon-sm"/></span>
+    <span data-icon="collapsed"><l:icon src="symbol-chevron-forward" class="icon-sm"/></span>
+    <span data-icon="external"><l:icon src="symbol-external" class="icon-sm"/></span>
+    <span data-icon="info"><l:icon src="symbol-information-circle" class="icon-sm"/></span>
+    <span data-icon="lock"><l:icon src="symbol-lock-closed" class="icon-sm"/></span>
+    <span data-icon="active"><l:icon src="symbol-checkmark-circle plugin-ionicons-api" class="icon-sm"/></span>
+    <span data-icon="standalone"><l:icon src="symbol-flag-outline plugin-ionicons-api" class="icon-sm"/></span>
+  </template>
+</j:jelly>

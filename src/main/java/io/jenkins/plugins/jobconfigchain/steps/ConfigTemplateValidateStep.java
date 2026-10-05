@@ -42,13 +42,25 @@ import java.util.Set;
  * entirely if a prior {@code setupConfigTemplate} call in the same build already supplied them (see
  * pipeline-steps.md's "setupConfigTemplate build-scoped convenience step"); explicit call-site
  * values always win per parameter. Only {@code file} remains mandatory.</p>
+ *
+ * <p><b>Deprecated alias (public-API rename).</b> Kept whole - class, nested {@code Execution} and
+ * {@code DescriptorImpl} names, fields and {@code serialVersionUID} - so older Jenkinsfiles, replayed builds
+ * and in-flight Pipeline state that name this step keep working unchanged. New Jenkinsfiles use
+ * {@code configChainValidate}, which delegates to the same {@code Execution}. The Snippet Generator lists this step
+ * only under the advanced/deprecated entries.</p>
+ *
+ * @deprecated use {@link ConfigChainValidateStep} ({@code configChainValidate})
  */
+@Deprecated
 public class ConfigTemplateValidateStep extends Step {
 
     private String file;
     private Boolean useBase;
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     private String configKey;
     private Integer version;
+    private String encoding;
 
     @DataBoundConstructor
     public ConfigTemplateValidateStep() {
@@ -97,9 +109,19 @@ public class ConfigTemplateValidateStep extends Step {
         this.version = version;
     }
 
+    /** Charset of the target file; {@code null} = UTF-8 with fallback to the agent default. */
+    public String getEncoding() {
+        return encoding;
+    }
+
+    @DataBoundSetter
+    public void setEncoding(String encoding) {
+        this.encoding = encoding == null || encoding.trim().isEmpty() ? null : encoding.trim();
+    }
+
     @Override
     public StepExecution start(StepContext context) {
-        return new Execution(context, file, useBase, configKey, version);
+        return new Execution(context, file, useBase, configKey, version, encoding);
     }
 
     static class Execution extends SynchronousNonBlockingStepExecution<Void> {
@@ -108,8 +130,22 @@ public class ConfigTemplateValidateStep extends Step {
 
         private final String file;
         private final Boolean useBase;
+        // Identifier of a config set/chain, not a credential or secret.
+        @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
         private final String configKey;
         private final Integer version;
+
+        /**
+         * Added after the first release: absent (null) in executions serialized by older builds,
+         * which means "UTF-8 with fallback to the agent default". Keep non-final and null-tolerant.
+         */
+        private String encoding;
+
+        Execution(StepContext context, String file, Boolean useBase, String configKey, Integer version,
+                  String encoding) {
+            this(context, file, useBase, configKey, version);
+            this.encoding = encoding;
+        }
 
         Execution(StepContext context, String file, Boolean useBase, String configKey, Integer version) {
             super(context);
@@ -136,7 +172,7 @@ public class ConfigTemplateValidateStep extends Step {
             StepSupport.ResolvedEffective resolved = StepSupport.resolveJobScoped(
                     repository, job, params.useBase, params.configKey, params.version);
 
-            String targetContent = readTargetFile(workspace, params.file);
+            String targetContent = readTargetFile(workspace, params.file, listener);
 
             String resolutionMode = StepSupport.describeResolutionMode(params.useBase, params.configKey, params.version);
             StepSupport.validateOrThrow(resolved.mergedConfig, targetContent, listener,
@@ -146,17 +182,25 @@ public class ConfigTemplateValidateStep extends Step {
             return null;
         }
 
-        private String readTargetFile(FilePath workspace, String file) throws IOException, InterruptedException {
+        private String readTargetFile(FilePath workspace, String file, TaskListener listener)
+                throws IOException, InterruptedException {
             FilePath target = workspace.child(file);
+            TargetFileIO.warnIfOutsideWorkspace(workspace, file, listener);
             if (!target.exists()) {
                 throw new AbortException("Target config file not found: " + file);
             }
-            return target.readToString();
+            return TargetFileIO.read(target, encoding, listener, file).text;
         }
     }
 
     @Extension
     public static class DescriptorImpl extends StepDescriptor {
+
+        /** Deprecated alias: only listed under the Snippet Generator's advanced entries. */
+        @Override
+        public boolean isAdvanced() {
+            return true;
+        }
 
         @Override
         public String getFunctionName() {
@@ -165,7 +209,7 @@ public class ConfigTemplateValidateStep extends Step {
 
         @Override
         public String getDisplayName() {
-            return io.jenkins.plugins.jobconfigchain.ui.Messages.Step_Validate_DisplayName();
+            return io.jenkins.plugins.jobconfigchain.ui.Messages.Step_Validate_DeprecatedDisplayName();
         }
 
         @Override

@@ -13,6 +13,8 @@ public final class ResolvedBaseVersion implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     private final String projectKey;
     private final int versionNumber;
 

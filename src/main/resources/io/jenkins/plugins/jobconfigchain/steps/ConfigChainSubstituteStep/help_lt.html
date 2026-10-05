@@ -1,0 +1,12 @@
+<div>
+  Pakeičia kiekvieną <code>#{Dotted.Path}#</code> žetoną tiksliniame faile jo reikšme iš galiojančios konfigūracijos
+  ir įrašo failą atgal. Slaptos reikšmės imamos iš Jenkins prisijungimo duomenų, susietų konfigūracijos rinkinio paslapčių manifeste,
+  niekada iš saugomo teksto.
+  <p>Pakeitimas atliekamas vienu praėjimu: kiekvienas žetonas pakeičiamas vieną kartą, o įterptas tekstas niekada nepereinamas iš naujo. Surinkimas nepavyksta,
+  jei žetonas lieka neišspręstas arba trūksta susietų prisijungimo duomenų. Sėkmės atveju surinkimas užregistruoja naudotų tikslių versijų
+  diegimo susiejimą (Deployment Binding), kad tą pačią konfigūraciją vėliau būtų galima pakartoti pasirinkus <b>Diegti iš naujo iš paleidimo</b>.</p>
+  <p>Pastaba: kai konfigūracijos sluoksniuojamos, viršutinis sluoksnis JSON masyvus pakeičia visiškai ir niekada jų nesujungia
+  po elementą.</p>
+  <p>Iškvieskite jį su Map, pavyzdžiui, <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Ankstesnis pavadinimas
+  <code>configTemplateSubstitute</code> vis dar veikia kaip pasenęs slapyvardis.</p>
+</div>

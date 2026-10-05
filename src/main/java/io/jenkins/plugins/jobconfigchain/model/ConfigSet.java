@@ -25,6 +25,8 @@ public class ConfigSet implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /** Structural identifier tying a common Config Set to its env Config Sets. */
+    // Identifier of a config set/chain, not a credential or secret.
+    @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
     private final String projectKey;
 
     private final ConfigSetRole role;
@@ -307,7 +309,7 @@ public class ConfigSet implements Serializable {
         TreeNode root = TreeFormats.forType(this.contentType).parse(content);
         if (!root.isObject()) {
             throw new IllegalArgumentException(
-                    "Config Set content must be a " + contentType + " object/root element");
+                    Messages.ConfigSet_ContentMustBeObject(contentType));
         }
         for (String dottedPath : secretsManifest.keySet()) {
             TreeNode leaf = TreePaths.get(root, dottedPath);
@@ -319,9 +321,7 @@ public class ConfigSet implements Serializable {
             String asString = !leaf.isObject() && !leaf.isNull() ? leaf.leafAsString() : null;
             if (asString == null || !asString.equals(SecretPlaceholder.VALUE)) {
                 throw new IllegalArgumentException(
-                        "Manifest-declared secret path '" + dottedPath
-                                + "' must hold the placeholder '" + SecretPlaceholder.VALUE
-                                + "', not a real value");
+                        Messages.SecretPath_MustHoldPlaceholder(dottedPath, SecretPlaceholder.VALUE));
             }
         }
     }
@@ -334,7 +334,7 @@ public class ConfigSet implements Serializable {
      */
     public void activate(int versionNumber) {
         if (getVersion(versionNumber) == null) {
-            throw new IllegalArgumentException("No such version: " + versionNumber);
+            throw new IllegalArgumentException(Messages.Version_NotFound(versionNumber));
         }
         this.activeVersionNumber = versionNumber;
     }

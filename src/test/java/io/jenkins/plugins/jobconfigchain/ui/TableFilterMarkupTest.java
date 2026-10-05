@@ -35,8 +35,11 @@ public class TableFilterMarkupTest {
     private static final File UI_RESOURCES =
             new File("src/main/resources/io/jenkins/plugins/jobconfigchain/ui");
 
+    private static final File TAGLIB =
+            new File("src/main/resources/lib/jobconfigchain");
+
     private static final File BLOCK =
-            new File(UI_RESOURCES, "SharedBlocks/tableToolsBlock.jelly");
+            new File(TAGLIB, "tableToolsBlock.jelly");
 
     // CSP migration (Jenkins hosting requirement, see
     // https://www.jenkins.io/doc/developer/security/csp/): the filter/sort JS this class guards
@@ -47,9 +50,7 @@ public class TableFilterMarkupTest {
     // a SharedBlocks-relative path. The three copies are required to stay byte-identical, so the
     // JS-content guards below check all three rather than the now-empty jelly fragment.
     private static final List<File> JS_COPIES = List.of(
-            new File(UI_RESOURCES, "CommonConfigSetPage/index.js"),
-            new File(UI_RESOURCES, "ConfigTemplatesJobAction/index.js"),
-            new File(UI_RESOURCES, "ConfigTemplatesRootAction/index.js"));
+            new File("src/main/resources/io/jenkins/plugins/jobconfigchain/adjuncts/ctsyncSharedScript.js"));
 
     private static String read(File f) throws IOException {
         return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
@@ -61,7 +62,7 @@ public class TableFilterMarkupTest {
      *  code (e.g. building the version-history/secrets-manifest rows) that legitimately DOES
      *  add/remove tbody rows and is out of scope for this guard. */
     private static final String TABLE_TOOLS_BLOCK_MARKER =
-            "/* ---- SharedBlocks/tableToolsBlock.jelly";
+            "/* ---- Table filtering (tableToolsBlock tag)";
 
     private static String extractTableToolsBlock(String jsFile) {
         int start = jsFile.indexOf(TABLE_TOOLS_BLOCK_MARKER);
@@ -72,12 +73,16 @@ public class TableFilterMarkupTest {
     }
 
     private static List<File> jellyFiles() throws IOException {
-        try (var paths = Files.walk(UI_RESOURCES.toPath())) {
-            return paths.map(java.nio.file.Path::toFile)
-                    .filter(f -> f.getName().endsWith(".jelly"))
-                    .sorted()
-                    .toList();
+        List<File> all = new ArrayList<>();
+        for (File root : List.of(UI_RESOURCES, TAGLIB)) {
+            try (var paths = Files.walk(root.toPath())) {
+                all.addAll(paths.map(java.nio.file.Path::toFile)
+                        .filter(f -> f.getName().endsWith(".jelly"))
+                        .sorted()
+                        .toList());
+            }
         }
+        return all;
     }
 
     /** Every {@code <table ...>} opening tag in a file, with its attribute text. */
@@ -108,7 +113,7 @@ public class TableFilterMarkupTest {
 
     @Test
     public void theBaseChainTableIsNeitherSortableNorFilterable() throws Exception {
-        String jelly = read(new File(UI_RESOURCES, "SharedBlocks/baseChainBlock.jelly"));
+        String jelly = read(new File(TAGLIB, "baseChainBlock.jelly"));
         for (String tag : tableTags(jelly)) {
             // Row order in this table IS the RFC 7396 merge-patch precedence - later rows win on
             // overlapping keys. Reordering it would misstate which value a build actually gets,

@@ -1,0 +1,111 @@
+/* @include io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncSharedStyle */
+/*
+ * Job-level Config Chains page-level styling (on top of ctsyncSharedStyle). Loaded via
+ * <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncJobStyle"/>.
+ * Sections, buttons, inputs, alerts and the page header are Jenkins core's own components; only the
+ * merge grid and the base-chain table (no core equivalent) are styled here, with core tokens.
+ */
+
+/* ---- Merge grid (Merged bases / Own override / Merged result) ---- */
+.ctsync-editor-toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+.ctsync-merge-grid { max-width: 100%; box-sizing: border-box; margin-bottom: 1rem; }
+.ctsync-merge-top { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; min-width: 0; align-items: stretch; }
+.ctsync-merge-full { margin-top: 0.75rem; }
+.ctsync-merge-pane { min-width: 0; max-width: 100%; overflow-x: auto; box-sizing: border-box; }
+.ctsync-merge-pane h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+@media (max-width: 768px) {
+  .ctsync-merge-top { grid-template-columns: 1fr; }
+  .ctsync-editor-toolbar-row { justify-content: flex-start; }
+}
+
+/* ---- Base-chain table ---- */
+.ctsync-basechain-table { width: 100%; }
+.ctsync-basechain-table th, .ctsync-basechain-table td { text-align: left; }
+.ctsync-basechain-table select.jenkins-select__input { width: 100%; max-width: 200px; }
+.ctsync-basechain-row select, .ctsync-basechain-row input[type="radio"] { vertical-align: middle; }
+.ctsync-basechain-row input[type="radio"],
+.ctsync-basechain-row label,
+.ctsync-standalone-row input[type="checkbox"],
+.ctsync-standalone-row label,
+#contentTypeUnlockedGroup input[type="radio"],
+#contentTypeUnlockedGroup label { cursor: pointer; }
+.ctsync-basechain-reorder-btn, .ctsync-basechain-remove-btn { min-width: 28px; }
+.ctsync-basechain-actions-cell { white-space: nowrap; }
+
+/* Round icon affordances next to / inside a row: expand chevron, open-in-new-tab, version info.
+   Transparent at rest, the core subtle border, the accent colour on hover. */
+.ctsync-basechain-row-toggle,
+.ctsync-basechain-open-link,
+.ctsync-basechain-version-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  color: var(--text-color-secondary);
+  background-color: transparent;
+  border: var(--jenkins-border-width) solid var(--jenkins-border-color);
+  border-radius: 50%;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.ctsync-basechain-row-toggle { width: 26px; height: 26px; cursor: pointer; color: var(--text-color); }
+.ctsync-basechain-open-link { width: 22px; height: 22px; margin-left: 6px; cursor: pointer; }
+.ctsync-basechain-version-info { width: 22px; height: 22px; cursor: help; }
+.ctsync-basechain-row-toggle svg,
+.ctsync-basechain-open-link svg,
+.ctsync-basechain-version-info svg { width: 14px; height: 14px; pointer-events: none; }
+.ctsync-basechain-row-toggle:hover,
+.ctsync-basechain-open-link:hover,
+.ctsync-basechain-version-info:hover {
+  background-color: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+.ctsync-basechain-row-toggle:active { transform: scale(0.92); }
+.ctsync-basechain-row-toggle:focus-visible,
+.ctsync-basechain-open-link:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.ctsync-basechain-resolved-pre {
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px;
+  color: var(--text-color);
+  background: var(--table-background);
+  border-radius: var(--form-input-border-radius);
+}
+.ctsync-basechain-resolved-caption { font-size: var(--font-size-sm); color: var(--text-color-secondary); margin-bottom: 4px; }
+.ctsync-basechain-history-detail { margin-top: 4px; padding-left: 16px; font-size: var(--font-size-sm); }
+.ctsync-basechain-diff-container { max-width: 100%; overflow-x: auto; box-sizing: border-box; }
+.ctsync-basechain-drag-cell { width: 32px; padding: 4px; text-align: center; }
+.ctsync-basechain-drag-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 32px; color: var(--text-color-secondary); cursor: grab;
+  -webkit-user-drag: element;
+}
+.ctsync-basechain-drag-handle svg { -webkit-user-drag: element; pointer-events: none; }
+.ctsync-basechain-drag-handle:hover { color: var(--accent-color); }
+.ctsync-basechain-row select,
+.ctsync-basechain-row input[type="radio"],
+.ctsync-basechain-row button,
+.ctsync-basechain-row-toggle,
+.ctsync-basechain-open-link { -webkit-user-drag: none; }
+.ctsync-basechain-version-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ctsync-basechain-version-cell select { min-width: 0; flex: 0 1 auto; }
+.ctsync-basechain-mode-cell { white-space: nowrap; }
+.ctsync-basechain-mode-cell label { margin-right: 8px; }
+.ctsync-basechain-config-key { display: flex; align-items: center; gap: 6px; }
+.ctsync-basechain-config-key select { flex: 1 1 auto; }
+.ctsync-basechain-row.ctsync-basechain-row--dragging { opacity: 0.5; cursor: grabbing; }
+.ctsync-basechain-row.ctsync-basechain-row--drop-target > td { border-top: 2px solid var(--accent-color); }
+.ctsync-standalone-badge { display: inline-flex; align-items: center; gap: 0.35em; }
+.ctsync-standalone-badge svg { width: 1.1em; height: 1.1em; }
+@media (max-width: 480px) {
+  .ctsync-basechain-table, .ctsync-basechain-table tbody, .ctsync-basechain-table tr,
+  .ctsync-basechain-table td { display: block; width: 100% !important; }
+  .ctsync-basechain-row { border-bottom: var(--jenkins-border-width) solid var(--jenkins-border-color--subtle); padding: 6px 0; }
+  .ctsync-basechain-drag-cell { display: none; }
+}

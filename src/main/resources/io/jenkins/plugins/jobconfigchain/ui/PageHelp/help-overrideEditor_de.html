@@ -1,0 +1,4 @@
+<div>
+  Der Inhalt dieses Editors wird über die zusammengeführten Basis-Konfigurationssätze angewendet. Schreiben Sie nur, was sich von den Basen unterscheidet; jeder weggelassene Schlüssel wird geerbt. In JSON und YAML entfernt das Setzen eines Schlüssels auf <code>null</code> ihn aus dem Ergebnis.
+  <p><b>Arrays werden vollständig ersetzt.</b> Objekte werden Schlüssel für Schlüssel zusammengeführt, eine Liste (ein JSON-Array, eine YAML-Sequenz oder wiederholte Geschwisterelemente in XML) wird jedoch nie elementweise zusammengeführt. Hat eine Basis <code>[1, 2, 3]</code> und dieser Editor setzt <code>[4]</code>, lautet das Ergebnis <code>[4]</code>, nicht <code>[1, 2, 3, 4]</code>. Um ein Element einer Liste zu ändern, wiederholen Sie hier die gesamte Liste.</p>
+</div>

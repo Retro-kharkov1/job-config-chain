@@ -1,0 +1,6 @@
+<div>
+  Ersetzt jedes <code>#{Dotted.Path}#</code>-Token in der Zieldatei durch seinen Wert aus der effektiven Konfiguration und schreibt die Datei zurück. Secret-Werte stammen aus den Jenkins-Zugangsdaten, die im Secrets-Manifest des Konfigurationssatzes gebunden sind, nie aus gespeichertem Text.
+  <p>Die Ersetzung erfolgt in einem Durchgang: Jedes Token wird einmal ersetzt, und eingefügter Text wird nie erneut durchsucht. Der Build schlägt fehl, wenn ein Token unaufgelöst bleibt oder gebundene Zugangsdaten fehlen. Bei Erfolg zeichnet der Build eine Deployment Binding der exakt verwendeten Versionen auf, sodass dieselbe Konfiguration später mit <b>Erneut bereitstellen aus Lauf</b> wiederholt werden kann.</p>
+  <p>Hinweis: Beim Schichten von Konfigurationen werden JSON-Arrays vom überlagernden Inhalt vollständig ersetzt und nie elementweise zusammengeführt.</p>
+  <p>Aufruf mit einer Map, zum Beispiel <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Der frühere Name <code>configTemplateSubstitute</code> funktioniert weiterhin als veralteter Alias.</p>
+</div>

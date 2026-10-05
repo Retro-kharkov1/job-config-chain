@@ -1,0 +1,6 @@
+<div>
+  A célfájlban lévő minden <code>#{Dotted.Path}#</code> tokent lecseréli a tényleges konfigurációból származó értékére, és visszaírja a fájlt. A titkos értékek a konfigurációs készlet titokjegyzékében kötött Jenkins hitelesítő adatokból származnak, soha nem tárolt szövegből.
+  <p>A behelyettesítés egyszeri menetben történik: minden token egyszer cserélődik, és a beszúrt szöveget a rendszer nem vizsgálja újra. A build meghiúsul, ha egy token feloldatlan marad, vagy egy kötött hitelesítő adat hiányzik. Siker esetén a build rögzít egy telepítési kötést (Deployment Binding) a felhasznált pontos verziókkal, így ugyanaz a konfiguráció később újrajátszható az <b>Újratelepítés futtatásból</b> beállítással.</p>
+  <p>Megjegyzés: a konfigurációk rétegezésekor a JSON-tömböket a fedőréteg teljes egészében lecseréli, és soha nem egyesíti elemenként.</p>
+  <p>Hívja meg egy Map-pel, például <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. A korábbi <code>configTemplateSubstitute</code> név elavult álnévként még működik.</p>
+</div>

@@ -12,12 +12,12 @@ import org.kohsuke.stapler.StaplerProxy;
 import java.util.List;
 
 /**
- * The global "Config Templates" admin screen (see admin-ui.md's "Global level" section), reachable
- * at {@code /configTemplates},
+ * The global "Config Chains" admin screen (see admin-ui.md's "Global level" section), reachable
+ * at {@code /configChains},
  * modeled on Jenkins' own Manage Jenkins &#8594; Managed Files list/edit interaction shape (see
  * "UI reference groundings" in the requirements spec). Lists every common Config Set and dispatches
- * directly to that project's {@link CommonConfigSetPage} at {@code /configTemplates/<projectKey>/}
- * via Stapler's {@code getDynamic(String)} catch-all hook — {@code /configTemplates/<projectKey>/}
+ * directly to that project's {@link CommonConfigSetPage} at {@code /configChains/<projectKey>/}
+ * via Stapler's {@code getDynamic(String)} catch-all hook — {@code /configChains/<projectKey>/}
  * IS the common Config Set editor directly (owner decision, 2026-09-14, see
  * {@code admin-ui.md}'s "Config-Key hub page IS the common editor directly" section); there is no
  * separate near-empty hub page and no {@code /common} URL segment anymore.
@@ -35,8 +35,8 @@ import java.util.List;
  * {@code ManagementLink} extensions (via {@code Jenkins#getManagementLinks()} /
  * {@code ManagementLink.all()}), so switching from one extension point to the other changes
  * only how the admin *navigates to* this screen — {@link #getUrlName()} is deliberately left at
- * {@code "configTemplates"} so {@code /configTemplates/<projectKey>/...} (and every existing
- * bookmark/link/test against it) resolves exactly as before, it is simply no longer echoed into
+ * {@code "configChains"} (renamed from {@code "configTemplates"}, whose GET URLs now redirect here via
+ * {@link LegacyConfigTemplatesRedirect}) so {@code /configChains/<projectKey>/...} resolves, it is simply no longer echoed into
  * the top-nav icon bar.</p>
  *
  * <p><b>Category constraint (grounded against {@code hudson.model.ManagementLink.Category}
@@ -79,17 +79,8 @@ import java.util.List;
  */
 @Extension
 public class ConfigTemplatesRootAction extends ManagementLink implements StaplerProxy {
-    /**
-     * Resolved {@link SharedBlocks} class for {@code st:include class="${it.sharedBlocksClass}"},
-     * mirroring {@link ConfigTemplatesJobAction#getSharedBlocksClass()} - see that method for why
-     * the class object is bound rather than a literal String.
-     */
-    public Class<SharedBlocks> getSharedBlocksClass() {
-        return SharedBlocks.class;
-    }
 
-
-    public static final String URL_NAME = "configTemplates";
+    public static final String URL_NAME = "configChains";
 
     private final ConfigSetRepository repository;
 
@@ -160,9 +151,9 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
     }
 
     /**
-     * Stapler catch-all dispatch: {@code /configTemplates/<projectKey>/...} (Config-Key grouping,
+     * Stapler catch-all dispatch: {@code /configChains/<projectKey>/...} (Config-Key grouping,
      * see overview.md's "Config Key" entity). Dispatches directly to {@link CommonConfigSetPage} —
-     * {@code /configTemplates/<projectKey>/}
+     * {@code /configChains/<projectKey>/}
      * IS the common Config Set editor, not a separate landing page one segment up from it (owner
      * decision, 2026-09-14).
      */
@@ -243,7 +234,7 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         String key = readProjectKey(payloadJson);
         if (key == null) {
-            return lifecycleError("NOT_FOUND", "No Config Set named.");
+            return lifecycleError("NOT_FOUND", Messages.Page_NoNameGiven());
         }
         return new CommonConfigSetPage(key, repository).jsRestoreConfigSet();
     }
@@ -254,7 +245,7 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         String key = readProjectKey(payloadJson);
         if (key == null) {
-            return lifecycleError("NOT_FOUND", "No Config Set named.");
+            return lifecycleError("NOT_FOUND", Messages.Page_NoNameGiven());
         }
         return new CommonConfigSetPage(key, repository).jsPurgePreflight();
     }
@@ -265,7 +256,7 @@ public class ConfigTemplatesRootAction extends ManagementLink implements Stapler
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
         String key = readProjectKey(payloadJson);
         if (key == null) {
-            return lifecycleError("NOT_FOUND", "No Config Set named.");
+            return lifecycleError("NOT_FOUND", Messages.Page_NoNameGiven());
         }
         return new CommonConfigSetPage(key, repository).jsPurgeConfigSet(payloadJson);
     }

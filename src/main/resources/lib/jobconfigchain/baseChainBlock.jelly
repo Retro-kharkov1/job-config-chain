@@ -1,0 +1,82 @@
+<?jelly escape-by-default='true'?>
+<!--
+  Block 3 of 4: base-chain editor. Shared between EnvConfigSetPage/index.jelly and
+  ConfigTemplatesJobAction/index.jelly (tech-lead design contract, 2026-09-09). Relies on ${it}
+  exposing: explicitlyStandaloneSupported, ownScopeLabel (Bug 6.2 fix, 2026-09-10 — "job" on
+  ConfigTemplatesJobAction, "layer" on EnvConfigSetPage; see each host's own getter javadoc). The
+  row bodies (#baseChainRowsBody) are entirely
+  JS-built (buildBaseChainRowElement) rather than server-rendered — including the per-row ↗
+  open-in-new-tab link next to each row's Config Key name and the resolved-content diff view keyed
+  off cumulativeJson — see BOTH hosts' own page-level <script> for that logic; this fragment is
+  only the static table shell + the explicitlyStandalone checkbox (guarded, EnvConfigSetPage only).
+-->
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form" xmlns:l="/lib/layout">
+  <j:choose>
+    <j:when test="${it.ownScopeLabel == 'job'}"><j:set var="scopeNoun" value="${%scope.job}"/></j:when>
+    <j:otherwise><j:set var="scopeNoun" value="${%scope.layer}"/></j:otherwise>
+  </j:choose>
+  <f:section title="${%baseChain.heading}">
+    <div id="baseChainEditor">
+      <div class="help-sibling ctsync-help-row">
+        <span class="ctsync-label-strong">${%baseChain.rowsHelpLabel}</span>
+        <f:helpLink url="/job-config-chain-help/baseChainRows" featureName="${%baseChain.rowsHelpLabel}"/>
+      </div>
+      <f:helpArea/>
+      <p>${%baseChain.intro(scopeNoun)}</p>
+      <!-- Requirement history, EnvConfigSetPage only (see base-chains.md's "Standalone env Config
+           Sets" section): mutually exclusive with having any base-chain rows —
+           checking this clears the chain, greys out (never hides) the row table below, and
+           disables Add base. Never rendered for a host where explicitlyStandaloneSupported is
+           false (e.g. ConfigTemplatesJobAction) — an empty chain there is already unambiguous. -->
+      <j:if test="${it.explicitlyStandaloneSupported}">
+        <div class="ctsync-standalone-row">
+          <label>
+            <!-- CSP migration: onchange removed — see this file's top-of-file note. -->
+            <input type="checkbox" id="explicitlyStandaloneCheckbox"/>
+            ${%explicitlyStandalone.label}
+          </label>
+        </div>
+      </j:if>
+      <!-- Empty-state row (ux-ui-designer correction, 2026-09-11): a genuinely-empty chain renders
+           as ONE spanning row inside the table body rather than swapping out the whole table —
+           the header stays visible either way. renderBaseChainRows() (both hosts' own script)
+           inserts/removes this row directly instead of toggling a separate placeholder div; see
+           its own comment for the explicitlyStandalone nuance (see base-chains.md). Table-scroll containment
+           (owner report, 2026-09-11): this table previously had no cap at all and grew
+           unboundedly with many rows — now wrapped the same way as every other table in this
+           plugin (.ctsync-scroll-table, defined in both host files' own &lt;style&gt; block).
+           Full-width override (owner report, 2026-09-11): unlike the narrow Secrets manifest /
+           Version history tables, this table's expanded row hosts a two-pane Monaco resolved
+           content diff that needs the full available width rather than hugging fit-content, so
+           an extra full-width modifier class (defined in both host files' own &lt;style&gt; block,
+           right after the shared .ctsync-scroll-table rule) overrides width back to 100% for
+           this table only, leaving every other .ctsync-scroll-table usage unaffected. -->
+      <div class="ctsync-scroll-table ctsync-scroll-table--full-width" id="baseChainRowsTableWrap">
+        <!-- Localized strings for the JS-built rows. The row markup is created in script
+             (buildBaseChainRowElement), which cannot use Jelly's ${%key} substitution, so the
+             translated text is carried here as data-* attributes and read via dataset - the same
+             pattern secretRowTemplate/versionRowTemplate already use in this plugin. -->
+        <template id="baseChainRowStrings"
+                  data-drag-handle-title="${%row.dragHandle.title}"
+                  data-move-up-title="${%row.moveUp.title}"
+                  data-move-down-title="${%row.moveDown.title}"
+                  data-remove-title="${%row.remove.title}"
+                  data-open-in-new-tab-title="${%row.openInNewTab.title}"
+                  data-collapse-title="${%row.collapse.title}"
+                  data-expand-title="${%row.expand.title}"
+                  data-mode-active="${%mode.active}"
+                  data-mode-pin="${%mode.pin}"
+                  data-resolved-caption="${%row.resolvedCaption}"
+                  data-not-resolvable="${%row.notResolvable}"/>
+        <table class="jenkins-table ctsync-basechain-table" id="baseChainRowsTable">
+          <thead><tr><th/><th/><th>#</th><th>${%column.configKey}</th><th>${%column.mode}</th><th>${%column.pinnedVersion}</th><th/></tr></thead>
+          <tbody id="baseChainRowsBody"/>
+        </table>
+      </div>
+      <div class="ctsync-btn-row">
+        <button type="button" id="addBaseChainRowBtn" class="jenkins-button"
+                title="${%addBase.title}"><l:icon src="symbol-add" class="icon-sm"/> ${%addBase.label}</button>
+      </div>
+    </div>
+  </f:section>
+</j:jelly>

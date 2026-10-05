@@ -1,50 +1,48 @@
 <?jelly escape-by-default='true'?>
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form">
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form" xmlns:jc="/lib/jobconfigchain">
   <l:layout title="${%title}">
     <l:main-panel>
       <st:bind var="proxy" value="${it}"/>
 
       <!-- CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): this page's own
            inline <style>/<script> were extracted verbatim into index.css/index.js, sibling files
-           to this index.jelly, loaded via h.getViewResource(it, ...) (resolves relative to this
-           view class — see https://www.jenkins.io/doc/developer/views/exposing-bundled-resources/).
+           to this index.jelly, loaded via st:adjunct (see the ctsyncRootStyle/RootScript adjuncts under
+           io/jenkins/plugins/jobconfigchain/adjuncts/).
            Every former inline onXxx="..." attribute below is now wired in index.js via
            addEventListener; server-side values it needs (rootURL/urlName) ride on data-*
            attributes instead of being interpolated into script text. -->
-      <link rel="stylesheet" href="${h.getViewResource(it, 'index.css')}"/>
+      <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncRootStyle"/>
 
-      <div id="ctsyncPageSeed" data-root-url="${rootURL}" data-url-name="${it.urlName}" style="display:none"/>
+      <div class="ctsync-hidden" id="ctsyncPageSeed" data-root-url="${rootURL}" data-url-name="${it.urlName}"/>
 
       <div class="ctsync-page">
 
-      <h1>${%title}</h1>
-      <p>
-        Global (common) Config Sets. Click a row to open its editor; open a project's env layer
-        from that project's page.
-      </p>
+      <l:app-bar title="${%title}"/>
+      <p>${%intro}</p>
 
-      <st:include class="${it.sharedBlocksClass}" page="confirmByNameBlock.jelly" it="${it}"/>
+      <jc:confirmByNameBlock/>
 
       <j:if test="${it.flashDeletedKey != null}">
-        <div class="alert alert-info">${%flash.deleted(it.flashDeletedKey)}</div>
+        <div class="jenkins-alert jenkins-alert-info">${%flash.deleted(it.flashDeletedKey)}</div>
       </j:if>
       <j:if test="${it.flashRestoredKey != null}">
-        <div class="alert alert-info">${%flash.restored(it.flashRestoredKey)}</div>
+        <div class="jenkins-alert jenkins-alert-info">${%flash.restored(it.flashRestoredKey)}</div>
       </j:if>
       <j:if test="${it.flashPurgedKey != null}">
-        <div class="alert alert-info">${%flash.purged(it.flashPurgedKey)}</div>
+        <div class="jenkins-alert jenkins-alert-info">${%flash.purged(it.flashPurgedKey)}</div>
       </j:if>
 
-      <div id="purgeBlockedBanner" class="alert alert-danger ctsync-blocked-banner"
-           style="display:none"/>
+      <div id="purgeBlockedBanner" class="jenkins-alert jenkins-alert-danger ctsync-blocked-banner ctsync-hidden"/>
 
       <j:if test="${!it.deletedConfigSets.isEmpty()}">
-        <div class="ctsync-btn-row">
+        <div class="ctsync-btn-row help-sibling">
           <label>
             <input type="checkbox" id="showDeletedToggle"/>
             ${%showDeleted.label} (${it.deletedConfigSets.size()})
           </label>
+          <f:helpLink url="/job-config-chain-help/showDeleted" featureName="${%showDeleted.label}"/>
         </div>
+        <f:helpArea/>
       </j:if>
 
       <template id="ctsyncListStrings"
@@ -55,9 +53,9 @@
                 data-job-row="${%deletedRow.jobRow}"
                 data-name-reserved="${%newConfigSet.nameReserved}"/>
 
-      <st:include class="${it.sharedBlocksClass}" page="tableToolsBlock.jelly" it="${it}"/>
+      <jc:tableToolsBlock/>
       <div id="commonConfigSetsTableWrap" class="ctsync-scroll-table">
-        <table class="jenkins-table sortable ctsync-filterable" style="width:100%">
+        <table class="jenkins-table sortable ctsync-filterable ctsync-w-full">
           <thead>
             <tr>
               <th>${%column.name}</th>
@@ -135,12 +133,14 @@
             <td>${%deletedRow.deletedBy(cs.deletion.deletedBy)}</td>
             <td>${%status.deleted}</td>
             <td>
-              <button type="button" class="jenkins-button ctsync-restore-btn"
-                      data-project-key="${cs.projectKey}" title="${%restore.title}"
-                      >${%restore.label}</button>
-              <button type="button" class="jenkins-button jenkins-button--destructive ctsync-purge-btn"
-                      data-project-key="${cs.projectKey}" title="${%purge.title}"
-                      >&#128465; ${%purge.label}</button>
+              <div class="ctsync-btn-row ctsync-btn-row--flush">
+                <button type="button" class="jenkins-button ctsync-restore-btn"
+                        data-project-key="${cs.projectKey}" title="${%restore.title}"
+                        >${%restore.label}</button>
+                <button type="button" class="jenkins-button jenkins-button--destructive ctsync-purge-btn"
+                        data-project-key="${cs.projectKey}" title="${%purge.title}"
+                        ><l:icon src="symbol-trash" class="icon-sm"/> ${%purge.label}</button>
+              </div>
             </td>
           </tr>
         </j:forEach>
@@ -159,12 +159,17 @@
                f:entry pairs a real title with its path input rather than relying on placeholder
                text alone); the placeholder now only carries the example format, exactly like that
                same secret-path input's own "database.password" placeholder. -->
-          <f:entry title="${%newConfigSet.projectKeyLabel}">
-            <input type="text" name="projectKey" id="newProjectKey" placeholder="my-app" class="setting-input"/>
+          <f:entry title="${%newConfigSet.projectKeyLabel}"
+                   help="/job-config-chain-help/newConfigKey">
+            <input type="text" name="projectKey" id="newProjectKey" placeholder="my-app" class="jenkins-input"/>
           </f:entry>
           <div>
-            <label class="ctsync-content-type-label">${%contentType.label}</label>
-            <div class="ctsync-content-type-hint">&#9432; ${%contentType.chooseOnceHelp}</div>
+            <div class="help-sibling ctsync-help-row">
+              <label class="ctsync-content-type-label">${%contentType.label}</label>
+              <f:helpLink url="/job-config-chain-help/contentType" featureName="${%contentType.label}"/>
+            </div>
+            <f:helpArea/>
+            <div class="ctsync-content-type-hint"><l:icon src="symbol-information-circle" class="icon-sm"/> ${%contentType.chooseOnceHelp}</div>
             <div class="ctsync-content-type-radios" id="newContentTypeGroup">
               <label><input type="radio" name="newContentTypeRadio" value="JSON" id="newContentTypeJson" checked="checked"/> JSON</label>
               <label><input type="radio" name="newContentTypeRadio" value="XML" id="newContentTypeXml"/> XML</label>
@@ -192,7 +197,7 @@
            as this element's (unexecuted, since src is set) text content until it finds the next
            literal </script> anywhere later in the document, silently swallowing whatever real
            HTML sits in between. Every script tag here must have an explicit closing tag. -->
-      <script src="${h.getViewResource(it, 'index.js')}"></script>
+      <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncRootScript"/>
     </l:main-panel>
   </l:layout>
 </j:jelly>

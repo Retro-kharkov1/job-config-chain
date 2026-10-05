@@ -1,0 +1,43 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@1602.v2a_70b_80a_2396">
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty>
+      <versions>
+        <io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion>
+          <versionNumber>1</versionNumber>
+          <contentJson>{&quot;Own&quot;:&quot;if-own&quot;}</contentJson>
+          <note>seed</note>
+          <author>safety-net</author>
+          <timestampEpochMillis>1</timestampEpochMillis>
+          <baseChain class="java.util.Collections$UnmodifiableRandomAccessList" resolves-to="java.util.Collections$UnmodifiableList">
+            <c class="list">
+              <io.jenkins.plugins.jobconfigchain.model.BaseConfigReference>
+                <projectKey>fx-if-base</projectKey>
+                <pinMode>ACTIVE</pinMode>
+                <pinnedVersionNumber>0</pinnedVersionNumber>
+              </io.jenkins.plugins.jobconfigchain.model.BaseConfigReference>
+            </c>
+            <list reference="../c"/>
+          </baseChain>
+        </io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion>
+      </versions>
+      <activeVersionNumber>1</activeVersionNumber>
+      <contentType>JSON</contentType>
+      <secretsManifest class="linked-hash-map"/>
+    </io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@4383.v04fa_a_3d67b_d9">
+    <script>setupConfigTemplate(file: &apos;app.cfg&apos;)
+waitUntil { currentBuild.description == &apos;go&apos; }
+node {
+writeFile file: &apos;app.cfg&apos;, text: &apos;host=#{Db.Host}# pw=#{Db.Password}# own=#{Own}#&apos;
+configTemplateValidate()
+configTemplateSubstitute()
+echo &quot;BIN:${readFile(file: &apos;app.cfg&apos;, encoding: &apos;Base64&apos;)}&quot;
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>
