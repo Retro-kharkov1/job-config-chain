@@ -537,8 +537,12 @@ public class ConfigTemplatesJobActionTest {
                     + "var document = { getElementById: function(id) {"
                     + "  if (id === 'ctsyncJobSeed') { return { dataset: __ctsyncSeedDataset }; }"
                     + "  if (!__ctsyncElements[id]) {"
+                    // classList is stateful (a name -> true map) since the show/hide toggles moved
+                    // from inline style.display to the ctsync-hidden class (CSP-clean, P6).
+                    + "    var __cls = {};"
                     + "    __ctsyncElements[id] = { addEventListener: function(){}, style:{}, "
-                    + "      classList:{add:function(){},remove:function(){}} };"
+                    + "      classList:{add:function(c){__cls[c]=true;},remove:function(c){delete __cls[c];},"
+                    + "                 contains:function(c){return __cls[c]===true;}} };"
                     + "  }"
                     + "  return __ctsyncElements[id];"
                     + "}, "
@@ -809,7 +813,7 @@ public class ConfigTemplatesJobActionTest {
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
         String html = page.getWebResponse().getContentAsString();
-        assertTrue(html.contains("2 bases"), "version-history row must render a [N bases] marker (FR-58)");
+        assertTrue(html.contains("Bases: 2"), "version-history row must render a plural-neutral [Bases: N] marker (FR-58)");
         assertTrue(html.contains("(v1)"), "expandable detail must include the PINNED entry's resolved version number");
     }
 
@@ -1228,16 +1232,16 @@ public class ConfigTemplatesJobActionTest {
         assertNotNull(engine);
         engine.eval(JOB_SEED_STUB_HARNESS + allScripts);
 
-        Object beforeDisplay = engine.eval("document.getElementById('notExistYetBanner').style.display");
-        assertTrue(beforeDisplay == null || "".equals(String.valueOf(beforeDisplay))
-                        || "undefined".equals(String.valueOf(beforeDisplay)),
-                "banner must start unhidden in this stub for the assertion below to be meaningful: " + beforeDisplay);
+        Object beforeHidden = engine.eval("document.getElementById('notExistYetBanner').classList.contains('ctsync-hidden')");
+        assertEquals(Boolean.FALSE, beforeHidden,
+                "banner must start unhidden in this stub for the assertion below to be meaningful");
 
         engine.eval("applyConfigSetNowExists();");
 
-        Object afterDisplay = engine.eval("document.getElementById('notExistYetBanner').style.display");
-        assertEquals("none", afterDisplay, "the very first successful save must hide the stale "
-                + "\"does not exist yet\" banner in place, without a page reload");
+        Object afterHidden = engine.eval("document.getElementById('notExistYetBanner').classList.contains('ctsync-hidden')");
+        assertEquals(Boolean.TRUE, afterHidden, "the very first successful save must hide the stale "
+                + "\"does not exist yet\" banner in place (via the ctsync-hidden class, not an inline "
+                + "style), without a page reload");
     }
 
     private int saveViaJsProxyLikeCall(FreeStyleProject project, JenkinsRule.WebClient wc, String content,

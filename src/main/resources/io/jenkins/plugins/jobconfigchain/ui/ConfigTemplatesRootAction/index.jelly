@@ -13,15 +13,12 @@
            attributes instead of being interpolated into script text. -->
       <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncRootStyle"/>
 
-      <div id="ctsyncPageSeed" data-root-url="${rootURL}" data-url-name="${it.urlName}" style="display:none"/>
+      <div class="ctsync-hidden" id="ctsyncPageSeed" data-root-url="${rootURL}" data-url-name="${it.urlName}"/>
 
       <div class="ctsync-page">
 
       <l:app-bar title="${%title}"/>
-      <p>
-        Global (common) Config Sets. Click a row to open its editor; open a project's env layer
-        from that project's page.
-      </p>
+      <p>${%intro}</p>
 
       <jc:confirmByNameBlock/>
 
@@ -35,16 +32,17 @@
         <div class="jenkins-alert jenkins-alert-info">${%flash.purged(it.flashPurgedKey)}</div>
       </j:if>
 
-      <div id="purgeBlockedBanner" class="jenkins-alert jenkins-alert-danger ctsync-blocked-banner"
-           style="display:none"/>
+      <div id="purgeBlockedBanner" class="jenkins-alert jenkins-alert-danger ctsync-blocked-banner ctsync-hidden"/>
 
       <j:if test="${!it.deletedConfigSets.isEmpty()}">
-        <div class="ctsync-btn-row">
+        <div class="ctsync-btn-row help-sibling">
           <label>
             <input type="checkbox" id="showDeletedToggle"/>
             ${%showDeleted.label} (${it.deletedConfigSets.size()})
           </label>
+          <f:helpLink url="/job-config-chain-help/showDeleted" featureName="${%showDeleted.label}"/>
         </div>
+        <f:helpArea/>
       </j:if>
 
       <template id="ctsyncListStrings"
@@ -57,7 +55,7 @@
 
       <jc:tableToolsBlock/>
       <div id="commonConfigSetsTableWrap" class="ctsync-scroll-table">
-        <table class="jenkins-table sortable ctsync-filterable" style="width:100%">
+        <table class="jenkins-table sortable ctsync-filterable ctsync-w-full">
           <thead>
             <tr>
               <th>${%column.name}</th>
@@ -135,12 +133,14 @@
             <td>${%deletedRow.deletedBy(cs.deletion.deletedBy)}</td>
             <td>${%status.deleted}</td>
             <td>
-              <button type="button" class="jenkins-button ctsync-restore-btn"
-                      data-project-key="${cs.projectKey}" title="${%restore.title}"
-                      >${%restore.label}</button>
-              <button type="button" class="jenkins-button jenkins-button--destructive ctsync-purge-btn"
-                      data-project-key="${cs.projectKey}" title="${%purge.title}"
-                      ><l:icon src="symbol-trash" class="icon-sm"/> ${%purge.label}</button>
+              <div class="ctsync-btn-row ctsync-btn-row--flush">
+                <button type="button" class="jenkins-button ctsync-restore-btn"
+                        data-project-key="${cs.projectKey}" title="${%restore.title}"
+                        >${%restore.label}</button>
+                <button type="button" class="jenkins-button jenkins-button--destructive ctsync-purge-btn"
+                        data-project-key="${cs.projectKey}" title="${%purge.title}"
+                        ><l:icon src="symbol-trash" class="icon-sm"/> ${%purge.label}</button>
+              </div>
             </td>
           </tr>
         </j:forEach>
@@ -159,11 +159,16 @@
                f:entry pairs a real title with its path input rather than relying on placeholder
                text alone); the placeholder now only carries the example format, exactly like that
                same secret-path input's own "database.password" placeholder. -->
-          <f:entry title="${%newConfigSet.projectKeyLabel}">
+          <f:entry title="${%newConfigSet.projectKeyLabel}"
+                   help="/job-config-chain-help/newConfigKey">
             <input type="text" name="projectKey" id="newProjectKey" placeholder="my-app" class="jenkins-input"/>
           </f:entry>
           <div>
-            <label class="ctsync-content-type-label">${%contentType.label}</label>
+            <div class="help-sibling ctsync-help-row">
+              <label class="ctsync-content-type-label">${%contentType.label}</label>
+              <f:helpLink url="/job-config-chain-help/contentType" featureName="${%contentType.label}"/>
+            </div>
+            <f:helpArea/>
             <div class="ctsync-content-type-hint"><l:icon src="symbol-information-circle" class="icon-sm"/> ${%contentType.chooseOnceHelp}</div>
             <div class="ctsync-content-type-radios" id="newContentTypeGroup">
               <label><input type="radio" name="newContentTypeRadio" value="JSON" id="newContentTypeJson" checked="checked"/> JSON</label>

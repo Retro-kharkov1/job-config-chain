@@ -31,7 +31,6 @@
 #contentTypeUnlockedGroup label { cursor: pointer; }
 .ctsync-basechain-reorder-btn, .ctsync-basechain-remove-btn { min-width: 28px; }
 .ctsync-basechain-actions-cell { white-space: nowrap; }
-.ctsync-basechain-actions-cell .jenkins-button { margin-right: 0.25rem; }
 
 /* Round icon affordances next to / inside a row: expand chevron, open-in-new-tab, version info.
    Transparent at rest, the core subtle border, the accent colour on hover. */

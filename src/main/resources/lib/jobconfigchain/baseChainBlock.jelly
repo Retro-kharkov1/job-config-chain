@@ -11,14 +11,18 @@
   only the static table shell + the explicitlyStandalone checkbox (guarded, EnvConfigSetPage only).
 -->
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form" xmlns:l="/lib/layout">
+  <j:choose>
+    <j:when test="${it.ownScopeLabel == 'job'}"><j:set var="scopeNoun" value="${%scope.job}"/></j:when>
+    <j:otherwise><j:set var="scopeNoun" value="${%scope.layer}"/></j:otherwise>
+  </j:choose>
   <f:section title="${%baseChain.heading}">
     <div id="baseChainEditor">
-      <p>Ordered list of base Config Sets folded left-to-right before this ${it.ownScopeLabel}'s own
-         override is applied — later rows win on overlapping keys. Each row either always tracks its project's
-         currently-ACTIVE version, or pins to one specific historical version. Drag a row by its
-         grip handle (or use the move-up/move-down buttons) to reorder. Click a row's chevron button
-         to expand its resolved (read-only) content, or click the open-in-new-tab icon to open that base project's own
-         admin page in a new tab.</p>
+      <div class="help-sibling ctsync-help-row">
+        <span class="ctsync-label-strong">${%baseChain.rowsHelpLabel}</span>
+        <f:helpLink url="/job-config-chain-help/baseChainRows" featureName="${%baseChain.rowsHelpLabel}"/>
+      </div>
+      <f:helpArea/>
+      <p>${%baseChain.intro(scopeNoun)}</p>
       <!-- Requirement history, EnvConfigSetPage only (see base-chains.md's "Standalone env Config
            Sets" section): mutually exclusive with having any base-chain rows —
            checking this clears the chain, greys out (never hides) the row table below, and
@@ -58,6 +62,10 @@
                   data-move-down-title="${%row.moveDown.title}"
                   data-remove-title="${%row.remove.title}"
                   data-open-in-new-tab-title="${%row.openInNewTab.title}"
+                  data-collapse-title="${%row.collapse.title}"
+                  data-expand-title="${%row.expand.title}"
+                  data-mode-active="${%mode.active}"
+                  data-mode-pin="${%mode.pin}"
                   data-resolved-caption="${%row.resolvedCaption}"
                   data-not-resolvable="${%row.notResolvable}"/>
         <table class="jenkins-table ctsync-basechain-table" id="baseChainRowsTable">

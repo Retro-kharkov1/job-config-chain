@@ -13,7 +13,7 @@
            into the script text) now ride on #ctsyncJobSeed's data-* attributes instead. -->
       <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncJobStyle"/>
 
-      <div id="ctsyncJobSeed" style="display:none"
+      <div class="ctsync-hidden" id="ctsyncJobSeed"
            data-editor-seed="${it.editorSeedJsonForScript}"
            data-available-project-keys="${it.availableCommonProjectKeysJsonForScript}"
            data-base-chain-seed="${it.baseChainSeedJsonForScript}"
@@ -23,7 +23,14 @@
            data-monaco-base="${rootURL}/plugin/${it.pluginShortName}/monaco/vs"
            data-empty-versions="${%emptyState.noVersions}"
            data-empty-secrets="${%emptyState.noSecrets}"
-           data-empty-basechain="${%emptyState.noBaseChain}"/>
+           data-empty-basechain="${%emptyState.noBaseChain}"
+           data-js-malformed-xml="${%js.malformedXml}"
+           data-js-malformed-yaml="${%js.malformedYaml}"
+           data-js-locked="${%contentType.locked}"
+           data-js-saved="${%js.saved}"
+           data-js-saved-activated="${%js.savedActivated}"
+           data-js-comparing="${%js.comparing}"
+           data-js-discard-confirm="${%js.discardConfirm}"/>
 
       <div class="ctsync-page">
 
