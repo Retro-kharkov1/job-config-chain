@@ -6,6 +6,48 @@
  * handlers anywhere in the plugin's pages.
  */
 
+/* ---- Show/hide through a class, never an inline style (CSP-clean, one convention) ---- */
+var CTSYNC_HIDDEN_CLASS = 'ctsync-hidden';
+function ctsyncSetHidden(el, hidden) {
+  if (!el) { return; }
+  if (hidden) { el.classList.add(CTSYNC_HIDDEN_CLASS); } else { el.classList.remove(CTSYNC_HIDDEN_CLASS); }
+}
+function ctsyncToggleHidden(el) {
+  if (!el) { return; }
+  ctsyncSetHidden(el, !el.classList.contains(CTSYNC_HIDDEN_CLASS));
+}
+
+/* ---- Monaco web workers from same-origin URLs (CSP) ----
+   The bundled Monaco builds each worker from a blob: URL (a Blob wrapper that importScripts the real
+   worker file), which Jenkins' enforced Content-Security-Policy refuses: worker-src falls back to
+   child-src, then default-src 'self', and 'self' does not cover blob:. The real worker files are
+   plain classic scripts served by this plugin under <monacoBase>/assets/, so after editor.main has
+   installed its own MonacoEnvironment this replaces getWorker with one that starts them directly by
+   URL. That is same-origin and needs no change to the CSP at all. Worker file names carry the
+   bundle's content hashes; MonacoWorkerAssetsTest fails if the bundle is upgraded and this map is
+   not. No label-specific worker is ever requested for XML/YAML (plain editor worker). */
+var CTSYNC_MONACO_WORKERS = {
+  json: 'assets/json.worker-CoJx_OPf.js',
+  css: 'assets/css.worker-URu8fCFR.js',
+  scss: 'assets/css.worker-URu8fCFR.js',
+  less: 'assets/css.worker-URu8fCFR.js',
+  html: 'assets/html.worker-D1SL3iM8.js',
+  handlebars: 'assets/html.worker-D1SL3iM8.js',
+  razor: 'assets/html.worker-D1SL3iM8.js',
+  typescript: 'assets/ts.worker-BWKtMYOk.js',
+  javascript: 'assets/ts.worker-BWKtMYOk.js'
+};
+var CTSYNC_MONACO_DEFAULT_WORKER = 'assets/editor.worker-lj3bdIIn.js';
+function ctsyncInstallMonacoWorkers(monacoBase) {
+  var base = String(monacoBase || '').replace(/\/+$/, '');
+  var env = self.MonacoEnvironment || {};
+  env.getWorker = function (moduleId, label) {
+    var file = CTSYNC_MONACO_WORKERS[label] || CTSYNC_MONACO_DEFAULT_WORKER;
+    return new Worker(base + '/' + file, { name: label });
+  };
+  self.MonacoEnvironment = env;
+}
+
 /* ---- Table filtering (tableToolsBlock tag) ---- */
 (function () {
   function strings() {
@@ -13,7 +55,7 @@
     return {
       placeholder: (tpl && tpl.dataset.filterPlaceholder) || 'Filter',
       count: (tpl && tpl.dataset.countLabel) || '{0} of {1}',
-      noMatches: (tpl && tpl.dataset.noMatches) || 'No rows match the filter',
+      noMatches: (tpl && tpl.dataset.noMatches) || '',
       any: (tpl && tpl.dataset.anyLabel) || 'Any'
     };
   }
@@ -187,7 +229,7 @@
     var tpl = document.getElementById('ctsyncConfirmStrings');
     return {
       cancel: (tpl && tpl.dataset.cancelLabel) || 'Cancel',
-      mismatch: (tpl && tpl.dataset.nameMismatch) || 'The typed name does not match.'
+      mismatch: (tpl && tpl.dataset.nameMismatch) || ''
     };
   }
 
@@ -327,7 +369,7 @@
         }
       }
     }
-    if (banner) { banner.style.display = ''; }
+    if (banner) { ctsyncSetHidden(banner, false); }
     if (typeof window !== 'undefined' && window.dialog
         && typeof window.dialog.alert === 'function') {
       window.dialog.alert(title, { message: plain.join('\n'), type: 'destructive' });
@@ -340,7 +382,7 @@
     var banner = document.getElementById(bannerId);
     if (banner) {
       banner.innerHTML = '';
-      banner.style.display = 'none';
+      ctsyncSetHidden(banner, true);
     }
   }
 

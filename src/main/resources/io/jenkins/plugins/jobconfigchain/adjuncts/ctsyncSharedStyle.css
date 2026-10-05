@@ -22,6 +22,21 @@
 }
 .ctsync-btn-row--right { justify-content: flex-end; }
 .ctsync-page .jenkins-button svg { flex: none; width: 1rem; height: 1rem; }
+/* Icon buttons inside core .jenkins-table cells: beat core's 1.5rem !important icon size,
+   and make a LONE button in a cell a block-level flex box so the cell's vertical-align:middle
+   centres it. Multi-button cells use a .ctsync-btn-row wrapper instead (:only-child excludes them). */
+.ctsync-page .jenkins-table .jenkins-button svg { width: 1rem !important; height: 1rem !important; }
+.ctsync-page .jenkins-table td > .jenkins-button:only-child { display: flex; width: fit-content; }
+/* Several buttons in one cell: a flex row centres them; core's -10px margins would only offset them. */
+.ctsync-page .jenkins-table td > .ctsync-btn-row { flex-wrap: nowrap; }
+.ctsync-page .jenkins-table td > .ctsync-btn-row .jenkins-button { margin: 0; }
+/* Mobile history table turns cells into display:block (no vertical-align) and puts a data-th label
+   before the button: keep the button inline next to that label instead of a block on its own line. */
+@media (max-width: 768px) {
+  .ctsync-page .ctsync-history-table td > .jenkins-button:only-child {
+    display: inline-flex; width: auto; margin: 0; vertical-align: middle;
+  }
+}
 
 /* ---- Muted / state text ---- */
 .ctsync-muted { color: var(--text-color-secondary); }
@@ -195,3 +210,13 @@
 .ctsync-btn-row--flush { margin: 0; }
 .ctsync-radio-label { display: inline-flex; align-items: center; gap: 0.35em; margin-right: 0.75rem; cursor: pointer; }
 .ctsync-section-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+
+/* ---- Visibility and width helpers (replace inline style attributes, which strict CSP forbids) ----
+   !important so the toggle wins over component display rules (.ctsync-btn-row is display:flex, etc.). */
+.ctsync-hidden { display: none !important; }
+.ctsync-w-full { width: 100%; }
+
+/* ---- In-UI help (core's f:helpLink / f:helpArea) ---- */
+.ctsync-help-row { display: flex; align-items: center; gap: 0.35rem; }
+.ctsync-content-type-row .help-area { flex-basis: 100%; }
+.ctsync-btn-row .jenkins-help-button, .ctsync-section-title-row .jenkins-help-button { flex: none; }

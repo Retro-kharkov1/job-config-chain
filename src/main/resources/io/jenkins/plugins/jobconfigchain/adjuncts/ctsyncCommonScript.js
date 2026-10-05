@@ -233,6 +233,7 @@ function watchJenkinsTheme() {
 
 require.config({ paths: { vs: __commonSeedData.monacoBase } });
 require(['vs/editor/editor.main'], function () {
+  ctsyncInstallMonacoWorkers(__commonSeedData.monacoBase);
   monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
     validate: true, allowComments: false, schemas: []
   });
@@ -292,7 +293,7 @@ function runXmlDiagnostics(ed) {
     if (errorNode) {
       markers.push({
         severity: monaco.MarkerSeverity.Error,
-        message: errorNode.textContent || 'Malformed XML',
+        message: errorNode.textContent || __commonSeedData.jsMalformedXml,
         startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
       });
     }
@@ -309,17 +310,17 @@ function runXmlDiagnostics(ed) {
 function scheduleYamlDiagnostics(ed) {
   if (yamlCheckTimer) { clearTimeout(yamlCheckTimer); }
   var indicator = document.getElementById('checkingIndicator');
-  if (indicator) { indicator.style.display = 'inline'; }
+  if (indicator) { ctsyncSetHidden(indicator, false); }
   var content = ed.getValue();
   yamlCheckTimer = setTimeout(function () {
     proxy.validateContent(JSON.stringify({ content: content, contentType: 'YAML' }), function (t) {
-      if (indicator) { indicator.style.display = 'none'; }
+      if (indicator) { ctsyncSetHidden(indicator, true); }
       var r = t.responseObject();
       var markers = [];
       if (!r.ok) {
         markers.push({
           severity: monaco.MarkerSeverity.Error,
-          message: r.error || 'Malformed YAML',
+          message: r.error || __commonSeedData.jsMalformedYaml,
           startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
         });
       }
@@ -393,7 +394,7 @@ function applyContentTypeLocked(type) {
   locked.appendChild(document.createTextNode(type));
   var lockIcon = window.ctsyncIcon && window.ctsyncIcon('lock');
   if (lockIcon) { locked.appendChild(lockIcon); }
-  locked.appendChild(document.createTextNode('(locked — set at first Save, immutable)'));
+  locked.appendChild(document.createTextNode(__commonSeedData.jsLocked));
   unlockedGroup.parentNode.replaceChild(locked, unlockedGroup);
   currentContentType = type;
   document.getElementById('contentTypeField').value = type;
@@ -421,7 +422,7 @@ function saveClicked(activate) {
       showSaveNotification(r.error, true);
       return;
     }
-    showSaveNotification(activate ? 'Saved and activated' : 'Version saved', false);
+    showSaveNotification(activate ? __commonSeedData.jsSavedActivated : __commonSeedData.jsSaved, false);
     renderVersionHistoryRows(r.versions);
     if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
     if (r.contentTypeLocked) { applyContentTypeLocked(r.contentTypeValue); }
@@ -442,7 +443,7 @@ function saveClicked(activate) {
 // location.reload()-ing the whole page.
 function applyConfigSetNowExists() {
   var banner = document.getElementById('notExistYetBanner');
-  if (banner) { banner.style.display = 'none'; }
+  if (banner) { ctsyncSetHidden(banner, true); }
   if (document.getElementById('deleteConfigSetBtn')) { return; }
   var row = document.getElementById('pageHeaderBtnRow');
   var tpl = document.getElementById('deleteConfigSetBtnTemplate');
@@ -550,9 +551,9 @@ function switchToEditMode() {
   clearHistorySelection();
   document.getElementById('modeEditBtn').className = 'jenkins-button jenkins-button--primary';
   document.getElementById('modeGenerateBtn').className = 'jenkins-button';
-  document.getElementById('compareBanner').style.display = 'none';
-  document.getElementById('generateBanner').style.display = 'none';
-  document.getElementById('generateCopyRow').style.display = 'none';
+  ctsyncSetHidden(document.getElementById('compareBanner'), true);
+  ctsyncSetHidden(document.getElementById('generateBanner'), true);
+  ctsyncSetHidden(document.getElementById('generateCopyRow'), true);
 }
 
 // Click-driven Compare (2026-09-01 redesign, owner report): no checkbox anywhere —
@@ -601,10 +602,10 @@ function enterCompareMode(version, versionContent) {
   document.getElementById('modeEditBtn').className = 'jenkins-button';
   document.getElementById('modeGenerateBtn').className = 'jenkins-button';
   document.getElementById('compareBannerText').textContent =
-      'Comparing the current (unsaved) draft against v' + version + '.';
-  document.getElementById('compareBanner').style.display = 'block';
-  document.getElementById('generateBanner').style.display = 'none';
-  document.getElementById('generateCopyRow').style.display = 'none';
+      __commonSeedData.jsComparing.replace('{0}', String(version));
+  ctsyncSetHidden(document.getElementById('compareBanner'), false);
+  ctsyncSetHidden(document.getElementById('generateBanner'), true);
+  ctsyncSetHidden(document.getElementById('generateCopyRow'), true);
 }
 
 // Accepts the version currently being compared into the draft and returns to edit mode.
@@ -662,9 +663,9 @@ function switchToGenerateMode() {
     clearHistorySelection();
     document.getElementById('modeEditBtn').className = 'jenkins-button';
     document.getElementById('modeGenerateBtn').className = 'jenkins-button jenkins-button--primary';
-    document.getElementById('compareBanner').style.display = 'none';
-    document.getElementById('generateBanner').style.display = 'block';
-    document.getElementById('generateCopyRow').style.display = 'block';
+    ctsyncSetHidden(document.getElementById('compareBanner'), true);
+    ctsyncSetHidden(document.getElementById('generateBanner'), false);
+    ctsyncSetHidden(document.getElementById('generateCopyRow'), false);
   });
 }
 

@@ -12,14 +12,13 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form" xmlns:l="/lib/layout">
   <div id="versionHistoryDetails">
   <f:section title="${%versionHistory.heading}">
-    <p>Click a row to compare it against the editor's current draft (no checkbox required — click
-       any row again to return to editing).</p>
+    <p>${%versionHistory.hint}</p>
     <!-- Empty-state row (ux-ui-designer correction, 2026-09-11): a version-less Config Set renders
          as ONE spanning row inside the table body — the column header row stays visible either
          way. renderVersionHistoryRows (both hosts' own script) inserts/removes this row directly
          instead of toggling a separate placeholder div. -->
     <div id="versionHistoryTableWrap" class="ctsync-scroll-table">
-      <table class="jenkins-table ctsync-history-table sortable ctsync-filterable" style="width:100%">
+      <table class="jenkins-table ctsync-history-table sortable ctsync-filterable ctsync-w-full">
         <thead><tr><th>${%column.version}</th><th>${%column.created}</th><th>${%column.createdBy}</th><th>${%column.note}</th><th>${%column.baseChain}</th><th data-ctsync-filter="enum">${%column.active}</th><th data-sort-disable="true">${%column.actions}</th></tr></thead>
         <tbody id="versionHistoryTbody">
           <j:if test="${it.versions.isEmpty()}">
@@ -45,27 +44,27 @@
                      v.explicitlyStandalone does not exist at all on a JobConfigTemplateVersion. -->
                 <j:choose>
                   <j:when test="${it.explicitlyStandaloneSupported and v.explicitlyStandalone}">
-                    <span class="ctsync-standalone-badge" title="Declared zero base configs on purpose (see base-chains.md's Standalone env Config Sets section)">
-                      <l:icon src="symbol-flag-outline plugin-ionicons-api" class="icon-sm"/> Standalone
+                    <span class="ctsync-standalone-badge" title="${%standalone.title}">
+                      <l:icon src="symbol-flag-outline plugin-ionicons-api" class="icon-sm"/> ${%standalone.label}
                     </span>
                   </j:when>
                   <j:otherwise>
                     <a href="#" class="ctsync-basechain-toggle" data-version-number="${v.versionNumber}">
-                      <l:icon src="symbol-chevron-forward" class="icon-sm"/> ${v.baseChain.size()} <j:choose>
-                        <j:when test="${v.baseChain.size() == 1}">base</j:when>
-                        <j:otherwise>bases</j:otherwise>
-                      </j:choose>
+                      <l:icon src="symbol-chevron-forward" class="icon-sm"/> ${%baseChain.count(v.baseChain.size())}
                     </a>
-                    <div id="baseChainDetail-${v.versionNumber}" class="ctsync-basechain-history-detail" style="display:none">
+                    <div id="baseChainDetail-${v.versionNumber}" class="ctsync-basechain-history-detail ctsync-hidden">
                       <j:choose>
                         <j:when test="${v.baseChain.isEmpty()}">
-                          <div>(no declared chain — 0 bases)</div>
+                          <div>${%baseChain.noneDeclared}</div>
                         </j:when>
                         <j:otherwise>
                           <j:forEach var="ref" items="${v.baseChain}">
                             <div>
-                              ${ref.projectKey} &#8212; ${ref.pinMode}
-                              <j:if test="${ref.pinMode == 'PINNED'}">(v${ref.pinnedVersionNumber})</j:if>
+                              ${ref.projectKey} &#8212;
+                              <j:choose>
+                                <j:when test="${ref.pinMode == 'PINNED'}">${%mode.pin} (v${ref.pinnedVersionNumber})</j:when>
+                                <j:otherwise>${%mode.active}</j:otherwise>
+                              </j:choose>
                             </div>
                           </j:forEach>
                         </j:otherwise>
@@ -89,7 +88,7 @@
                   <j:otherwise>
                     <button type="button" class="jenkins-button jenkins-button--primary ctsync-activate-btn"
                             data-version-number="${v.versionNumber}"
-                            title="Activate version ${v.versionNumber} without changing the editor content">${%activate.label}</button>
+                            title="${%activate.title(v.versionNumber)}">${%activate.label}</button>
                   </j:otherwise>
                 </j:choose>
               </td>
@@ -101,9 +100,10 @@
     <template id="historyRowTemplate"
               data-active-label="${%activeStatus}"
               data-already-active-title="${%activate.alreadyActiveTitle}"
-              data-base-singular="${%baseChain.countSingular}"
-              data-base-plural="${%baseChain.countPlural}"
+              data-base-count="${%baseChain.count}"
               data-no-declared-chain="${%baseChain.noneDeclared}"
+              data-mode-active="${%mode.active}"
+              data-mode-pin="${%mode.pin}"
               data-activate-title="${%activate.title}">
       <tr class="ctsync-history-row" tabindex="0" role="button">
         <td data-th="${%column.version}" class="js-version"/>
@@ -111,11 +111,11 @@
         <td data-th="${%column.createdBy}" class="js-createdBy"/>
         <td data-th="${%column.note}" class="js-note"/>
         <td data-th="${%column.baseChain}">
-          <span class="ctsync-standalone-badge js-standalone-badge" style="display:none"
-                title="Declared zero base configs on purpose (see base-chains.md's Standalone env Config Sets section)"><l:icon src="symbol-flag-outline plugin-ionicons-api" class="icon-sm"/> Standalone</span>
+          <span class="ctsync-standalone-badge js-standalone-badge ctsync-hidden"
+                title="${%standalone.title}"><l:icon src="symbol-flag-outline plugin-ionicons-api" class="icon-sm"/> ${%standalone.label}</span>
           <a href="#" class="ctsync-basechain-toggle js-basechain-toggle">
-            <l:icon src="symbol-chevron-forward" class="icon-sm"/> <span class="js-basechain-count"/> bases</a>
-          <div class="ctsync-basechain-history-detail js-basechain-detail" style="display:none"/>
+            <l:icon src="symbol-chevron-forward" class="icon-sm"/> <span class="js-basechain-count"/></a>
+          <div class="ctsync-basechain-history-detail js-basechain-detail ctsync-hidden"/>
         </td>
         <td data-th="${%column.active}" class="js-activeBadge"/>
         <td data-th="${%column.actions}">

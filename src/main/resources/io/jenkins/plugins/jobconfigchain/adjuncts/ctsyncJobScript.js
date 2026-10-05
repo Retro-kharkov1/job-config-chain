@@ -110,7 +110,7 @@ function runXmlDiagnostics(ed) {
     if (errorNode) {
       markers.push({
         severity: monaco.MarkerSeverity.Error,
-        message: errorNode.textContent || 'Malformed XML',
+        message: errorNode.textContent || __seed.jsMalformedXml,
         startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
       });
     }
@@ -127,17 +127,17 @@ function runXmlDiagnostics(ed) {
 function scheduleYamlDiagnostics(ed) {
   if (yamlCheckTimer) { clearTimeout(yamlCheckTimer); }
   var indicator = document.getElementById('checkingIndicator');
-  if (indicator) { indicator.style.display = 'inline'; }
+  if (indicator) { ctsyncSetHidden(indicator, false); }
   var content = ed.getValue();
   yamlCheckTimer = setTimeout(function () {
     proxy.validateContent(JSON.stringify({ content: content, contentType: 'YAML' }), function (t) {
-      if (indicator) { indicator.style.display = 'none'; }
+      if (indicator) { ctsyncSetHidden(indicator, true); }
       var r = t.responseObject();
       var markers = [];
       if (!r.ok) {
         markers.push({
           severity: monaco.MarkerSeverity.Error,
-          message: r.error || 'Malformed YAML',
+          message: r.error || __seed.jsMalformedYaml,
           startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1
         });
       }
@@ -192,6 +192,7 @@ function watchJenkinsTheme() {
 
 require.config({ paths: { vs: __seed.monacoBase } });
 require(['vs/editor/editor.main'], function () {
+  ctsyncInstallMonacoWorkers(__seed.monacoBase);
   monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
     validate: true, allowComments: false, schemas: []
   });
@@ -220,7 +221,7 @@ require(['vs/editor/editor.main'], function () {
 // baseChainRows array is itself the trigger.
 function updateContentTypeRowVisibility() {
   var row = document.getElementById('contentTypeRow');
-  if (row) { row.style.display = (baseChainRows.length === 0) ? '' : 'none'; }
+  ctsyncSetHidden(row, baseChainRows.length !== 0);
 }
 
 function onContentTypeChange(type) {
@@ -243,7 +244,7 @@ function applyContentTypeLocked(type) {
   locked.appendChild(document.createTextNode(type));
   var lockIcon = window.ctsyncIcon && window.ctsyncIcon('lock');
   if (lockIcon) { locked.appendChild(lockIcon); }
-  locked.appendChild(document.createTextNode('(locked — set at first Save, immutable)'));
+  locked.appendChild(document.createTextNode(__seed.jsLocked));
   unlockedGroup.parentNode.replaceChild(locked, unlockedGroup);
   currentContentType = type;
 }
@@ -518,7 +519,7 @@ function buildBaseChainRowElement(row, index) {
   toggleLink.className = 'ctsync-basechain-row-toggle';
   toggleLink.setAttribute('role', 'button');
   toggleLink.setAttribute('aria-expanded', baseChainRowExpanded[index] ? 'true' : 'false');
-  toggleLink.title = baseChainRowExpanded[index] ? 'Collapse resolved content' : 'Expand resolved content';
+  toggleLink.title = baseChainRowExpanded[index] ? baseChainText('collapseTitle') : baseChainText('expandTitle');
   toggleLink.setAttribute('aria-label', toggleLink.title);
   var chevron = ctsyncIcon(baseChainRowExpanded[index] ? 'expanded' : 'collapsed');
   if (chevron) { toggleLink.appendChild(chevron); }
@@ -573,8 +574,8 @@ function buildBaseChainRowElement(row, index) {
 
   var modeTd = document.createElement('td');
   modeTd.className = 'ctsync-basechain-mode-cell';
-  modeTd.appendChild(buildModeRadio(row, index, 'ACTIVE', 'Active'));
-  modeTd.appendChild(buildModeRadio(row, index, 'PINNED', 'Pin'));
+  modeTd.appendChild(buildModeRadio(row, index, 'ACTIVE', baseChainText('modeActive')));
+  modeTd.appendChild(buildModeRadio(row, index, 'PINNED', baseChainText('modePin')));
   tr.appendChild(modeTd);
 
   var versionTd = document.createElement('td');
@@ -614,7 +615,7 @@ function buildBaseChainRowElement(row, index) {
       var label = fullLabels[String(versionSelect.value)] || '';
       var elided = label !== truncateVersionLabel(label);
       infoIcon.title = label;
-      infoIcon.style.display = elided ? '' : 'none';
+      ctsyncSetHidden(infoIcon, !elided);
     };
     syncVersionInfo();
 
@@ -630,6 +631,9 @@ function buildBaseChainRowElement(row, index) {
 
   var actionsTd = document.createElement('td');
   actionsTd.className = 'ctsync-basechain-actions-cell';
+  // Flex wrapper keeps the three buttons side by side and vertically centred in the cell.
+  var actionsWrap = document.createElement('div');
+  actionsWrap.className = 'ctsync-btn-row ctsync-btn-row--flush';
   var upBtn = document.createElement('button');
   upBtn.type = 'button';
   upBtn.className = 'jenkins-button ctsync-basechain-reorder-btn';
@@ -638,7 +642,7 @@ function buildBaseChainRowElement(row, index) {
   { var ic_upBtn = ctsyncIcon('up'); if (ic_upBtn) { upBtn.appendChild(ic_upBtn); } }
   upBtn.disabled = (index === 0);
   upBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, -1); }; })(index);
-  actionsTd.appendChild(upBtn);
+  actionsWrap.appendChild(upBtn);
 
   var downBtn = document.createElement('button');
   downBtn.type = 'button';
@@ -648,7 +652,7 @@ function buildBaseChainRowElement(row, index) {
   { var ic_downBtn = ctsyncIcon('down'); if (ic_downBtn) { downBtn.appendChild(ic_downBtn); } }
   downBtn.disabled = (index === baseChainRows.length - 1);
   downBtn.onclick = (function (idx) { return function () { moveBaseChainRow(idx, 1); }; })(index);
-  actionsTd.appendChild(downBtn);
+  actionsWrap.appendChild(downBtn);
 
   var removeBtn = document.createElement('button');
   removeBtn.type = 'button';
@@ -657,8 +661,9 @@ function buildBaseChainRowElement(row, index) {
   removeBtn.setAttribute('aria-label', removeBtn.title);
   { var ic_removeBtn = ctsyncIcon('remove'); if (ic_removeBtn) { removeBtn.appendChild(ic_removeBtn); } }
   removeBtn.onclick = (function (idx) { return function () { removeBaseChainRow(idx); }; })(index);
-  actionsTd.appendChild(removeBtn);
+  actionsWrap.appendChild(removeBtn);
 
+  actionsTd.appendChild(actionsWrap);
   tr.appendChild(actionsTd);
 
   if (!baseChainRowExpanded[index]) {
@@ -712,7 +717,7 @@ function buildModeRadio(row, index, value, label) {
 
 function toggleBaseChainDetail(versionNumber) {
   var el = document.getElementById('baseChainDetail-' + versionNumber);
-  if (el) { el.style.display = (el.style.display === 'none') ? 'block' : 'none'; }
+  ctsyncToggleHidden(el);
 }
 
 function formatEditorContent(ed) {
@@ -753,8 +758,8 @@ function switchToEditMode() {
   recomputeMerge();
   editMode = true;
   clearHistorySelection();
-  document.getElementById('modeEditBtn').className = 'jenkins-button jenkins-button--primary';
-  document.getElementById('compareBanner').style.display = 'none';
+  document.getElementById('modeEditBtn').classList.add('jenkins-button--primary'); // classList, not className: keeps ctsync-hidden
+  ctsyncSetHidden(document.getElementById('compareBanner'), true);
 }
 
 function selectHistoryRow(version) {
@@ -795,10 +800,10 @@ function enterCompareMode(version, versionContent) {
   selectedCompareVersion = version;
   lastComparedVersionContent = versionContent;
   highlightSelectedHistoryRow(version);
-  document.getElementById('modeEditBtn').className = 'jenkins-button';
+  document.getElementById('modeEditBtn').classList.remove('jenkins-button--primary');
   document.getElementById('compareBannerText').textContent =
-      'Comparing the current (unsaved) draft against v' + version + '.';
-  document.getElementById('compareBanner').style.display = 'block';
+      __seed.jsComparing.replace('{0}', String(version));
+  ctsyncSetHidden(document.getElementById('compareBanner'), false);
 }
 
 function loadComparedIntoEditor() {
@@ -853,11 +858,11 @@ function recomputeMerge() {
       }
       mergedEditor.setValue(r.merged);
       mergedBasesEditor.setValue(r.mergedBases);
-      indicator.style.display = 'none';
+      ctsyncSetHidden(indicator, true);
       lastPerReference = r.perReference || [];
       renderBaseChainRows();
     } else {
-      indicator.style.display = 'block';
+      ctsyncSetHidden(indicator, false);
     }
   });
 }
@@ -894,7 +899,7 @@ function saveClicked(activate) {
       showSaveNotification(r.error, true);
       return;
     }
-    showSaveNotification(activate ? 'Saved and activated' : 'Version saved', false);
+    showSaveNotification(activate ? __seed.jsSavedActivated : __seed.jsSaved, false);
     renderVersionHistoryRows(r.versions);
     if (selectedCompareVersion !== null) { highlightSelectedHistoryRow(selectedCompareVersion); }
     document.getElementById('noteField').value = '';
@@ -914,12 +919,11 @@ function saveClicked(activate) {
 // ever touches the banner.
 function applyConfigSetNowExists() {
   var banner = document.getElementById('notExistYetBanner');
-  if (banner) { banner.style.display = 'none'; }
+  if (banner) { ctsyncSetHidden(banner, true); }
 }
 
 function discardAllChangesClicked() {
-  if (!window.confirm('Discard all unsaved changes to the base chain and override? '
-      + 'This cannot be undone.')) {
+  if (!window.confirm(__seed.jsDiscardConfirm)) {
     return;
   }
   baseChainRows = JSON.parse(lastSavedBaseChainJson);
@@ -952,7 +956,7 @@ function renderVersionHistoryRows(versions) {
     tbody.appendChild(buildEmptyStateRow(7, __seed.emptyVersions));
     reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
     refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
-    document.getElementById('modeEditBtn').style.display = 'none';
+    ctsyncSetHidden(document.getElementById('modeEditBtn'), true);
     return;
   }
   for (var i = 0; i < versions.length; i++) {
@@ -960,7 +964,7 @@ function renderVersionHistoryRows(versions) {
   }
   reconcilePhantomScrollSoon(document.getElementById('versionHistoryTableWrap'));
   refreshTableFilters(); // re-apply any active column filter to the rebuilt rows
-  document.getElementById('modeEditBtn').style.display = (versions.length >= 2) ? '' : 'none';
+  ctsyncSetHidden(document.getElementById('modeEditBtn'), versions.length < 2);
 }
 
 function buildHistoryRowElement(v) {
@@ -981,18 +985,14 @@ function buildHistoryRowElement(v) {
   // No explicitlyStandalone concept here — the badge stays permanently hidden, always the
   // plain "N bases" link.
   var badge = tr.querySelector('.js-standalone-badge');
-  badge.style.display = 'none';
+  ctsyncSetHidden(badge, true);
   var toggle = tr.querySelector('.js-basechain-toggle');
-  toggle.style.display = 'inline';
+  ctsyncSetHidden(toggle, false);
   toggle.setAttribute('data-version-number', v.versionNumber);
-  tr.querySelector('.js-basechain-count').textContent = chain.length;
-  var countLabel = tr.querySelector('.js-basechain-count').nextSibling;
-  if (countLabel) {
-    // Singular and plural are separate keys, not an English 's' appended at runtime:
-    // most target languages do not pluralize that way.
-    countLabel.textContent = ' ' + (chain.length === 1
-        ? tpl.dataset.baseSingular : tpl.dataset.basePlural);
-  }
+  // One plural-neutral "label: N" message with a {0} slot, not singular/plural keys: languages
+  // have anywhere from one to six plural forms, so the count is never inflected.
+  tr.querySelector('.js-basechain-count').textContent =
+      tpl.dataset.baseCount.replace('{0}', String(chain.length));
   var detail = tr.querySelector('.js-basechain-detail');
   detail.id = 'baseChainDetail-' + v.versionNumber;
   if (chain.length === 0) {
@@ -1002,8 +1002,10 @@ function buildHistoryRowElement(v) {
     for (var c = 0; c < chain.length; c++) {
       var ref = chain[c];
       var line = document.createElement('div');
-      line.textContent = ref.projectKey + ' — ' + ref.pinMode
-          + (ref.pinMode === 'PINNED' ? ' (v' + ref.pinnedVersionNumber + ')' : '');
+      line.textContent = ref.projectKey + ' — '
+          + (ref.pinMode === 'PINNED'
+              ? tpl.dataset.modePin + ' (v' + ref.pinnedVersionNumber + ')'
+              : tpl.dataset.modeActive);
       detail.appendChild(line);
     }
   }
@@ -1067,11 +1069,11 @@ function showGeneratedTemplateView() {
       return;
     }
     lastGeneratedTemplateText = r.template;
-    document.getElementById('mergeLayout').style.display = 'none';
-    document.getElementById('generateBanner').style.display = 'block';
-    document.getElementById('generatedTemplatePanel').style.display = 'block';
-    document.getElementById('generateTemplateBtn').style.display = 'none';
-    document.getElementById('backTo3PanelBtn').style.display = 'inline-block';
+    ctsyncSetHidden(document.getElementById('mergeLayout'), true);
+    ctsyncSetHidden(document.getElementById('generateBanner'), false);
+    ctsyncSetHidden(document.getElementById('generatedTemplatePanel'), false);
+    ctsyncSetHidden(document.getElementById('generateTemplateBtn'), true);
+    ctsyncSetHidden(document.getElementById('backTo3PanelBtn'), false);
     if (generatedTemplateEditor) {
       generatedTemplateEditor.setValue(lastGeneratedTemplateText);
       monaco.editor.setModelLanguage(generatedTemplateEditor.getModel(), languageForType(r.contentType));
@@ -1087,11 +1089,11 @@ function showGeneratedTemplateView() {
 }
 
 function backTo3PanelView() {
-  document.getElementById('mergeLayout').style.display = '';
-  document.getElementById('generateBanner').style.display = 'none';
-  document.getElementById('generatedTemplatePanel').style.display = 'none';
-  document.getElementById('generateTemplateBtn').style.display = 'inline-block';
-  document.getElementById('backTo3PanelBtn').style.display = 'none';
+  ctsyncSetHidden(document.getElementById('mergeLayout'), false);
+  ctsyncSetHidden(document.getElementById('generateBanner'), true);
+  ctsyncSetHidden(document.getElementById('generatedTemplatePanel'), true);
+  ctsyncSetHidden(document.getElementById('generateTemplateBtn'), false);
+  ctsyncSetHidden(document.getElementById('backTo3PanelBtn'), true);
 }
 
 function copyGeneratedTemplate() {
