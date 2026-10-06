@@ -13,7 +13,7 @@
 
   <groupId>io.jenkins.plugins</groupId>
   <artifactId>job-config-chain</artifactId>
-  <version>${revision}-${changelist}</version>
+  <version>${revision}${changelist}</version>
   <packaging>hpi</packaging>
 
   <name>Job Config Chain</name>
@@ -64,12 +64,14 @@
          publish-github-packages.yaml) rather than dropping it — the "Manually Controlled
          Prefix"/"Wrapped Components" pattern documented on that page (`${revision}-${changelist}`,
          also used by real jenkinsci-hosted plugins, e.g. git-plugin) layers the standard
-         `changelist` qualifier on top instead of replacing the whole scheme outright. `999999-SNAPSHOT`
+         `changelist` qualifier on top instead of replacing the whole scheme outright. `-999999-SNAPSHOT` (the leading dash is part of the value so a release build can pass an EMPTY
+         `-Dchangelist=` and get a version of exactly `<revision>`, e.g. `0.1.0`; with a literal dash in
+         <version> the best an empty value could give is `0.1.0-`; see .github/workflows/release.yml)
          is the standard local/dev fallback value (see any archetype-generated plugin pom.xml); once
          this repo is transferred and released via the official CD pipeline
          (.github/workflows/cd.yaml + .mvn/extensions.xml's git-changelist-maven-extension), that
          extension computes a real value for `changelist` from the git tag being released. -->
-    <changelist>999999-SNAPSHOT</changelist>
+    <changelist>-999999-SNAPSHOT</changelist>
     <!-- Bumped 2026-09-28 in response to the Jenkins Security Advisory of 2026-09-02
          (https://www.jenkins.io/security/advisory/2026-09-02/), which names fixed
          core version "Jenkins 2.580, LTS 2.568.3" for 13 CVEs (CVE-2026-84645 through
