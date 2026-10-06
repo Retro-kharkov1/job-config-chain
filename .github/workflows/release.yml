@@ -1,0 +1,186 @@
+# Release workflow: a pushed `vX.Y.Z` tag builds, tests and publishes the plugin automatically.
+#
+# Mirrors the conventions of the owner's other repo (Retro-kharkov1/chatdock,
+# .github/workflows/release.yml): trigger on `v*.*.*` tags (+ manual dispatch), version computed
+# by GitVersion (gittools/actions pinned to the verified tag v4.7.0, versionSpec 6.8.x), built
+# artifacts attached to the GitHub Release as assets, authenticated with the built-in
+# GITHUB_TOKEN only (no PAT, no extra secrets).
+#
+# What one run does, in order (each step gates the next; a red step publishes nothing after it):
+#   1. checkout the tag with FULL history (GitVersion needs it)
+#   2. GitVersion -> SemVer; must equal the tag without the `v` (guards a mismatch)
+#   3. `mvn clean verify` -- the whole test suite is the release gate
+#   4. check the .hpi manifest really says Plugin-Version == SemVer (no SNAPSHOT/changelist suffix)
+#   5. stage assets: job-config-chain-<semver>.hpi, job-config-chain.hpi, SHA256SUMS
+#   6. create/update the GitHub Release for the tag (body from .github/release-notes/<tag>.md
+#      when that file exists, otherwise auto-generated notes) and upload the assets
+#   7. publish the same version to GitHub Packages (Maven registry)
+#
+# Why Packages is folded in here and not left on `release: published`: a release created with
+# the built-in GITHUB_TOKEN does NOT trigger other workflows (GitHub's recursion guard,
+# https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication),
+# so publish-github-packages.yaml would silently never fire. That workflow is now
+# workflow_dispatch-only and serves as a manual re-publish fallback.
+#
+# Version scheme: pom.xml is `${revision}${changelist}`. A release passes `-Drevision=<semver>`
+# and an EMPTY `-Dchangelist=` so the packaged version is exactly <semver> (0.1.0 for tag v0.1.0).
+# Locally and in Jenkins CD `changelist` keeps its non-empty default / computed value.
+#
+# FUTURE (Jenkins CD): once the repo is forked into the jenkinsci org, official releases go
+# through cd.yaml (maven-cd reusable workflow, git-changelist-maven-extension) and this
+# workflow is retired or reduced to GitHub-only mirrors. Nothing here touches cd.yaml, and
+# the `-Pgithub-packages` profile keeps distributionManagement out of the official path.
+#
+# Recovery model: fix forward. A failed run before step 6 publishes nothing; fix and push a
+# new tag (or re-run this workflow). Steps 6 and 7 are re-runnable, except that GitHub Packages
+# rejects re-publishing an existing release version -- use a new patch version in that case.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re-)release, e.g. v0.1.0. Empty = the tag this run was started from (choose "Use workflow from: Tag").'
+        required: false
+        type: string
+
+permissions:
+  contents: write   # create/update the Release and upload assets
+  packages: write   # publish to GitHub Packages (Maven registry)
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          TAG="$INPUT_TAG"
+          if [ -z "$TAG" ] && [ "$REF_TYPE" = "tag" ]; then
+            TAG="$REF_NAME"
+          fi
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Release tag must look like vX.Y.Z; got '${TAG}'. Start the run from a tag or set the 'tag' input."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+          # GitVersion walks commits and tags; a shallow clone makes it fail or compute nonsense.
+          fetch-depth: 0
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4.7.0
+        with:
+          versionSpec: '6.8.x'
+
+      - name: Determine version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4.7.0
+        # Also exports env vars GitVersion_SemVer, GitVersion_FullSemVer, ...
+
+      - name: Check version matches the tag
+        id: version
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          SEMVER: ${{ env.GitVersion_SemVer }}
+        run: |
+          echo "tag=$TAG GitVersion SemVer=$SEMVER"
+          if [ -z "$SEMVER" ] || [ "v$SEMVER" != "$TAG" ]; then
+            echo "::error::GitVersion computed '${SEMVER}' but the tag is '${TAG}'. For a manual run, start it from the tag itself (Use workflow from: Tag) so GitVersion sees the tag."
+            exit 1
+          fi
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          # JDK 21 to RUN Maven/maven-hpi-plugin; bytecode target stays maven.compiler.release=17.
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+          server-id: github # matches <id>github</id> in pom.xml's github-packages profile
+
+      - name: Build and test (release gate)
+        # `mvn` (preinstalled on the runner), not ./mvnw: the wrapper would run its own
+        # dotnet-gitversion; the version computed above is the single source of truth.
+        # -Dchangelist= (empty) makes the version exactly <semver>; see header.
+        run: >
+          mvn -B
+          -Drevision=${{ steps.version.outputs.semver }}
+          -Dchangelist=
+          -Dmaven.clean.failOnError=false
+          clean verify
+
+      - name: Stage release assets
+        id: assets
+        env:
+          SEMVER: ${{ steps.version.outputs.semver }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Fail closed if the manifest does not carry exactly the release version.
+          MANIFEST_VERSION="$(unzip -p target/job-config-chain.hpi META-INF/MANIFEST.MF | tr -d '\r' | sed -n 's/^Plugin-Version: //p')"
+          echo "Plugin-Version in .hpi manifest: '$MANIFEST_VERSION'"
+          if [ "$MANIFEST_VERSION" != "$SEMVER" ]; then
+            echo "::error::.hpi Plugin-Version '${MANIFEST_VERSION}' != '${SEMVER}'"
+            exit 1
+          fi
+          mkdir -p release-assets
+          cp target/job-config-chain.hpi "release-assets/job-config-chain-${SEMVER}.hpi"
+          cp target/job-config-chain.hpi release-assets/job-config-chain.hpi
+          (cd release-assets && sha256sum "job-config-chain-${SEMVER}.hpi" job-config-chain.hpi > SHA256SUMS && cat SHA256SUMS)
+          # Release body: committed notes for this tag win over auto-generated ones.
+          NOTES=".github/release-notes/${TAG}.md"
+          if [ -f "$NOTES" ]; then
+            echo "body_path=$NOTES" >> "$GITHUB_OUTPUT"
+            echo "generate=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "body_path=" >> "$GITHUB_OUTPUT"
+            echo "generate=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update the GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Job Config Chain ${{ steps.tag.outputs.tag }}
+          body_path: ${{ steps.assets.outputs.body_path }}
+          generate_release_notes: ${{ steps.assets.outputs.generate == 'true' }}
+          draft: false
+          prerelease: false
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/job-config-chain-${{ steps.version.outputs.semver }}.hpi
+            release-assets/job-config-chain.hpi
+            release-assets/SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to GitHub Packages
+        # Tests already ran in the gate above, so they are skipped here; the staged release
+        # assets are copies taken before this step. -Pgithub-packages opts into the
+        # distributionManagement profile (kept out of the default/official path in pom.xml).
+        run: >
+          mvn -B -Pgithub-packages
+          -Drevision=${{ steps.version.outputs.semver }}
+          -Dchangelist=
+          -DskipTests
+          deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

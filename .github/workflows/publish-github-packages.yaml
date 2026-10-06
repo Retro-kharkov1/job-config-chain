@@ -28,11 +28,15 @@
 # profile in pom.xml, not as an unconditional override — see the comment on that profile
 # in pom.xml for why (protects the future official jenkinsci-hosted release path).
 
+# MANUAL FALLBACK ONLY. The normal release path is release.yml, which on a `vX.Y.Z` tag push
+# builds, tests, creates the GitHub Release with its assets AND publishes to GitHub Packages.
+# The former `release: published` trigger was removed: releases created with GITHUB_TOKEN do
+# not fire other workflows, and keeping it would risk double-publishing now that release.yml
+# publishes. Use this workflow only to re-publish an existing tag by hand.
+
 name: Publish to GitHub Packages
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -100,6 +104,7 @@ jobs:
         run: >
           mvn -B -Pgithub-packages
           -Drevision=${{ steps.gitversion.outputs.semver }}
+          -Dchangelist=
           -Dmaven.clean.failOnError=false
           clean deploy
         env:
