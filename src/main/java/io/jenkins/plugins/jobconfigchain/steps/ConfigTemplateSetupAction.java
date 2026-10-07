@@ -5,11 +5,11 @@ import hudson.model.InvisibleAction;
 import java.io.Serializable;
 
 /**
- * Build-scoped storage for {@code setupConfigTemplate}'s parameters (see pipeline-steps.md's
- * "setupConfigTemplate build-scoped convenience step" section). Attached to the
+ * Build-scoped storage for {@code setupConfigChain}'s parameters (see pipeline-steps.md's
+ * "setupConfigChain build-scoped convenience step" section). Attached to the
  * {@link hudson.model.Run} via {@code addOrReplaceAction} (never plain {@code addAction} — see
- * {@link SetupConfigTemplateStep.Execution#run()}), so a same-build, zero/partial-argument
- * {@code configTemplateValidate()}/{@code configTemplateSubstitute()} call can read back whichever
+ * {@link SetupConfigChainStep.Execution#run()}), so a same-build, zero/partial-argument
+ * {@code configChainValidate()}/{@code configChainSubstitute()} call can read back whichever
  * parameters it did not itself explicitly supply. {@code InvisibleAction} — this state
  * is a pipeline-internal implementation detail, never rendered on the build's own UI page.
  *

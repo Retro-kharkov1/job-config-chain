@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * build originally shipped with (build-version-pinned replay; pipeline-steps.md "Build-identity
  * pinning", user-flows.md rollback flow).
  *
- * <p>Existing coverage (ConfigTemplateSubstituteStepTest fr25/fr54/fr54b/fr103) proves replay of a
+ * <p>Existing coverage (ConfigChainSubstituteStepTest fr25/fr54/fr54b/fr103) proves replay of a
  * changed BASE across jobs and across builds. This class adds the combination the owner's rule is
  * really about: after the bases, the job's OWN override versions AND the job's base chain itself have
  * all changed, build #1 is still replayed byte-identically — including a secret placeholder resolved

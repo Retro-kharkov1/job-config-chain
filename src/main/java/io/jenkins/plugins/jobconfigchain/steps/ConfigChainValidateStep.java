@@ -1,28 +1,47 @@
 package io.jenkins.plugins.jobconfigchain.steps;
 
+import hudson.AbortException;
 import hudson.Extension;
 import hudson.FilePath;
+import hudson.model.Job;
 import hudson.model.Run;
 import hudson.model.TaskListener;
+import io.jenkins.plugins.jobconfigchain.persistence.ConfigSetRepository;
+
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
+import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Pipeline step {@code configChainValidate(file, useBase, configKey, version, encoding)}: the public name
- * of what older Jenkinsfiles call {@code configTemplateValidate}.
+ * Pipeline step {@code configChainValidate(file, useBase, configKey, version)} — see
+ * pipeline-steps.md's "Validation (drift detection)" section, and user-flows.md's deploy-validate
+ * flow.
  *
- * <p>This class only carries the parameters. The work is done by the very same
- * {@link ConfigTemplateValidateStep.Execution} the deprecated alias uses (reached, not copied), so the
- * result and every log line are identical for both names; see {@link ConfigTemplateValidateStep} for the
- * full parameter semantics.</p>
+ * <p>Every call resolves against the CALLING JOB's own attached local config
+ * ({@code JobConfigTemplateProperty}) by construction, unless {@code useBase: true} + {@code
+ * configKey} explicitly redirects to a named global COMMON Config Set — see pipeline-steps.md's
+ * "Pipeline call resolution — the final parameter model" for the full 7-row resolution matrix.
+ * There is no {@code projectKey}/{@code environment} parameter; that calling form was retired in
+ * full (2026-09-14), not deprecated.</p>
+ *
+ * <p>Resolves the effective configuration per the resolution matrix, flattens it to dotted-path
+ * keys, extracts the actual {@code #{...}#} tokens present in {@code file}, and fails the build
+ * naming every token with no matching effective-config key ("missing"). A key with no matching
+ * token ("orphaned") only produces a non-fatal warning.</p>
+ *
+ * <p>{@code file}/{@code useBase}/{@code configKey}/{@code version} may be omitted from the call
+ * entirely if a prior {@code setupConfigChain} call in the same build already supplied them (see
+ * pipeline-steps.md's "setupConfigChain build-scoped convenience step"); explicit call-site
+ * values always win per parameter. Only {@code file} remains mandatory.</p>
  */
 public class ConfigChainValidateStep extends Step {
 
@@ -87,9 +106,74 @@ public class ConfigChainValidateStep extends Step {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public StepExecution start(StepContext context) {
-        return new ConfigTemplateValidateStep.Execution(context, file, useBase, configKey, version, encoding);
+        return new Execution(context, file, useBase, configKey, version, encoding);
+    }
+
+    static class Execution extends SynchronousNonBlockingStepExecution<Void> {
+
+        private static final long serialVersionUID = 1L;
+
+        private final String file;
+        private final Boolean useBase;
+        // Identifier of a config set/chain, not a credential or secret.
+        @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
+        private final String configKey;
+        private final Integer version;
+
+        /** {@code null} means "UTF-8 with fallback to the agent default". */
+        private String encoding;
+
+        Execution(StepContext context, String file, Boolean useBase, String configKey, Integer version,
+                  String encoding) {
+            this(context, file, useBase, configKey, version);
+            this.encoding = encoding;
+        }
+
+        Execution(StepContext context, String file, Boolean useBase, String configKey, Integer version) {
+            super(context);
+            this.file = file;
+            this.useBase = useBase;
+            this.configKey = configKey;
+            this.version = version;
+        }
+
+        @Override
+        protected Void run() throws Exception {
+            TaskListener listener = getContext().get(TaskListener.class);
+            FilePath workspace = getContext().get(FilePath.class);
+            Run<?, ?> run = getContext().get(Run.class);
+            Job<?, ?> job = run.getParent(); // Run#getParent() already returns the owning Job — no
+            // getRequiredContext() change needed (tech-lead scoping decision, 2026-09-14,
+            // pipeline-steps.md §2).
+
+            StepSupport.EffectiveParams params = StepSupport.mergeWithSetupState(
+                    run, file, null, useBase, configKey, version);
+
+            ConfigSetRepository repository = StepSupport.newRepository();
+
+            StepSupport.ResolvedEffective resolved = StepSupport.resolveJobScoped(
+                    repository, job, params.useBase, params.configKey, params.version);
+
+            String targetContent = readTargetFile(workspace, params.file, listener);
+
+            String resolutionMode = StepSupport.describeResolutionMode(params.useBase, params.configKey, params.version);
+            StepSupport.validateOrThrow(resolved.mergedConfig, targetContent, listener,
+                    job.getFullName(), params.file, resolutionMode);
+            listener.getLogger().println(
+                    "[configTemplateSync] Validation passed for Job '" + job.getFullName() + "'");
+            return null;
+        }
+
+        private String readTargetFile(FilePath workspace, String file, TaskListener listener)
+                throws IOException, InterruptedException {
+            FilePath target = workspace.child(file);
+            TargetFileIO.warnIfOutsideWorkspace(workspace, file, listener);
+            if (!target.exists()) {
+                throw new AbortException("Target config file not found: " + file);
+            }
+            return TargetFileIO.read(target, encoding, listener, file).text;
+        }
     }
 
     @Extension

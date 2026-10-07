@@ -2,5 +2,5 @@
   將目標檔案中的每個 <code>#{Dotted.Path}#</code> 權杖取代為有效設定中的對應值，並將檔案寫回。機密值來自設定集的機密清單中所綁定的 Jenkins 憑證，絕不會來自已儲存的文字。
   <p>取代只會進行一輪: 每個權杖只取代一次，插入的文字不會被再次掃描。如果有權杖仍未解析，或所綁定的憑證遺失，建置會失敗。成功後，建置會記錄所用確切版本的部署綁定，以便日後可透過<b>從建置重新部署</b>重播同一份設定。</p>
   <p>注意: 當設定分層疊加時，JSON 陣列會被疊加層整個取代，絕不會逐元素合併。</p>
-  <p>以 Map 呼叫，例如 <code>configChainSubstitute(file: &#39;app.json&#39;)</code>。舊名稱 <code>configTemplateSubstitute</code> 仍可作為已淘汰的別名使用。</p>
+  <p>以 Map 呼叫，例如 <code>configChainSubstitute(file: &#39;app.json&#39;)</code>。</p>
 </div>

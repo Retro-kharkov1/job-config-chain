@@ -17,15 +17,15 @@ import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 import java.util.Collections;
 
 /**
- * FR-90–FR-95: {@code setupConfigTemplate}'s build-scoped convenience state, its per-parameter
+ * FR-90–FR-95: {@code setupConfigChain}'s build-scoped convenience state, its per-parameter
  * precedence against explicit call-site arguments (FR-93), the fail-loud missing-parameter path
  * (FR-94), and the {@code parallel {}} rejection (FR-95, OQ-11). Rewritten for the job-scoped
- * resolution model (tech-lead scoping decision, 2026-09-14): {@code setupConfigTemplate} has no
+ * resolution model (tech-lead scoping decision, 2026-09-14): {@code setupConfigChain} has no
  * {@code projectKey}/{@code environment} parameter — only {@code file}, {@code useBase}, {@code
  * configKey}, {@code version}, {@code redeployFromRun}.
  */
 @WithJenkins
-public class SetupConfigTemplateStepTest {
+public class SetupConfigChainStepTest {
 
     private JenkinsRule jenkins;
 
@@ -56,10 +56,10 @@ public class SetupConfigTemplateStepTest {
         seedJobOwnConfig(job, "{\"a\":1}");
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
-                        + "  setupConfigTemplate(file: 'app.json')\n"
+                        + "  setupConfigChain(file: 'app.json')\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate()\n"
-                        + "  configTemplateSubstitute()\n"
+                        + "  configChainValidate()\n"
+                        + "  configChainSubstitute()\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -79,10 +79,10 @@ public class SetupConfigTemplateStepTest {
         seedJobOwnConfig(job, "{\"a\":\"fromJobsOwnConfig-shouldNeverBeUsed\"}");
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
-                        + "  setupConfigTemplate(useBase: true, configKey: 'setup2', file: 'wrong.json')\n"
+                        + "  setupConfigChain(useBase: true, configKey: 'setup2', file: 'wrong.json')\n"
                         + "  writeFile file: 'right.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'right.json')\n"
-                        + "  configTemplateSubstitute(file: 'right.json')\n"
+                        + "  configChainValidate(file: 'right.json')\n"
+                        + "  configChainSubstitute(file: 'right.json')\n"
                         + "  echo \"RESULT:${readFile('right.json')}\"\n"
                         + "}", true));
 
@@ -95,7 +95,7 @@ public class SetupConfigTemplateStepTest {
         WorkflowJob job = jenkins.createProject(WorkflowJob.class, "setup-missing-params");
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
-                        + "  configTemplateValidate()\n"
+                        + "  configChainValidate()\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -105,7 +105,7 @@ public class SetupConfigTemplateStepTest {
 
     @Test
     public void secondSetupCallReplacesRatherThanDuplicatesStoredState() throws Exception {
-        // FR-92: a second setupConfigTemplate() call in the same build must REPLACE the stored
+        // FR-92: a second setupConfigChain() call in the same build must REPLACE the stored
         // state, not leave two ConfigTemplateSetupAction instances behind — proven here by pointing
         // the two calls at two DIFFERENT global COMMON Config Sets and asserting the SECOND one wins.
         seedCommon("setup3a", "{\"a\":1}");
@@ -114,35 +114,35 @@ public class SetupConfigTemplateStepTest {
         WorkflowJob job = jenkins.createProject(WorkflowJob.class, "setup-replace-not-duplicate");
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
-                        + "  setupConfigTemplate(useBase: true, configKey: 'setup3a', file: 'app.json')\n"
-                        + "  setupConfigTemplate(useBase: true, configKey: 'setup3b', file: 'app.json')\n"
+                        + "  setupConfigChain(useBase: true, configKey: 'setup3a', file: 'app.json')\n"
+                        + "  setupConfigChain(useBase: true, configKey: 'setup3b', file: 'app.json')\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{onlyInB}#'\n"
-                        + "  configTemplateValidate()\n"
+                        + "  configChainValidate()\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
     }
 
     @Test
-    public void setupConfigTemplateForbiddenInsideParallelBranch() throws Exception {
+    public void setupConfigChainForbiddenInsideParallelBranch() throws Exception {
         WorkflowJob job = jenkins.createProject(WorkflowJob.class, "setup-forbidden-in-parallel");
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  parallel(\n"
                         + "    branchA: {\n"
-                        + "      setupConfigTemplate(file: 'a.json')\n"
+                        + "      setupConfigChain(file: 'a.json')\n"
                         + "    }\n"
                         + "  )\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
         jenkins.assertLogContains(
-                "[configTemplateSync] setupConfigTemplate() is not supported inside a parallel {} branch", run);
+                "[configTemplateSync] setupConfigChain() is not supported inside a parallel {} branch", run);
     }
 
     @Test
     public void fullyExplicitCallsRemainSafeInsideParallelBranch() throws Exception {
-        // FR-95: the restriction is scoped to setupConfigTemplate itself, not to the two
+        // FR-95: the restriction is scoped to setupConfigChain itself, not to the two
         // existing steps — a fully explicit call inside parallel {} must still succeed.
         WorkflowJob job = jenkins.createProject(WorkflowJob.class, "explicit-call-safe-in-parallel");
         seedJobOwnConfig(job, "{\"a\":1}");
@@ -151,7 +151,7 @@ public class SetupConfigTemplateStepTest {
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
                         + "  parallel(\n"
                         + "    branchA: {\n"
-                        + "      configTemplateValidate(file: 'app.json')\n"
+                        + "      configChainValidate(file: 'app.json')\n"
                         + "    }\n"
                         + "  )\n"
                         + "}", true));

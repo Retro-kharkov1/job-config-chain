@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  *
  * <p>Already covered elsewhere (not repeated): single-base fold, own-override + base in one call,
  * every row of the resolution matrix, mismatched content types, missing project / pinned version,
- * XML and YAML variants of the happy path (see ConfigTemplateSubstituteStepTest, StepSupportTest,
+ * XML and YAML variants of the happy path (see ConfigChainSubstituteStepTest, StepSupportTest,
  * EffectiveConfigResolverTest, TreeMergePatchTest).</p>
  */
 @WithJenkins

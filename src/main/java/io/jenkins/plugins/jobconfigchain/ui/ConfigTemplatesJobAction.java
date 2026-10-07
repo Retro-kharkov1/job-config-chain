@@ -66,7 +66,7 @@ import java.util.stream.Collectors;
  */
 public class ConfigTemplatesJobAction implements Action {
 
-    /** URL segment of the job page (renamed from {@code configTemplates}; old GETs redirect). */
+    /** URL segment of the job page. */
     public static final String URL_NAME = "configChains";
 
     private final Job<?, ?> job;

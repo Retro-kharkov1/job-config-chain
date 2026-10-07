@@ -1,3 +1,0 @@
-[configTemplateSync] Validation passed for Job '@JOB@'
-[configTemplateSync] redeployFromRun '1' (resolved target 'fx-job#1') is pinned to base chain [fx-base@v1, fx-base2@v1] / own config v1
-[configTemplateSync] Substituted app.cfg for Job '@JOB@' using base chain [fx-base@v1, fx-base2@v1] / own config v1 (pinned)

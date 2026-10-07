@@ -21,9 +21,9 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code configTemplateValidate} end-to-end pipeline tests against the job-scoped resolution
+ * {@code configChainValidate} end-to-end pipeline tests against the job-scoped resolution
  * matrix (tech-lead scoping decision, 2026-09-14, pipeline-steps.md "Pipeline call resolution —
- * the final parameter model"). See {@link ConfigTemplateSubstituteStepTest}'s class javadoc for
+ * the final parameter model"). See {@link ConfigChainSubstituteStepTest}'s class javadoc for
  * the shared model description; matrix rows 4/5, the {@code configKey}-without-{@code useBase}
  * fail-loud path, and the cross-Job isolation guarantee already have dedicated coverage there
  * (both steps share the identical {@code StepSupport.resolveJobScoped}/{@code mergeWithSetupState}
@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * separate binding-related treatment).
  */
 @WithJenkins
-public class ConfigTemplateValidateStepTest {
+public class ConfigChainValidateStepTest {
 
     private JenkinsRule jenkins;
 
@@ -91,7 +91,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -105,7 +105,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -118,7 +118,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -131,7 +131,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{doesNotExist}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -146,7 +146,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{doesNotExist}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -160,7 +160,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{doesNotExist}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -177,7 +177,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'host=#{Database.Host}# pass=#{Database.Password}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -194,7 +194,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'host=#{Database.Host}# pass=#{Database.Password}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -211,7 +211,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'host=#{Database.Host}# pass=#{Database.Password}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -225,7 +225,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -241,7 +241,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -256,7 +256,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -294,7 +294,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}# z=#{c}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -329,7 +329,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}# z=#{c}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -364,7 +364,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}# z=#{c}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -378,7 +378,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -393,7 +393,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -408,7 +408,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -429,7 +429,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', useBase: true, configKey: 'proj6')\n"
+                        + "  configChainValidate(file: 'app.json', useBase: true, configKey: 'proj6')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -445,7 +445,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', useBase: true, configKey: 'proj22')\n"
+                        + "  configChainValidate(file: 'app.json', useBase: true, configKey: 'proj22')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -461,7 +461,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', useBase: true, configKey: 'proj23')\n"
+                        + "  configChainValidate(file: 'app.json', useBase: true, configKey: 'proj23')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -476,7 +476,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', useBase: true, configKey: 'proj7', version: 99)\n"
+                        + "  configChainValidate(file: 'app.json', useBase: true, configKey: 'proj7', version: 99)\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -492,7 +492,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', useBase: true, configKey: 'proj24', version: 99)\n"
+                        + "  configChainValidate(file: 'app.json', useBase: true, configKey: 'proj24', version: 99)\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -508,7 +508,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', useBase: true, configKey: 'proj25', version: 99)\n"
+                        + "  configChainValidate(file: 'app.json', useBase: true, configKey: 'proj25', version: 99)\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -536,7 +536,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', version: " + ev1 + ")\n"
+                        + "  configChainValidate(file: 'app.json', version: " + ev1 + ")\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -560,7 +560,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', version: " + ev1 + ")\n"
+                        + "  configChainValidate(file: 'app.json', version: " + ev1 + ")\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -584,7 +584,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', version: " + ev1 + ")\n"
+                        + "  configChainValidate(file: 'app.json', version: " + ev1 + ")\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -598,7 +598,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=1'\n"
-                        + "  configTemplateValidate(file: 'app.json', configKey: 'some-key')\n"
+                        + "  configChainValidate(file: 'app.json', configKey: 'some-key')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -619,7 +619,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'no tokens here'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -635,7 +635,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{anything}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -652,7 +652,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{doesNotExist}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -671,7 +671,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateValidate(file: 'app.json')\n"
+                        + "  configChainValidate(file: 'app.json')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -698,7 +698,7 @@ public class ConfigTemplateValidateStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{doesNotExist}#'\n"
-                        + "  configTemplateValidate(file: 'app.json', useBase: true, configKey: 'uf23usebaseproj')\n"
+                        + "  configChainValidate(file: 'app.json', useBase: true, configKey: 'uf23usebaseproj')\n"
                         + "}", true));
 
         var run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));

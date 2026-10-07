@@ -7,9 +7,9 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * The single flatten-and-compare implementation shared by {@code configTemplateValidate} (see
+ * The single flatten-and-compare implementation shared by {@code configChainValidate} (see
  * pipeline-steps.md's "Validation (drift detection)" section)
- * and the defensive re-check inside {@code configTemplateSubstitute} (substitute reuses this exact
+ * and the defensive re-check inside {@code configChainSubstitute} (substitute reuses this exact
  * logic rather than duplicating it or trusting validate already ran).
  *
  * <p>The drift comparison itself is a plain string-set comparison (dotted paths vs. {@code #{...}#}

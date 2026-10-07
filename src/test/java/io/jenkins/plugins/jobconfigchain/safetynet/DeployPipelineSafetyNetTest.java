@@ -36,8 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Characterization tests: green on current code, must stay green after the fixes. Already
  * covered elsewhere (not repeated): happy paths and missing / orphaned keys in all three content
  * formats, remaining-token detection, secret resolve / missing credential, setup state precedence
- * and parallel-branch refusal (ConfigTemplateSubstituteStepTest, ConfigTemplateValidateStepTest,
- * SetupConfigTemplateStepTest). This class adds the end-to-end combinations and the gaps: job's OWN
+ * and parallel-branch refusal (ConfigChainSubstituteStepTest, ConfigChainValidateStepTest,
+ * SetupConfigChainStepTest). This class adds the end-to-end combinations and the gaps: job's OWN
  * secrets manifest, manifest precedence, env override rules, missing target file, file untouched on
  * failure.</p>
  */
