@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code configTemplateSubstitute} end-to-end pipeline tests against the job-scoped resolution
+ * {@code configChainSubstitute} end-to-end pipeline tests against the job-scoped resolution
  * matrix (tech-lead scoping decision, 2026-09-14, pipeline-steps.md "Pipeline call resolution —
  * the final parameter model"). Every call resolves against the CALLING JOB's own attached
  * {@link JobConfigTemplateProperty} by construction, unless {@code useBase: true} + {@code
@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code EnvConfigSetPage} themselves) was retired in full, not deprecated.
  */
 @WithJenkins
-public class ConfigTemplateSubstituteStepTest {
+public class ConfigChainSubstituteStepTest {
 
     private JenkinsRule jenkins;
 
@@ -141,7 +141,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'password=#{Database.Password}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  def content = readFile('app.json')\n"
                         + "  echo \"RESULT:${content}\"\n"
                         + "}", true));
@@ -164,7 +164,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'password=#{Database.Password}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -188,7 +188,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'password=#{Database.Password}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  def content = readFile('app.json')\n"
                         + "  echo \"RESULT:${content}\"\n"
                         + "}", true));
@@ -212,7 +212,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'password=#{Database.Password}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  def content = readFile('app.json')\n"
                         + "  echo \"RESULT:${content}\"\n"
                         + "}", true));
@@ -234,7 +234,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'password=#{Database.Password}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -254,7 +254,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'password=#{Database.Password}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -281,7 +281,7 @@ public class ConfigTemplateSubstituteStepTest {
                 "node {\n"
                         + "  writeFile file: 'app.json', "
                         + "text: 'own=#{Own.Override}# host=#{Database.Host}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -298,7 +298,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'no tokens here'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -315,7 +315,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{anything}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -331,7 +331,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'name=#{Feature.Name}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  def content = readFile('app.json')\n"
                         + "  echo \"RESULT:${content}\"\n"
                         + "}", true));
@@ -349,7 +349,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'name=#{Feature.Name}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  def content = readFile('app.json')\n"
                         + "  echo \"RESULT:${content}\"\n"
                         + "}", true));
@@ -367,7 +367,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'name=#{Feature.Name}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  def content = readFile('app.json')\n"
                         + "  echo \"RESULT:${content}\"\n"
                         + "}", true));
@@ -387,7 +387,7 @@ public class ConfigTemplateSubstituteStepTest {
                 // re-check (OQ-7) fails it before substitution even runs.
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{missing}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -403,7 +403,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{missing}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -419,7 +419,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{missing}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -441,7 +441,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -462,7 +462,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -484,7 +484,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -509,7 +509,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -534,7 +534,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -554,7 +554,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -574,7 +574,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', version: 1)\n"
+                        + "  configChainSubstitute(file: 'app.json', version: 1)\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -593,7 +593,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', version: 1)\n"
+                        + "  configChainSubstitute(file: 'app.json', version: 1)\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -612,7 +612,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', version: 1)\n"
+                        + "  configChainSubstitute(file: 'app.json', version: 1)\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -631,7 +631,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', redeployFromRun: '999')\n"
+                        + "  configChainSubstitute(file: 'app.json', redeployFromRun: '999')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -650,7 +650,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', redeployFromRun: '999')\n"
+                        + "  configChainSubstitute(file: 'app.json', redeployFromRun: '999')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -667,7 +667,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', redeployFromRun: '999')\n"
+                        + "  configChainSubstitute(file: 'app.json', redeployFromRun: '999')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -684,7 +684,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -701,7 +701,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -718,7 +718,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -737,10 +737,10 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"FIRST:${readFile('app.json')}\"\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"SECOND:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -764,9 +764,9 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -786,10 +786,10 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"FIRST:${readFile('app.json')}\"\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"SECOND:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -808,10 +808,10 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"FIRST:${readFile('app.json')}\"\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"SECOND:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -837,7 +837,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -863,7 +863,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -888,7 +888,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}# y=#{b}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -906,7 +906,7 @@ public class ConfigTemplateSubstituteStepTest {
         //
         // Cross-JOB nuance under the job-scoped model: on a redeployFromRun replay,
         // overlayPatchForFrozenReplay re-applies the frozen ownConfigVersionNumber against the
-        // CURRENT run's own job property (StepSupport/ConfigTemplateSubstituteStep.Execution — see
+        // CURRENT run's own job property (StepSupport/ConfigChainSubstituteStep.Execution — see
         // "own config version" javadoc), never against the ORIGINATING job's property. A realistic
         // cross-job redeploy pipeline (a separate "deploy" job replaying a "build" job's pinned
         // config) is therefore only byte-identical when the redeploying job's own version N carries
@@ -919,7 +919,7 @@ public class ConfigTemplateSubstituteStepTest {
         firstDeploy.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"FIRST:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun first = jenkins.assertBuildStatus(Result.SUCCESS, firstDeploy.scheduleBuild2(0));
@@ -942,7 +942,7 @@ public class ConfigTemplateSubstituteStepTest {
         secondDeploy.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', "
+                        + "  configChainSubstitute(file: 'app.json', "
                         + "redeployFromRun: '" + first.getParent().getFullName() + "#" + firstBuildNumber + "')\n"
                         + "  echo \"SECOND:${readFile('app.json')}\"\n"
                         + "}", true));
@@ -975,7 +975,7 @@ public class ConfigTemplateSubstituteStepTest {
         firstDeploy.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"FIRST:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun first = jenkins.assertBuildStatus(Result.SUCCESS, firstDeploy.scheduleBuild2(0));
@@ -996,7 +996,7 @@ public class ConfigTemplateSubstituteStepTest {
         secondDeploy.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', "
+                        + "  configChainSubstitute(file: 'app.json', "
                         + "redeployFromRun: '" + first.getParent().getFullName() + "#" + firstBuildNumber + "')\n"
                         + "  echo \"SECOND:${readFile('app.json')}\"\n"
                         + "}", true));
@@ -1027,7 +1027,7 @@ public class ConfigTemplateSubstituteStepTest {
         firstDeploy.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"FIRST:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun first = jenkins.assertBuildStatus(Result.SUCCESS, firstDeploy.scheduleBuild2(0));
@@ -1048,7 +1048,7 @@ public class ConfigTemplateSubstituteStepTest {
         secondDeploy.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', "
+                        + "  configChainSubstitute(file: 'app.json', "
                         + "redeployFromRun: '" + first.getParent().getFullName() + "#" + firstBuildNumber + "')\n"
                         + "  echo \"SECOND:${readFile('app.json')}\"\n"
                         + "}", true));
@@ -1084,7 +1084,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"BUILD1:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun build1 = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -1103,7 +1103,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"BUILD2:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun build2 = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -1117,7 +1117,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', "
+                        + "  configChainSubstitute(file: 'app.json', "
                         + "redeployFromRun: '1')\n"
                         + "  echo \"BUILD3:${readFile('app.json')}\"\n"
                         + "}", true));
@@ -1151,7 +1151,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"BUILD1:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun build1 = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -1168,7 +1168,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"BUILD2:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun build2 = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -1180,7 +1180,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', "
+                        + "  configChainSubstitute(file: 'app.json', "
                         + "redeployFromRun: '1')\n"
                         + "  echo \"BUILD3:${readFile('app.json')}\"\n"
                         + "}", true));
@@ -1209,7 +1209,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"BUILD1:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun build1 = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -1226,7 +1226,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"BUILD2:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun build2 = jenkins.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
@@ -1238,7 +1238,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', "
+                        + "  configChainSubstitute(file: 'app.json', "
                         + "redeployFromRun: '1')\n"
                         + "  echo \"BUILD3:${readFile('app.json')}\"\n"
                         + "}", true));
@@ -1270,7 +1270,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'subproj11')\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true, configKey: 'subproj11')\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1288,7 +1288,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'subproj42')\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true, configKey: 'subproj42')\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1306,7 +1306,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'subproj43')\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true, configKey: 'subproj43')\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1329,7 +1329,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'subproj12', version: 1)\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true, configKey: 'subproj12', version: 1)\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1350,7 +1350,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'subproj44', version: 1)\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true, configKey: 'subproj44', version: 1)\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1371,7 +1371,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'subproj45', version: 1)\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true, configKey: 'subproj45', version: 1)\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1404,7 +1404,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', version: " + ev1 + ")\n"
+                        + "  configChainSubstitute(file: 'app.json', version: " + ev1 + ")\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1432,7 +1432,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', version: " + ev1 + ")\n"
+                        + "  configChainSubstitute(file: 'app.json', version: " + ev1 + ")\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1460,7 +1460,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', version: " + ev1 + ")\n"
+                        + "  configChainSubstitute(file: 'app.json', version: " + ev1 + ")\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1484,7 +1484,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true)\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true)\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1512,7 +1512,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true, version: " + v1 + ")\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true, version: " + v1 + ")\n"
                         + "  echo \"RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
 
@@ -1528,7 +1528,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=1'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', configKey: 'some-key')\n"
+                        + "  configChainSubstitute(file: 'app.json', configKey: 'some-key')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -1544,7 +1544,7 @@ public class ConfigTemplateSubstituteStepTest {
         job.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=1'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true, configKey: 'no-such-key')\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true, configKey: 'no-such-key')\n"
                         + "}", true));
 
         WorkflowRun run = jenkins.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
@@ -1570,7 +1570,7 @@ public class ConfigTemplateSubstituteStepTest {
         jobA.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{secret}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"A_RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun runA = jenkins.assertBuildStatus(Result.SUCCESS, jobA.scheduleBuild2(0));
@@ -1584,7 +1584,7 @@ public class ConfigTemplateSubstituteStepTest {
         jobB.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{secret}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json')\n"
+                        + "  configChainSubstitute(file: 'app.json')\n"
                         + "  echo \"B_RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun runB = jenkins.assertBuildStatus(Result.SUCCESS, jobB.scheduleBuild2(0));
@@ -1615,7 +1615,7 @@ public class ConfigTemplateSubstituteStepTest {
         jobA.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{secret}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', version: " + aV1 + ")\n"
+                        + "  configChainSubstitute(file: 'app.json', version: " + aV1 + ")\n"
                         + "  echo \"A_RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun runA = jenkins.assertBuildStatus(Result.SUCCESS, jobA.scheduleBuild2(0));
@@ -1630,7 +1630,7 @@ public class ConfigTemplateSubstituteStepTest {
         jobB.setDefinition(new CpsFlowDefinition(
                 "node {\n"
                         + "  writeFile file: 'app.json', text: 'x=#{a}#'\n"
-                        + "  configTemplateSubstitute(file: 'app.json', useBase: true)\n"
+                        + "  configChainSubstitute(file: 'app.json', useBase: true)\n"
                         + "  echo \"B_RESULT:${readFile('app.json')}\"\n"
                         + "}", true));
         WorkflowRun runB = jenkins.assertBuildStatus(Result.SUCCESS, jobB.scheduleBuild2(0));

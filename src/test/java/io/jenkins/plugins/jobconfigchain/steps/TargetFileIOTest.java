@@ -227,7 +227,7 @@ public class TargetFileIOTest {
 
     @Test
     public void replaceTokens_isLiteral_noRegexReplacementSyntax() {
-        String out = ConfigTemplateSubstituteStep.Execution.replaceTokens("a=#{A}# b=#{B}#",
+        String out = ConfigChainSubstituteStep.Execution.replaceTokens("a=#{A}# b=#{B}#",
                 values("A", "$1\\${x}$&", "B", "\\"));
 
         assertEquals("a=$1\\${x}$& b=\\", out);
@@ -236,7 +236,7 @@ public class TargetFileIOTest {
     @Test
     public void replaceTokens_neverRescansSubstitutedText() {
         // A's value looks like B's token; B is known too, but must NOT be expanded inside A's value.
-        String out = ConfigTemplateSubstituteStep.Execution.replaceTokens("#{A}# #{B}#",
+        String out = ConfigChainSubstituteStep.Execution.replaceTokens("#{A}# #{B}#",
                 values("A", "x#{B}#y", "B", "bee"));
 
         assertEquals("x#{B}#y bee", out);
@@ -245,13 +245,13 @@ public class TargetFileIOTest {
     @Test
     public void replaceTokens_orderIndependent() {
         String content = "#{A}#|#{B}#";
-        assertEquals(ConfigTemplateSubstituteStep.Execution.replaceTokens(content, values("A", "#{B}#", "B", "1")),
-                ConfigTemplateSubstituteStep.Execution.replaceTokens(content, values("B", "1", "A", "#{B}#")));
+        assertEquals(ConfigChainSubstituteStep.Execution.replaceTokens(content, values("A", "#{B}#", "B", "1")),
+                ConfigChainSubstituteStep.Execution.replaceTokens(content, values("B", "1", "A", "#{B}#")));
     }
 
     @Test
     public void replaceTokens_leavesUnknownTokensAndLookalikesAlone() {
-        String out = ConfigTemplateSubstituteStep.Execution.replaceTokens(
+        String out = ConfigChainSubstituteStep.Execution.replaceTokens(
                 "#{Known}# #{Unknown}# ${Known} #{Known", values("Known", "k"));
 
         assertEquals("k #{Unknown}# ${Known} #{Known", out);
@@ -259,33 +259,33 @@ public class TargetFileIOTest {
 
     @Test
     public void replaceTokens_adjacentAndRepeated() {
-        assertEquals("11112222", ConfigTemplateSubstituteStep.Execution.replaceTokens("#{A}##{A}##{B}##{B}#",
+        assertEquals("11112222", ConfigChainSubstituteStep.Execution.replaceTokens("#{A}##{A}##{B}##{B}#",
                 values("A", "11", "B", "22")));
     }
 
     @Test
     public void replaceTokens_emptyMap_returnsContent() {
-        assertEquals("x #{A}#", ConfigTemplateSubstituteStep.Execution.replaceTokens("x #{A}#", values()));
+        assertEquals("x #{A}#", ConfigChainSubstituteStep.Execution.replaceTokens("x #{A}#", values()));
     }
 
-    // ---- serialization compatibility of the step executions -------------------------------------
+    // ---- serialization of the step executions ------------------------------------------------------
 
     @Test
-    public void executions_keepSerialVersionUid_andTheNewEncodingFieldIsNullTolerant() throws Exception {
-        for (Class<?> c : new Class<?>[] {ConfigTemplateSubstituteStep.Execution.class,
-                ConfigTemplateValidateStep.Execution.class}) {
+    public void executions_haveAStableSerialVersionUid_andAnUnsetEncodingFieldDefaultsToNull() throws Exception {
+        for (Class<?> c : new Class<?>[] {ConfigChainSubstituteStep.Execution.class,
+                ConfigChainValidateStep.Execution.class}) {
             assertEquals(1L, ObjectStreamClass.lookup(c).getSerialVersionUID(), c.getName());
             Field encoding = c.getDeclaredField("encoding");
             assertFalse(Modifier.isFinal(encoding.getModifiers()), c.getName());
             assertFalse(Modifier.isTransient(encoding.getModifiers()), c.getName());
             assertEquals(String.class, encoding.getType());
             assertNotNull(ObjectStreamClass.lookup(c).getField("encoding"));
-            // The legacy-shaped constructor (what old callers and old state correspond to) leaves it null.
-            Object legacy = c == ConfigTemplateSubstituteStep.Execution.class
-                    ? new ConfigTemplateSubstituteStep.Execution(null, "f", null, null, null, null)
-                    : new ConfigTemplateValidateStep.Execution(null, "f", null, null, null);
+            // The constructor without an encoding leaves it null (UTF-8 with fallback).
+            Object noEncoding = c == ConfigChainSubstituteStep.Execution.class
+                    ? new ConfigChainSubstituteStep.Execution(null, "f", null, null, null, null)
+                    : new ConfigChainValidateStep.Execution(null, "f", null, null, null);
             encoding.setAccessible(true);
-            assertEquals(null, encoding.get(legacy));
+            assertEquals(null, encoding.get(noEncoding));
         }
     }
 

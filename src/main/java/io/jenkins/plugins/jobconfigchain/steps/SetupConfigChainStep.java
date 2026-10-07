@@ -1,5 +1,6 @@
 package io.jenkins.plugins.jobconfigchain.steps;
 
+import hudson.AbortException;
 import hudson.Extension;
 import hudson.model.Run;
 import org.jenkinsci.plugins.workflow.graph.FlowNode;
@@ -7,6 +8,7 @@ import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
+import org.jenkinsci.plugins.workflow.steps.SynchronousStepExecution;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
@@ -15,13 +17,17 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Pipeline step {@code setupConfigChain(file:, useBase:, configKey:, version:, redeployFromRun:)}: the
- * public name of what older Jenkinsfiles call {@code setupConfigTemplate}.
+ * Pipeline step {@code setupConfigChain(file:, useBase:, configKey:, version:, redeployFromRun:)}
+ * — see pipeline-steps.md's "setupConfigChain build-scoped convenience step" section. Stores its
+ * parameters scoped to the current build ({@link Run}) so a subsequent
+ * same-build, zero/partial-argument {@code configChainValidate()}/{@code configChainSubstitute()}
+ * call can read them back — purely additive convenience: a Jenkinsfile that
+ * never calls this step behaves with zero change.
  *
- * <p>This class only carries the parameters. The work is done by the very same
- * {@link SetupConfigTemplateStep.Execution} the deprecated alias uses (reached, not copied), so the
- * build-scoped state it stores is identical for both names and is read back by either the validate or
- * the substitute name; see {@link SetupConfigTemplateStep} for the full semantics.</p>
+ * <p><b>Parameter shape (2026-09-14):</b> no {@code projectKey}/{@code environment} parameter exists
+ * here either, for the same reason there is none on the two steps this configures — see
+ * pipeline-steps.md's "Pipeline call resolution — the final parameter model". {@code configKey} is
+ * only meaningful together with {@code useBase: true}.</p>
  */
 public class SetupConfigChainStep extends Step {
 
@@ -83,10 +89,59 @@ public class SetupConfigChainStep extends Step {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public StepExecution start(StepContext context) {
-        return new SetupConfigTemplateStep.Execution(context, file, redeployFromRun, useBase != null && useBase,
-                configKey, version, true);
+        return new Execution(context, file, redeployFromRun, useBase != null && useBase, configKey, version);
+    }
+
+    static class Execution extends SynchronousStepExecution<Void> {
+        // Deliberately SynchronousStepExecution, NOT SynchronousNonBlockingStepExecution like the
+        // other two steps: this step does no file/credential/network I/O (it only appends an
+        // in-memory Action to the running Run), so there is nothing worth handing off to the
+        // async-step thread pool for — running it on the CPS execution thread directly is both
+        // simpler and correct.
+
+        private static final long serialVersionUID = 1L;
+
+        private final String file;
+        private final String redeployFromRun;
+        private final boolean useBase;
+        // Identifier of a config set/chain, not a credential or secret.
+        @SuppressWarnings("lgtm[jenkins/plaintext-storage]")
+        private final String configKey;
+        private final Integer version;
+
+        Execution(StepContext context, String file, String redeployFromRun, boolean useBase, String configKey,
+                  Integer version) {
+            super(context);
+            this.file = file;
+            this.redeployFromRun = redeployFromRun;
+            this.useBase = useBase;
+            this.configKey = configKey;
+            this.version = version;
+        }
+
+        @Override
+        protected Void run() throws Exception {
+            FlowNode flowNode = getContext().get(FlowNode.class);
+            String branch = ParallelBranchGuard.enclosingParallelBranchName(flowNode);
+            if (branch != null) {
+                // See pipeline-steps.md's "Forbidden inside parallel {}" rule.
+                throw new AbortException("[configTemplateSync] setupConfigChain() is not supported "
+                        + "inside a parallel {} branch ('" + branch + "') — its build-scoped state would be "
+                        + "ambiguous across concurrently-running branches. Call configChainValidate/"
+                        + "configChainSubstitute with their own full explicit parameters inside "
+                        + "parallel {} instead.");
+            }
+            Run<?, ?> run = getContext().get(Run.class);
+            // addOrReplaceAction, not addAction: a build MAY legitimately call setupConfigChain()
+            // more than once (e.g. re-pointing to a different configKey partway through a
+            // Jenkinsfile) — a second call must REPLACE the stored state, not leave two
+            // ConfigTemplateSetupAction instances on the Run where run.getAction(Class) resolution
+            // order would be an unspecified surprise.
+            run.addOrReplaceAction(new ConfigTemplateSetupAction(file, redeployFromRun, useBase, configKey,
+                    version));
+            return null;
+        }
     }
 
     @Extension

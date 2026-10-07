@@ -15,6 +15,7 @@ import io.jenkins.plugins.jobconfigchain.model.JobConfigTemplateVersion;
 import io.jenkins.plugins.jobconfigchain.model.SecretPlaceholder;
 
 import net.sf.json.JSONObject;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.kohsuke.stapler.StaplerRequest2;
 
 import java.util.ArrayList;
@@ -207,8 +208,12 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
         }
 
         /**
-         * Always {@code true} so that this descriptor takes part in the property rebuild done on every
-         * job Configure -> Save; with {@code false} the property would be silently dropped. The content
+         * {@code true} for Pipeline jobs ({@link WorkflowJob}, including multibranch branch jobs) only: the
+         * configuration is consumed solely by Pipeline steps, so no other job type offers it. For those jobs it
+         * must stay {@code true} so that this descriptor takes part in the property rebuild done on every job
+         * Configure -> Save; with {@code false} the property would be silently dropped. (An older job of another
+         * type that already carries the property still loads with it; a Configure -> Save of such a job drops it,
+         * which loses nothing usable there.) The content
          * is still viewed and edited only on the job's own {@code /job/<name>/configChains} page (see
          * {@link ConfigTemplatesJobAction}): the descriptor is an "invisible property" (core's
          * {@code ReconfigurableDescribable} pattern) — an empty {@code config.jelly}, a
@@ -217,7 +222,7 @@ public class JobConfigTemplateProperty extends JobProperty<Job<?, ?>> {
          */
         @Override
         public boolean isApplicable(Class<? extends Job> jobType) {
-            return true;
+            return WorkflowJob.class.isAssignableFrom(jobType);
         }
 
         /**

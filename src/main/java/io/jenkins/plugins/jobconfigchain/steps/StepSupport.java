@@ -33,8 +33,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Logic shared by {@code configTemplateValidate} and the defensive re-check inside
- * {@code configTemplateSubstitute} — kept here as plain, unit-testable Java so neither step
+ * Logic shared by {@code configChainValidate} and the defensive re-check inside
+ * {@code configChainSubstitute} — kept here as plain, unit-testable Java so neither step
  * duplicates the flatten-and-compare implementation.
  */
 final class StepSupport {
@@ -266,7 +266,7 @@ final class StepSupport {
      * Overload adding the {@code (frozen deployment binding replay)} suffix
      * (pipeline-steps.md §5, "the belt-and-suspenders internal re-check ... needs ... one
      * refinement beyond the plain matrix-row phrase") — used at {@code
-     * configTemplateSubstitute}'s defensive re-check call site when a frozen Deployment Binding
+     * configChainSubstitute}'s defensive re-check call site when a frozen Deployment Binding
      * replay is active ({@code pinned == true}), so the message never misleadingly implies an
      * explicit {@code version} was passed on this call when it was actually replayed.
      */
@@ -381,7 +381,7 @@ final class StepSupport {
      */
     /**
      * Per-parameter merge of a call's own explicit arguments against a prior
-     * {@code setupConfigTemplate} call's stored {@link ConfigTemplateSetupAction} state for the same
+     * {@code setupConfigChain} call's stored {@link ConfigTemplateSetupAction} state for the same
      * build — explicit call-site value always wins, evaluated field by field, never all-or-nothing.
      * Also implements fail-loud on insufficient parameters (see pipeline-steps.md's
      * "Fail-loud on insufficient parameters" section) as this method's single exit-check.
@@ -430,8 +430,8 @@ final class StepSupport {
         }
         if (!missing.isEmpty()) {
             throw new AbortException("[configTemplateSync] Missing required parameter(s) " + missing
-                    + " — not supplied explicitly on this call, and no prior setupConfigChain() (or the deprecated "
-                    + "setupConfigTemplate()) call in this build provided them.");
+                    + " — not supplied explicitly on this call, and no prior setupConfigChain() call in this build "
+                    + "provided them.");
         }
         return new EffectiveParams(file, redeployFromRun, useBase, configKey, version);
     }

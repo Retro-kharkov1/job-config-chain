@@ -35,8 +35,7 @@ import java.util.List;
  * {@code ManagementLink} extensions (via {@code Jenkins#getManagementLinks()} /
  * {@code ManagementLink.all()}), so switching from one extension point to the other changes
  * only how the admin *navigates to* this screen — {@link #getUrlName()} is deliberately left at
- * {@code "configChains"} (renamed from {@code "configTemplates"}, whose GET URLs now redirect here via
- * {@link LegacyConfigTemplatesRedirect}) so {@code /configChains/<projectKey>/...} resolves, it is simply no longer echoed into
+ * {@code "configChains"} so {@code /configChains/<projectKey>/...} resolves; it is simply not echoed into
  * the top-nav icon bar.</p>
  *
  * <p><b>Category constraint (grounded against {@code hudson.model.ManagementLink.Category}

@@ -1,6 +1,6 @@
 package io.jenkins.plugins.jobconfigchain.ui;
 
-import hudson.model.FreeStyleProject;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSet;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
@@ -92,7 +92,7 @@ public class PageAssetsStructureTest {
 
     @Test
     public void jobPageLoadsItsAdjunctsOnce() throws Exception {
-        FreeStyleProject job = jenkins.createFreeStyleProject("assets-job");
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "assets-job");
         String html = client().goTo("job/" + job.getName() + "/configChains/").getWebResponse().getContentAsString();
         assertLoadsOnce(html, "job page", "ctsyncJobStyle", "ctsyncJobScript");
     }

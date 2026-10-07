@@ -145,10 +145,6 @@ Config layers are combined with RFC 7396 Merge Patch. When an overlay (a job's o
 chain entry) contains a JSON array, that array **replaces** the one below it as a whole; arrays are never merged
 element by element. To change one element of an array, repeat the complete array in the overlay.
 
-## Renamed steps and URLs
+## Build-log prefix
 
-The steps were previously called `configTemplateValidate`, `configTemplateSubstitute` and
-`setupConfigTemplate`. The old names still work as deprecated aliases with identical behavior and output, so
-existing Jenkinsfiles and replays of older builds keep running; they appear in the Snippet Generator only under
-advanced/deprecated entries. Use the new names in new Jenkinsfiles. The old `/configTemplates` page URLs redirect
-(GET only) to `/configChains`. Build-log messages keep their `[configTemplateSync]` prefix.
+Build-log messages of the steps carry the `[configTemplateSync]` prefix.

@@ -1,6 +1,6 @@
 package io.jenkins.plugins.jobconfigchain.ui;
 
-import hudson.model.FreeStyleProject;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import jenkins.model.Jenkins;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSet;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole;
@@ -77,7 +77,7 @@ public class CspCleanPagesTest {
         JSONObject confirm = new JSONObject();
         confirm.put("confirmName", "csp-gone");
         new CommonConfigSetPage("csp-gone", repo).jsDeleteConfigSet(confirm.toString());
-        FreeStyleProject job = jenkins.createFreeStyleProject("csp-job");
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "csp-job");
 
         Map<String, String> pages = new LinkedHashMap<>();
         pages.put("global list", "manage/configChains/");

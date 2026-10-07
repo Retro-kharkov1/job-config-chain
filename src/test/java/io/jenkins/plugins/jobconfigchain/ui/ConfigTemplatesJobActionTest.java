@@ -3,7 +3,7 @@ package io.jenkins.plugins.jobconfigchain.ui;
 import com.cloudbees.plugins.credentials.CredentialsScope;
 import com.cloudbees.plugins.credentials.SystemCredentialsProvider;
 import hudson.model.Action;
-import hudson.model.FreeStyleProject;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSet;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole;
@@ -58,7 +58,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobAction_isContributedToEveryJobAndMatchesTheManagementLinkEntry() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("uitest-job-action");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "uitest-job-action");
 
         List<? extends Action> actions = project.getAllActions();
         ConfigTemplatesJobAction jobAction = actions.stream()
@@ -88,7 +88,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_rendersTheConfigTemplatesSidebarLink() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("uitest-job-action-2");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "uitest-job-action-2");
 
         HtmlPage page = jenkins.createWebClient().getPage(project);
         assertTrue(page.asNormalizedText().contains("Config Chains"), "the job's page must render the 'Config Chains' sidebar link");
@@ -96,7 +96,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobAction_exposesTheJobItself_notACachedProperty() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("uitest-job-action-3");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "uitest-job-action-3");
         ConfigTemplatesJobAction jobAction = findJobAction(project);
 
         assertEquals(project, jobAction.getJob(), "the action must expose the owning job so callers (and the Jelly view) can "
@@ -124,7 +124,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jsSave_onAJobsFirstSave_reportsExistsTrueInTheResponse() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-first-save-exists-check");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-first-save-exists-check");
         ConfigTemplatesJobAction jobAction = findJobAction(project);
         assertFalse(jobAction.isExists(), "must start unsaved for this test to be meaningful");
 
@@ -142,7 +142,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void nothingConfigured_allFourBlocksRenderEmpty_noError() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("state1-nothing-configured");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "state1-nothing-configured");
         ConfigTemplatesJobAction action = findJobAction(project);
 
         assertFalse(action.isExists());
@@ -169,7 +169,7 @@ public class ConfigTemplatesJobActionTest {
         // on /job/&lt;name&gt;/configure. HtmlUnit's Rhino-based JS engine can't reliably render live
         // notificationBar DOM state, so this asserts on the served script content instead (reliably
         // testable) rather than trying to observe a live toast.
-        FreeStyleProject project = jenkins.createFreeStyleProject("uitest-job-action-notification");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "uitest-job-action-notification");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
@@ -186,7 +186,7 @@ public class ConfigTemplatesJobActionTest {
     public void jobPage_neverSaved_notExistYetBannerCarriesAnId() throws Exception {
         // Bug fix regression guard (2026-09-28): mirrors CommonConfigSetPage's identical fix -
         // see jobPage_applyConfigSetNowExists_hidesTheNotExistYetBanner for the functional half.
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-exists-fix-markup-check");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-exists-fix-markup-check");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
@@ -209,7 +209,7 @@ public class ConfigTemplatesJobActionTest {
         // okButtonStaysDisabledUntilTheTypedNameMatches for the live-DOM functional proof of the
         // actual gating logic. This page carries a byte-identical duplicate of the same
         // confirmByNameBlock code — this test proves THIS page's copy actually shipped the fix too.
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-confirm-gate-fix-check");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-confirm-gate-fix-check");
 
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
@@ -229,7 +229,7 @@ public class ConfigTemplatesJobActionTest {
         // must still be able to generate a template straight from the CURRENT, unsaved editor draft
         // — the same overlayJson/baseChainJson/standaloneContentType inputs doComputeMerge already
         // accepts, never requiring an active version to exist first.
-        FreeStyleProject project = jenkins.createFreeStyleProject("generate-from-draft-job");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "generate-from-draft-job");
         ConfigTemplatesJobAction action = findJobAction(project);
         assertFalse(action.isExists(), "this job must never have been saved for this test to be meaningful");
 
@@ -256,7 +256,7 @@ public class ConfigTemplatesJobActionTest {
         // Degenerate case: brand-new job, empty override, empty base chain — must still produce a
         // sensible (non-error) template, matching whatever previewMergeImpl already does for the
         // same empty-chain/empty-overlay input (an empty object, no substitutions to tokenize).
-        FreeStyleProject project = jenkins.createFreeStyleProject("generate-from-draft-empty-job");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "generate-from-draft-empty-job");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL renderUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/renderTemplate");
@@ -290,7 +290,7 @@ public class ConfigTemplatesJobActionTest {
         String baseChainJson = "[{\"projectKey\":\"" + projectKey + "\",\"pinMode\":\"ACTIVE\"}]";
         String overlayJson = "{\"b\":2}";
 
-        FreeStyleProject project = jenkins.createFreeStyleProject("state2-job");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "state2-job");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
@@ -316,7 +316,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void overrideOnly_zeroChain_contentUsedVerbatim() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("state3-job");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "state3-job");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
@@ -353,7 +353,7 @@ public class ConfigTemplatesJobActionTest {
         xmlCommon.activate(xv);
         repository.save(xmlCommon);
 
-        FreeStyleProject project = jenkins.createFreeStyleProject("cross-chain-type-mismatch");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "cross-chain-type-mismatch");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
@@ -389,7 +389,7 @@ public class ConfigTemplatesJobActionTest {
             throws Exception {
         seedCommon("history-common", "{\"a\":1}", "seed");
 
-        FreeStyleProject project = jenkins.createFreeStyleProject("history-job");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "history-job");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
 
@@ -591,7 +591,7 @@ public class ConfigTemplatesJobActionTest {
     @Test
     public void jobPage_doAddSecret_persistsMappingOnTheJobPropertyItself() throws Exception {
         seedRealCredential("job-secret-real-cred");
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-add-secret");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-add-secret");
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         property.addVersion("{\"database\":{\"password\":\"" + SecretPlaceholder.VALUE + "\"}}",
                 "seed", "seed-author", 1L, java.util.Collections.emptyList(), null);
@@ -616,7 +616,7 @@ public class ConfigTemplatesJobActionTest {
     @Test
     public void jobPage_doUnbindSecret_removesMappingOnTheJobPropertyItself() throws Exception {
         seedRealCredential("job-unbind-real-cred");
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-unbind-secret");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-unbind-secret");
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         property.addVersion("{\"database\":{\"password\":\"" + SecretPlaceholder.VALUE + "\"}}",
                 "seed", "seed-author", 1L, java.util.Collections.emptyList(), null);
@@ -640,7 +640,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_inlineScriptsAreSyntacticallyValidJs_withRemoveSecretCode() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-remove-secret-js");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-remove-secret-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -652,7 +652,7 @@ public class ConfigTemplatesJobActionTest {
     @Test
     public void jobPage_rendersASecretCredentialPickerNotFreeText() throws Exception {
         seedRealCredential("job-picker-real-cred");
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-secret-picker");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-secret-picker");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -663,7 +663,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_inlineScriptsAreSyntacticallyValidJs() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-inline-scripts-valid");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-inline-scripts-valid");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -676,7 +676,7 @@ public class ConfigTemplatesJobActionTest {
             throws Exception {
         String multilineJson = "{\n  \"database\": {\n    \"host\": \"db.internal\",\n"
                 + "    \"note\": \"has a \\\"quoted\\\" word and a </script> look-alike\"\n  }\n}";
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-multiline-seed");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-multiline-seed");
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         int v = property.addVersion(multilineJson, "seed", "seed-author", 1L,
                 java.util.Collections.emptyList(), null);
@@ -692,7 +692,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_rendersGenerateTemplateButtonAboveThreePanelTable() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-generate-template-layout");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-generate-template-layout");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -707,7 +707,7 @@ public class ConfigTemplatesJobActionTest {
     public void jobPage_generateTemplateButtonNeverDisabled() throws Exception {
         // Owner requirement (2026-09-12): the job page's Generate Template button must ALWAYS be
         // clickable — renamed off "Common" (a job has no COMMON-active-version concept to reference).
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-generate-template-never-disabled");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-generate-template-never-disabled");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -719,7 +719,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_inlineScriptsAreSyntacticallyValidJs_withGenerateTemplateCode() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-generate-template-js");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-generate-template-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -732,7 +732,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_rendersExplicitBackToEditingButtonInCompareBanner() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-compare-banner");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-compare-banner");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -746,7 +746,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_activateButtonDisabledOnTheAlreadyActiveRow() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-activate-disabled-row");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-activate-disabled-row");
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         property.addVersion("{\"a\":1}", "v1", "seed-author", 1L, java.util.Collections.emptyList(), null);
         int v2 = property.addVersion("{\"a\":2}", "v2", "seed-author", 2L, java.util.Collections.emptyList(), null);
@@ -768,7 +768,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_inlineScriptsAreSyntacticallyValidJs_withBusyDisableGuardCode() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-busy-disable-js");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-busy-disable-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -781,7 +781,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_rendersBaseChainEditorMarkup() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-base-chain-markup");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-base-chain-markup");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -801,7 +801,7 @@ public class ConfigTemplatesJobActionTest {
     @Test
     public void jobPage_versionHistoryRendersBaseChainMarkerPerVersion() throws Exception {
         seedCommon("job-history-marker-common", "{\"a\":1}", "seed");
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-history-marker");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-history-marker");
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         int v = property.addVersion("{}", "seed", "seed-author", 1L, java.util.Arrays.asList(
                 BaseConfigReference.active("job-history-marker-common"),
@@ -819,7 +819,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_inlineScriptsAreSyntacticallyValidJs_withBaseChainEditorCode() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-base-chain-editor-js");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-base-chain-editor-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -842,7 +842,7 @@ public class ConfigTemplatesJobActionTest {
         String baseChainJson = "[{\"projectKey\":\"job-multi-base-a\",\"pinMode\":\"ACTIVE\"},"
                 + "{\"projectKey\":\"job-multi-base-b\",\"pinMode\":\"ACTIVE\"}]";
 
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-multi-base-merge");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-multi-base-merge");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/computeMerge");
@@ -874,7 +874,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_doComputeMerge_unresolvableChainReferenceReportsErrorWithoutThrowing() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-unresolvable-chain");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-unresolvable-chain");
         String baseChainJson = "[{\"projectKey\":\"no-such-common-project\",\"pinMode\":\"ACTIVE\"}]";
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
@@ -893,7 +893,7 @@ public class ConfigTemplatesJobActionTest {
     @Test
     public void jobPage_doSave_baseChainRowMissingPinModeDefaultsToActive() throws Exception {
         seedCommon("job-missing-pinmode-common", "{\"a\":1}", "seed");
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-missing-pinmode");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-missing-pinmode");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
@@ -919,7 +919,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_sectionsAreFramedNotCollapsible_andRenderInTheNewOrder() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-sections-order");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-sections-order");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -940,7 +940,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_inlineScriptsAreSyntacticallyValidJs_afterSectionReorg() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-section-reorg-js");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-section-reorg-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -950,7 +950,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_inlineScriptsContainReloadEditorStateFunction_andAreValidJs() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-reload-editor-state-js");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-reload-editor-state-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -963,7 +963,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_addBaseButtonUsesClearerWording() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-add-base-wording");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-add-base-wording");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -973,7 +973,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_baseChainTable_constrainsSelectDropdownWidth() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-base-chain-select-width");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-base-chain-select-width");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -986,7 +986,7 @@ public class ConfigTemplatesJobActionTest {
     public void jobPage_rendersMergedBasesPaneAndDiscardButton() throws Exception {
         // SPLIT (rule 5): real half of the old envEditPage_rendersMergedBasesPaneAndDiscardButtonAndStandaloneCheckbox
         // — the explicitlyStandaloneCheckbox assertion is dropped (dead concept for jobs, rule 4).
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-merged-bases-pane");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-merged-bases-pane");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -1003,7 +1003,7 @@ public class ConfigTemplatesJobActionTest {
     public void jobPage_inlineScriptsAreSyntacticallyValidJs_withDiscardCode() throws Exception {
         // SPLIT (rule 5): real half of envEditPage_inlineScriptsAreSyntacticallyValidJs_withStandaloneAndDiscardCode
         // — dropped the standalone-code half (onExplicitlyStandaloneChange has no job-route equivalent).
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-discard-code-js");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-discard-code-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -1020,7 +1020,7 @@ public class ConfigTemplatesJobActionTest {
         // MERGE (rule 6): the old env-route pair (locked-standalone / locked-non-standalone)
         // collapses into this ONE job-route test — the job model has no standalone/non-standalone
         // split, only "a version exists" / "no version exists yet".
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-content-type-locked");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-content-type-locked");
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         int v = property.addVersion("{}", "seed", "seed-author", 1L, java.util.Collections.emptyList(), "XML");
         property.activate(v);
@@ -1036,7 +1036,7 @@ public class ConfigTemplatesJobActionTest {
 
     @Test
     public void jobPage_rendersContentTypeRow_unlockedWhenNoVersionExists() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-content-type-unlocked");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-content-type-unlocked");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -1053,7 +1053,7 @@ public class ConfigTemplatesJobActionTest {
         // migrated by extension of rule 7's own pattern: the old env-route
         // envEditPage_inlineScript_containsContentTypePickerFunctions_andIsValidJs also hit the
         // now-404 global route and is genuine, currently job-route-uncovered business logic.
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-content-type-picker-js");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-content-type-picker-js");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -1072,7 +1072,7 @@ public class ConfigTemplatesJobActionTest {
         // (see that entry's own grounding note ahead of its disposition list); mirrors the deleted
         // env-route doSubmitSave_envContentType_immutableAfterFirstStandaloneSave, minus its
         // explicitlyStandalone setup (a job property has no such field).
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-content-type-immutable");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-content-type-immutable");
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         int v = property.addVersion("<root><a>1</a></root>", "seed", "seed-author", 1L,
                 java.util.Collections.emptyList(), "XML");
@@ -1106,7 +1106,7 @@ public class ConfigTemplatesJobActionTest {
         seedCommon("job-recompute-common", "{\"database\":{\"host\":\"db.internal\",\"port\":5432}}", "seed");
         String baseChainJson = "[{\"projectKey\":\"job-recompute-common\",\"pinMode\":\"ACTIVE\"}]";
 
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-recompute-merge");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-recompute-merge");
         jenkins.jenkins.setCrumbIssuer(null);
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         URL computeMergeUrl = new URL(wc.getContextPath() + "job/" + project.getName() + "/configChains/computeMerge");
@@ -1138,7 +1138,7 @@ public class ConfigTemplatesJobActionTest {
     @Test
     public void jobPage_baseChainRowExpanded_reorderLockstep_and_projectOptionsForRow_typeFilter_runInARealJsEngine()
             throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-basechain-js-engine");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-basechain-js-engine");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -1175,7 +1175,7 @@ public class ConfigTemplatesJobActionTest {
     @Test
     public void jobPage_pinnedVersionLabel_isTruncatedSoLongNotesCannotPushTheRowActionsOut()
             throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-basechain-version-label");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-basechain-version-label");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -1221,7 +1221,7 @@ public class ConfigTemplatesJobActionTest {
      */
     @Test
     public void jobPage_applyConfigSetNowExists_hidesTheNotExistYetBanner() throws Exception {
-        FreeStyleProject project = jenkins.createFreeStyleProject("job-exists-banner-check");
+        WorkflowJob project = jenkins.createProject(WorkflowJob.class, "job-exists-banner-check");
         JenkinsRule.WebClient wc = jenkins.createWebClient();
         wc.getOptions().setJavaScriptEnabled(false);
         HtmlPage page = wc.goTo("job/" + project.getName() + "/configChains/");
@@ -1244,7 +1244,7 @@ public class ConfigTemplatesJobActionTest {
                 + "style), without a page reload");
     }
 
-    private int saveViaJsProxyLikeCall(FreeStyleProject project, JenkinsRule.WebClient wc, String content,
+    private int saveViaJsProxyLikeCall(WorkflowJob project, JenkinsRule.WebClient wc, String content,
                                         String note, String baseChainJson) throws Exception {
         wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
         JSONObject payload = new JSONObject();
@@ -1284,7 +1284,7 @@ public class ConfigTemplatesJobActionTest {
         repository.save(configSet);
     }
 
-    private static ConfigTemplatesJobAction findJobAction(FreeStyleProject project) {
+    private static ConfigTemplatesJobAction findJobAction(WorkflowJob project) {
         List<? extends Action> actions = project.getAllActions();
         return actions.stream()
                 .filter(ConfigTemplatesJobAction.class::isInstance)

@@ -2,5 +2,5 @@
   Înlocuiește fiecare token <code>#{Dotted.Path}#</code> din fișierul țintă cu valoarea lui din configurația efectivă și scrie fișierul înapoi. Valorile secrete provin din acreditările Jenkins asociate în manifestul secretelor al setului de configurare, niciodată din text stocat.
   <p>Substituția se face într-o singură trecere: fiecare token este înlocuit o dată, iar textul inserat nu mai este scanat. Build-ul eșuează dacă un token rămâne nerezolvat sau dacă o acreditare asociată lipsește. La succes, build-ul înregistrează o asociere de desfășurare (Deployment Binding) cu versiunile exacte folosite, astfel încât aceeași configurație poate fi reluată ulterior cu <b>Redeployează dintr-o rulare</b>.</p>
   <p>Notă: când configurațiile sunt stratificate, tablourile JSON sunt înlocuite integral de stratul superior și nu sunt niciodată îmbinate element cu element.</p>
-  <p>Apelați-l cu un Map, de exemplu <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. Numele anterior <code>configTemplateSubstitute</code> funcționează în continuare ca alias depășit.</p>
+  <p>Apelați-l cu un Map, de exemplu <code>configChainSubstitute(file: &#39;app.json&#39;)</code>.</p>
 </div>

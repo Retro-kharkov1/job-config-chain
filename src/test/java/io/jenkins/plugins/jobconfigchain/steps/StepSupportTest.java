@@ -229,8 +229,8 @@ public class StepSupportTest {
     // NOTE: StepSupport#resolveJobScoped (the new Job-scoped entry point implementing matrix rows
     // 1/2/4/5/6/7) and StepSupport#mergeWithSetupState's row-3 fail-loud check both require a real
     // hudson.model.Job (JenkinsRule), which this fast, JenkinsRule-free unit-test class deliberately
-    // does not carry. Their coverage lives in ConfigTemplateSubstituteStepTest/
-    // ConfigTemplateValidateStepTest instead, exercised end to end through real pipeline runs against
+    // does not carry. Their coverage lives in ConfigChainSubstituteStepTest/
+    // ConfigChainValidateStepTest instead, exercised end to end through real pipeline runs against
     // real Jobs — see those classes' row1/row2/row4/row5/row6/row7 and configKey-without-useBase
     // tests.
 }

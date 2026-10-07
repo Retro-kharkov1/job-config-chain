@@ -28,7 +28,8 @@ database and no git-backed store.
    `sample-app`), then write and activate its first version. Mark secret leaves and bind each to a Jenkins
    credential ID (never a real value).
 3. Open the consuming job's own **Config Chains** page (`/job/<name>/configChains`), add the Config Set to the
-   job's base chain and, optionally, the job's own override content.
+   job's base chain and, optionally, the job's own override content. The page exists on Pipeline jobs
+   (including multibranch branch jobs) only, because the configuration is consumed by Pipeline steps.
 4. Call the steps from the Jenkinsfile:
 
 ```groovy
@@ -83,8 +84,7 @@ Building the `.hpi` yourself is described in [CONTRIBUTING.md](CONTRIBUTING.md).
 | `configChainSubstitute` | Replaces every `#{Path}#` token in the file with its value and records a Deployment Binding. |
 | `setupConfigChain` | Declares `file` and the resolution parameters once for the rest of the build. |
 
-Parameters: `file`, `useBase`, `configKey`, `version`, `redeployFromRun`, `encoding`. The former names
-`configTemplateValidate`, `configTemplateSubstitute` and `setupConfigTemplate` still work as deprecated aliases.
+Parameters: `file`, `useBase`, `configKey`, `version`, `redeployFromRun`, `encoding`.
 Details, the resolution matrix and the failure messages are in the
 [Pipeline step reference](docs/pipeline-steps.md).
 

@@ -2,5 +2,5 @@
   Reemplaza cada token <code>#{Dotted.Path}#</code> del archivo de destino por su valor de la configuración efectiva y vuelve a escribir el archivo. Los valores secretos provienen de las credenciales de Jenkins vinculadas en el manifiesto de secretos del conjunto de configuración, nunca de texto almacenado.
   <p>La sustitución se hace en una sola pasada: cada token se reemplaza una vez y el texto insertado nunca se vuelve a examinar. La compilación falla si un token queda sin resolver o falta una credencial vinculada. Si tiene éxito, la compilación registra un Deployment Binding de las versiones exactas usadas, de modo que la misma configuración pueda reproducirse más tarde con <b>Volver a desplegar desde la ejecución</b>.</p>
   <p>Nota: cuando se superponen configuraciones, la capa superior reemplaza por completo los arrays JSON y nunca se combinan elemento por elemento.</p>
-  <p>Llámelo con un Map, por ejemplo <code>configChainSubstitute(file: &#39;app.json&#39;)</code>. El nombre anterior <code>configTemplateSubstitute</code> sigue funcionando como alias obsoleto.</p>
+  <p>Llámelo con un Map, por ejemplo <code>configChainSubstitute(file: &#39;app.json&#39;)</code>.</p>
 </div>

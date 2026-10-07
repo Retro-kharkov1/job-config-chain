@@ -2,5 +2,5 @@
   将目标文件中的每个 <code>#{Dotted.Path}#</code> 令牌替换为有效配置中的对应值，并将文件回写。机密值来自配置集的机密清单中绑定的 Jenkins 凭据，绝不会来自已存储的文本。
   <p>替换只进行一遍: 每个令牌只替换一次，插入的文本不会被再次扫描。如果有令牌仍未解析，或绑定的凭据缺失，构建会失败。成功后，构建会记录所用确切版本的部署绑定，以便以后可通过<b>从构建重新部署</b>重放同一份配置。</p>
   <p>注意: 当配置分层叠加时，JSON 数组会被叠加层整体替换，绝不会逐元素合并。</p>
-  <p>使用 Map 调用，例如 <code>configChainSubstitute(file: &#39;app.json&#39;)</code>。旧名称 <code>configTemplateSubstitute</code> 仍可作为已弃用的别名使用。</p>
+  <p>使用 Map 调用，例如 <code>configChainSubstitute(file: &#39;app.json&#39;)</code>。</p>
 </div>

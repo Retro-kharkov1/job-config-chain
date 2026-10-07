@@ -144,8 +144,8 @@
   <build>
     <plugins>
       <plugin>
-        <!-- JenkinsRule-based integration tests (ConfigTemplateSubstituteStepTest /
-             ConfigTemplateValidateStepTest) each boot a full embedded Jenkins controller
+        <!-- JenkinsRule-based integration tests (ConfigChainSubstituteStepTest /
+             ConfigChainValidateStepTest) each boot a full embedded Jenkins controller
              (WarExploder + a fresh $JENKINS_HOME under target/tmp) once per @Test method,
              all within one shared, non-reused surefire fork per test class (parent POM
              default: reuseForks=false, one fork *per test class*, not per method — see
@@ -199,7 +199,7 @@
       <artifactId>workflow-step-api</artifactId>
     </dependency>
     <dependency>
-      <!-- FR-95/OQ-11: SetupConfigTemplateStep's ParallelBranchGuard needs FlowNode/ThreadNameAction,
+      <!-- FR-95/OQ-11: SetupConfigChainStep's ParallelBranchGuard needs FlowNode/ThreadNameAction,
            which live in workflow-api, not workflow-cps (that stays test-scope only, deliberately —
            see the tech-lead contract review's OQ-11 §7 for why CpsThread/workflow-cps was rejected
            for this). Not pulled in transitively by workflow-step-api at any scope (confirmed by
@@ -214,9 +214,11 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <!-- Compile scope: the Config Chains action and job property are contributed to Pipeline jobs only
+           (WorkflowJob), because the configuration is consumed solely by Pipeline steps. Version managed by
+           the imported bom. -->
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-job</artifactId>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
@@ -240,7 +242,7 @@
       <artifactId>credentials</artifactId>
     </dependency>
     <dependency>
-      <!-- StringCredentials is resolved at Pipeline Step *runtime* (ConfigTemplateSubstituteStep,
+      <!-- StringCredentials is resolved at Pipeline Step *runtime* (ConfigChainSubstituteStep,
            via CredentialsProvider.findCredentialById), not just from test fixtures/e2e seed data —
            this must be a normal compile-scope dependency, not test-only. -->
       <groupId>org.jenkins-ci.plugins</groupId>

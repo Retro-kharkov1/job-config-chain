@@ -1,7 +1,8 @@
 <?jelly escape-by-default='true'?>
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form" xmlns:jc="/lib/jobconfigchain">
-  <l:layout title="${it.displayName}">
-    <l:main-panel>
+  <!-- Manage Jenkins sub-page (see ConfigTemplatesRootAction/index.jelly for the attribute rationale). `it` is not
+       a ManagementLink, so the title is given explicitly. -->
+  <l:settings-subpage title="${it.displayName}" header="" width="wide" noDefer="true">
       <st:bind var="proxy" value="${it}"/>
 
       <!-- CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): this page's own
@@ -397,6 +398,5 @@
       <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncCommonScript"/>
 
       </div>
-    </l:main-panel>
-  </l:layout>
+  </l:settings-subpage>
 </j:jelly>

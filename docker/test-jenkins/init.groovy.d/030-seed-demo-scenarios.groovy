@@ -1,6 +1,6 @@
 /*
  * Auto-seeds VISUAL demonstrations of business-logic scenarios already proven correct by
- * JUnit tests this session (ConfigTemplateSubstituteStepTest, ConfigTemplateValidateStepTest,
+ * JUnit tests this session (ConfigChainSubstituteStepTest, ConfigChainValidateStepTest,
  * DriftCheckerTest) — so the owner can click through the browser and see the exact same
  * scenario shapes for themselves, instead of only trusting the test suite.
  *
@@ -20,16 +20,16 @@
  * construction; there is no more `projectKey`/`environment` calling form:
  *   1) Multi-format Config Set examples — XML and YAML siblings of the existing JSON
  *      "test-app" common Config Set, independently viewable/editable in the UI.
- *   2) Rebuild-replay demo — mirrors ConfigTemplateSubstituteStepTest#fr54b_... : same job,
+ *   2) Rebuild-replay demo — mirrors ConfigChainSubstituteStepTest#fr54b_... : same job,
  *      3 real builds, build #3's redeployFromRun replays build #1's frozen output
  *      byte-identically despite the Job's own active version having moved on. Now expressed as
  *      two versions of the Job's OWN local config (JobConfigTemplateProperty) instead of two
  *      versions of a COMMON Config Set referenced via an env overlay.
- *   3) Negative/validation demo — mirrors ConfigTemplateValidateStepTest#missingKey_... and
+ *   3) Negative/validation demo — mirrors ConfigChainValidateStepTest#missingKey_... and
  *      #orphanedKey_... : one build that fails naming a missing token, one that succeeds with
  *      a WARN naming an orphaned key. Now against each demo Job's own local config.
  *   4) Multi-base chain demo — mirrors
- *      ConfigTemplateSubstituteStepTest#multiEntryCrossProjectChainSubstitutesFromAllBases : a
+ *      ConfigChainSubstituteStepTest#multiEntryCrossProjectChainSubstitutesFromAllBases : a
  *      3-entry base chain, still across independent global COMMON Config Keys, now declared on
  *      the Job's own JobConfigTemplateVersion instead of an env Config Set Version.
  *
@@ -151,7 +151,7 @@ if (rebuildJob != null) {
                     "}", true))
     rebuildJob.setDescription(
             "Demonstrates FR-54/UF-6 rebuild-replay (see " +
-            "ConfigTemplateSubstituteStepTest#fr54b_sameJobRebuildViaRedeployFromRunReplaysByteIdenticalDespiteLaterActiveVersionBump), " +
+            "ConfigChainSubstituteStepTest#fr54b_sameJobRebuildViaRedeployFromRunReplaysByteIdenticalDespiteLaterActiveVersionBump), " +
             "now expressed as two versions of this Job's OWN local config (JobConfigTemplateProperty). " +
             "Build #1: plain call, auto-pins to Configuration A (v1, x=configuration-A-value). " +
             "Build #2: plain call again AFTER Configuration B (v2) was activated on this Job's own config " +
@@ -211,7 +211,7 @@ if (validationJob != null) {
                     "  configChainValidate(file: 'app.json')\n" +
                     "}", true))
     validationJob.setDescription(
-            "Demonstrates FR-17/18/19 drift validation (see ConfigTemplateValidateStepTest" +
+            "Demonstrates FR-17/18/19 drift validation (see ConfigChainValidateStepTest" +
             "#missingKey_failsBuildNamingTheToken and #orphanedKey_warnsButDoesNotFailBuild), " +
             "now against this Job's own local config (JobConfigTemplateProperty). " +
             "Build #1 (this Job's own v${missingKeyVersion} active at the time): template references " +
@@ -287,7 +287,7 @@ if (chainJob != null) {
                     "  echo \"RESULT:\${readFile('app.json')}\"\n" +
                     "}", true))
     chainJob.setDescription(
-            "Demonstrates FR-8/FR-51 multi-base chains (see ConfigTemplateSubstituteStepTest" +
+            "Demonstrates FR-8/FR-51 multi-base chains (see ConfigChainSubstituteStepTest" +
             "#multiEntryCrossProjectChainSubstitutesFromAllBases), now declared on this Job's own " +
             "JobConfigTemplateVersion. This Job's ONE version declares a 3-entry base chain: " +
             "'${CHAIN_PROJECT_KEY}'@ACTIVE, '${SHARED_DB_KEY}'@ACTIVE, '${SHARED_LOGGING_KEY}'@ACTIVE — " +
@@ -323,7 +323,7 @@ if (chainJob != null) {
 // Each matrix row below is seeded as its OWN separate build (mirrors Area 2/3's proven pattern)
 // rather than multiple stages inside one build. This is deliberate, not just stylistic: every
 // configChainSubstitute call that OMITS 'version' (rows 1/4/6) resolves via
-// ConfigTemplateSubstituteStep's "own-Run Deployment Binding" branch, which -- once ANY earlier
+// ConfigChainSubstituteStep's "own-Run Deployment Binding" branch, which -- once ANY earlier
 // no-version substitute call in the SAME build/Run has already written a binding -- replays that
 // FROZEN chain for every later no-version call in that same build, ignoring that later call's own
 // useBase/configKey entirely. Rows 1/4/6 packed into one shared build would therefore silently

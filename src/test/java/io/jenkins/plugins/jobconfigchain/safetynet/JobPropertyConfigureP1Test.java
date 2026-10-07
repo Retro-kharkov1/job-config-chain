@@ -1,12 +1,11 @@
 package io.jenkins.plugins.jobconfigchain.safetynet;
 
-import hudson.model.FreeStyleProject;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference;
 import io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty;
 import org.htmlunit.html.HtmlForm;
 import org.htmlunit.html.HtmlPage;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
-import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
@@ -52,7 +51,8 @@ public class JobPropertyConfigureP1Test {
     // 1 + 2
     @Test
     public void htmlUnitConfigureSave_keepsEverything_andPropertyXmlIsByteIdentical(JenkinsRule j) throws Exception {
-        FreeStyleProject job = j.createFreeStyleProject("p1-xml");
+        WorkflowJob job = j.createProject(WorkflowJob.class, "p1-xml");
+        job.setDefinition(new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition("echo 'x'", true));
         job.addProperty(seeded());
         job.save();
         String before = propertyXml(job);
@@ -64,7 +64,7 @@ public class JobPropertyConfigureP1Test {
         j.configRoundtrip(job);
         assertEquals(before, propertyXml(job), "property XML must not change across configRoundtrip");
         j.jenkins.reload();
-        FreeStyleProject reloaded = j.jenkins.getItemByFullName("p1-xml", FreeStyleProject.class);
+        WorkflowJob reloaded = j.jenkins.getItemByFullName("p1-xml", WorkflowJob.class);
         assertEquals(before, propertyXml(reloaded));
         JobConfigTemplateProperty p = propertyOf(j, "p1-xml");
         assertEquals(2, p.getVersions().size());
@@ -94,7 +94,8 @@ public class JobPropertyConfigureP1Test {
     // 4
     @Test
     public void concurrentVersionSavesRacingConfigureSave_loseNothing(JenkinsRule j) throws Exception {
-        FreeStyleProject job = j.createFreeStyleProject("p1-concurrent");
+        WorkflowJob job = j.createProject(WorkflowJob.class, "p1-concurrent");
+        job.setDefinition(new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition("echo 'x'", true));
         job.addProperty(seeded());
         job.save();
         int saves = 8;
@@ -158,7 +159,8 @@ public class JobPropertyConfigureP1Test {
     @Test
     public void configurePageRendersNoBlockForTheProperty_andNoEntrySubmitStillPreserves(JenkinsRule j)
             throws Exception {
-        FreeStyleProject job = j.createFreeStyleProject("p1-hidden");
+        WorkflowJob job = j.createProject(WorkflowJob.class, "p1-hidden");
+        job.setDefinition(new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition("echo 'x'", true));
         job.addProperty(seeded());
         job.save();
 

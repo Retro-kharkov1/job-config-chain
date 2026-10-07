@@ -1,13 +1,12 @@
 package io.jenkins.plugins.jobconfigchain.safetynet;
 
-import hudson.model.FreeStyleProject;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference;
 import io.jenkins.plugins.jobconfigchain.model.ContentType;
 import io.jenkins.plugins.jobconfigchain.ui.JobConfigTemplateProperty;
 import org.htmlunit.html.HtmlForm;
 import org.htmlunit.html.HtmlPage;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
-import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
@@ -79,23 +78,6 @@ public class JobPropertyConfigureRoundtripC11RedTest {
     }
 
     @Test
-    public void configRoundtrip_freestyleJob_keepsPropertyAndAllVersions_alsoAfterReloadFromDisk(JenkinsRule j)
-            throws Exception {
-        FreeStyleProject job = j.createFreeStyleProject("c11-freestyle");
-        job.addProperty(threeVersionProperty());
-        job.save();
-        assertIntact(propertyOf(j, "c11-freestyle"), "before the configure submit (test setup sanity)");
-
-        j.configRoundtrip(job);
-
-        assertIntact(propertyOf(j, "c11-freestyle"), "after configRoundtrip, in memory");
-        assertTrue(job.getConfigFile().asString().contains(JobConfigTemplateProperty.class.getName()),
-                "after configRoundtrip the property must still be written to config.xml");
-        j.jenkins.reload();
-        assertIntact(propertyOf(j, "c11-freestyle"), "after configRoundtrip and reload from disk");
-    }
-
-    @Test
     public void configRoundtrip_pipelineJob_keepsPropertyAndAllVersions_alsoAfterReloadFromDisk(JenkinsRule j)
             throws Exception {
         WorkflowJob job = j.createProject(WorkflowJob.class, "c11-pipeline");
@@ -114,7 +96,8 @@ public class JobPropertyConfigureRoundtripC11RedTest {
     public void staleConfigureFormSubmittedAfterANewVersionWasSaved_keepsTheNewerVersion(JenkinsRule j)
             throws Exception {
         j.jenkins.setCrumbIssuer(null);
-        FreeStyleProject job = j.createFreeStyleProject("c11-race");
+        WorkflowJob job = j.createProject(WorkflowJob.class, "c11-race");
+        job.setDefinition(new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition("echo 'x'", true));
         JobConfigTemplateProperty initial = new JobConfigTemplateProperty();
         initial.addVersion(V1, "note-1", "alice", 1L, CHAIN, "JSON");
         initial.activate(1);

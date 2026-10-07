@@ -1,6 +1,6 @@
 package io.jenkins.plugins.jobconfigchain.ui;
 
-import hudson.model.FreeStyleProject;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSet;
 import io.jenkins.plugins.jobconfigchain.model.ConfigSetRole;
@@ -90,7 +90,7 @@ public class ConfigSetLifecycleUiTest {
     /** A job whose versions name the given keys, activating the version at {@code activeIndex}. */
     private void jobReferencing(String jobName, List<String> keyPerVersion, int activeIndex)
             throws Exception {
-        FreeStyleProject job = jenkins.createFreeStyleProject(jobName);
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, jobName);
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         List<Integer> numbers = new ArrayList<>();
         for (String key : keyPerVersion) {
@@ -328,7 +328,7 @@ public class ConfigSetLifecycleUiTest {
 
     @Test
     public void theJobPageNeverOffersDeletion() throws Exception {
-        FreeStyleProject job = jenkins.createFreeStyleProject("untouched-job");
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "untouched-job");
 
         HtmlPage rendered = markupClient().goTo("job/" + job.getName() + "/configChains/");
 

@@ -3,6 +3,7 @@ package io.jenkins.plugins.jobconfigchain.ui;
 import com.cloudbees.plugins.credentials.CredentialsScope;
 import com.cloudbees.plugins.credentials.SystemCredentialsProvider;
 import hudson.model.ManagementLink;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.htmlunit.HttpMethod;
 import org.htmlunit.Page;
 import org.htmlunit.WebRequest;
@@ -921,7 +922,7 @@ public class ConfigTemplatesUiTest {
         // test now asserts, not a silently dropped FR-56 default.
         seedCommon("uitest51", "{\"a\":1}", "seed");
 
-        hudson.model.FreeStyleProject job = jenkins.createFreeStyleProject("uitest51-job");
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "uitest51-job");
         ConfigTemplatesJobAction action = new ConfigTemplatesJobAction(job);
         String seedLiteral = action.getBaseChainSeedJsonForScript();
         String jsonArrayText = new com.google.gson.Gson().fromJson(seedLiteral, String.class);
@@ -1048,7 +1049,7 @@ public class ConfigTemplatesUiTest {
         // {versionsByProject: {...}, typeByProject: {...}} — proves the new sibling map exists with
         // the same key set, for the client-side type filter.
         seedCommon("uitest74", "{\"a\":1}", "seed");
-        hudson.model.FreeStyleProject job = jenkins.createFreeStyleProject("uitest74-job");
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "uitest74-job");
         ConfigTemplatesJobAction action = new ConfigTemplatesJobAction(job);
         String literal = action.getCommonVersionCatalogJsonForScript();
         String jsonText = new com.google.gson.Gson().fromJson(literal, String.class);

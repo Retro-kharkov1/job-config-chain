@@ -3,9 +3,14 @@ package io.jenkins.plugins.jobconfigchain.safetynet;
 import io.jenkins.plugins.jobconfigchain.steps.ConfigChainSubstituteStep;
 import io.jenkins.plugins.jobconfigchain.steps.ConfigChainValidateStep;
 import io.jenkins.plugins.jobconfigchain.steps.SetupConfigChainStep;
+import org.htmlunit.html.HtmlButton;
+import org.htmlunit.html.HtmlCheckBoxInput;
+import org.htmlunit.html.HtmlElement;
 import org.htmlunit.html.HtmlOption;
 import org.htmlunit.html.HtmlPage;
 import org.htmlunit.html.HtmlSelect;
+import org.htmlunit.html.HtmlTextArea;
+import org.htmlunit.html.HtmlTextInput;
 import org.jenkinsci.plugins.structs.describable.DescribableModel;
 import org.jenkinsci.plugins.workflow.cps.Snippetizer;
 import org.jenkinsci.plugins.workflow.steps.Step;
@@ -74,7 +79,7 @@ public class StepsSnippetGeneratorP4Test {
         for (StepCase c : CASES) {
             String dir = BASE + c.type().getSimpleName() + "/";
             String jelly = resource(dir + "config.jelly");
-            Matcher m = Pattern.compile("<f:entry[^>]*field=\"(\\w+)\"").matcher(jelly);
+            Matcher m = Pattern.compile("<f:(?:entry|optionalBlock)[^>]*field=\"(\\w+)\"").matcher(jelly);
             List<String> found = new ArrayList<>();
             while (m.find()) {
                 found.add(m.group(1));
@@ -128,6 +133,88 @@ public class StepsSnippetGeneratorP4Test {
                 assertFalse(page.getElementsByName("_." + field).isEmpty(),
                         c.function() + " form control for " + field);
             }
+        }
+    }
+
+    private static HtmlPage openStepForm(JenkinsRule.WebClient wc, StepCase c) throws Exception {
+        HtmlPage page = wc.goTo("pipeline-syntax/");
+        for (Object node : page.getByXPath("//select")) {
+            HtmlSelect candidate = (HtmlSelect) node;
+            for (HtmlOption o : candidate.getOptions()) {
+                if (o.getText().startsWith(c.function() + ":")) {
+                    candidate.setSelectedAttribute(o, true);
+                    wc.waitForBackgroundJavaScript(10_000);
+                    return page;
+                }
+            }
+        }
+        throw new AssertionError(c.function() + " is not listed in the generator");
+    }
+
+    private static String generateFromForm(JenkinsRule.WebClient wc, HtmlPage page) throws Exception {
+        HtmlButton button = page.getFirstByXPath("//button[contains(normalize-space(.), 'Generate Pipeline Script')]");
+        assertNotNull(button, "Generate Pipeline Script button");
+        button.click();
+        wc.waitForBackgroundJavaScript(10_000);
+        HtmlTextArea out = page.getFirstByXPath("//textarea[@name='prototype' or @id='prototypeText']");
+        assertNotNull(out, "generated script area");
+        return out.getText().trim();
+    }
+
+    // Review remark (hosting PR): configKey is only meaningful with useBase, so the form shows it only once
+    // useBase is checked (f:optionalBlock inline) and hides it again when unchecked.
+    @Test
+    public void configKeyField_hiddenUntilUseBaseChecked(JenkinsRule j) throws Exception {
+        for (StepCase c : CASES) {
+            JenkinsRule.WebClient wc = j.createWebClient();
+            HtmlPage page = openStepForm(wc, c);
+            HtmlCheckBoxInput useBase = page.getElementByName("_.useBase");
+            HtmlTextInput configKey = page.getElementByName("_.configKey");
+            assertFalse(useBase.isChecked(), c.function() + " useBase default");
+            assertFalse(configKey.isDisplayed(), c.function() + " configKey hidden while useBase unchecked");
+            assertTrue(((HtmlElement) page.getElementByName("_.version")).isDisplayed(),
+                    c.function() + " version is not tied to useBase");
+            useBase.click();
+            wc.waitForBackgroundJavaScript(10_000);
+            assertTrue(configKey.isDisplayed(), c.function() + " configKey shown once useBase is checked");
+            useBase.click();
+            wc.waitForBackgroundJavaScript(10_000);
+            assertFalse(configKey.isDisplayed(), c.function() + " configKey hidden again when unchecked");
+        }
+    }
+
+    // Through the real form: unchecked useBase never yields configKey (even if one was typed before
+    // unchecking); checked + key yields both.
+    @Test
+    public void generatorForm_configKeyOnlyEmittedWithUseBase(JenkinsRule j) throws Exception {
+        for (StepCase c : CASES) {
+            JenkinsRule.WebClient wc = j.createWebClient();
+            HtmlPage page = openStepForm(wc, c);
+            ((HtmlTextInput) page.getElementByName("_.file")).setText("app.cfg");
+            HtmlCheckBoxInput useBase = page.getElementByName("_.useBase");
+            useBase.click();
+            ((HtmlTextInput) page.getElementByName("_.configKey")).setText("shared");
+            assertEquals(c.function() + " configKey: 'shared', file: 'app.cfg', useBase: true",
+                    generateFromForm(wc, page), c.function() + " checked");
+            useBase.click();
+            assertEquals(c.function() + " file: 'app.cfg'", generateFromForm(wc, page),
+                    c.function() + " unchecked after typing a key");
+        }
+    }
+
+    // Submitted JSON shapes of the inline block: collapsed sends no configKey at all.
+    @Test
+    public void collapsedBlock_sendsNoConfigKey(JenkinsRule j) throws Exception {
+        for (StepCase c : CASES) {
+            assertEquals(c.function() + " file: 'app.cfg'",
+                    generate(j, c, ",\"file\":\"app.cfg\",\"useBase\":false,\"configKey\":\"typed-then-unchecked\""),
+                    c.function() + " stale key under an unchecked box");
+            assertEquals(c.function() + " file: 'app.cfg'",
+                    generate(j, c, ",\"file\":\"app.cfg\",\"useBase\":false"), c.function());
+            assertEquals(c.function() + " configKey: 'shared', file: 'app.cfg', useBase: true",
+                    generate(j, c, ",\"file\":\"app.cfg\",\"useBase\":true,\"configKey\":\"shared\""), c.function());
+            assertEquals(c.function() + " file: 'app.cfg', useBase: true",
+                    generate(j, c, ",\"file\":\"app.cfg\",\"useBase\":true,\"configKey\":\"\""), c.function());
         }
     }
 
