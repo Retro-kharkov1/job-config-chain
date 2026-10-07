@@ -18,6 +18,10 @@ final class SnippetFormSupport {
     private SnippetFormSupport() {
     }
 
+    private static boolean isTrue(Object v) {
+        return Boolean.TRUE.equals(v) || (v instanceof String s && Boolean.parseBoolean(s.trim()));
+    }
+
     @SuppressWarnings("unchecked")
     static JSONObject withoutBlankValues(JSONObject formData) {
         JSONObject kept = new JSONObject();
@@ -25,6 +29,12 @@ final class SnippetFormSupport {
             if (!(e.getValue() instanceof String s && s.trim().isEmpty())) {
                 kept.put(e.getKey(), e.getValue());
             }
+        }
+        // configKey sits in an inline f:optionalBlock bound to useBase. An inline block is not a JSON group, so a
+        // key typed before the box was unchecked is still submitted; it is only meaningful with useBase: true
+        // (pipeline-steps.md, matrix row 3), so it is dropped here, as the collapsed block promises.
+        if (!isTrue(kept.opt("useBase"))) {
+            kept.remove("configKey");
         }
         return kept;
     }
