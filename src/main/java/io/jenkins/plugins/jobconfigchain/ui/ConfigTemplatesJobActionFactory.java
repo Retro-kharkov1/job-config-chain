@@ -2,7 +2,7 @@ package io.jenkins.plugins.jobconfigchain.ui;
 
 import hudson.Extension;
 import hudson.model.Action;
-import hudson.model.Job;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import jenkins.model.Jenkins;
 import jenkins.model.TransientActionFactory;
 
@@ -10,14 +10,14 @@ import java.util.Collection;
 import java.util.Collections;
 
 /**
- * Contributes a {@link ConfigTemplatesJobAction} sidebar link to every {@link Job}'s page
+ * Contributes a {@link ConfigTemplatesJobAction} sidebar link to every Pipeline job's ({@link WorkflowJob}) page
  * ({@code /job/<name>/}), so the plugin is discoverable from any job without needing to already
  * know about {@code /manage/}.
  *
  * <p>Extension point: {@link jenkins.model.TransientActionFactory}
  * (https://javadoc.jenkins.io/jenkins/model/TransientActionFactory.html) — "Allows you to add
  * actions to any kind of object at once." This is the correct core mechanism for contributing an
- * action to every instance of a given {@code Actionable} type (here, every {@link Job}) without
+ * action to every instance of a given {@code Actionable} type (here, every Pipeline job; the configuration is consumed only by Pipeline steps, so other job types get no link) without
  * that type itself needing to know about this plugin, as opposed to a per-class {@code Action}
  * hand-wired into a specific job type.</p>
  *
@@ -29,15 +29,15 @@ import java.util.Collections;
  * visibility convenience, not the sole enforcement point.</p>
  */
 @Extension
-public class ConfigTemplatesJobActionFactory extends TransientActionFactory<Job> {
+public class ConfigTemplatesJobActionFactory extends TransientActionFactory<WorkflowJob> {
 
     @Override
-    public Class<Job> type() {
-        return Job.class;
+    public Class<WorkflowJob> type() {
+        return WorkflowJob.class;
     }
 
     @Override
-    public Collection<? extends Action> createFor(Job target) {
+    public Collection<? extends Action> createFor(WorkflowJob target) {
         Jenkins jenkins = Jenkins.getInstanceOrNull();
         if (jenkins == null || !jenkins.hasPermission(Jenkins.ADMINISTER)) {
             return Collections.emptySet();

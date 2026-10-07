@@ -1,6 +1,6 @@
 package io.jenkins.plugins.jobconfigchain.ui;
 
-import hudson.model.FreeStyleProject;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import io.jenkins.plugins.jobconfigchain.model.BaseConfigReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,9 +43,9 @@ public class ConfigSetUsageScannerTest {
      * Gives a Job a Config Templates property whose versions name the given base keys, and
      * activates the version at {@code activeIndex}.
      */
-    private FreeStyleProject jobReferencing(String jobName, List<String> keyPerVersion, int activeIndex)
+    private WorkflowJob jobReferencing(String jobName, List<String> keyPerVersion, int activeIndex)
             throws Exception {
-        FreeStyleProject job = jenkins.createFreeStyleProject(jobName);
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, jobName);
         JobConfigTemplateProperty property = new JobConfigTemplateProperty();
         List<Integer> versionNumbers = new ArrayList<>();
         for (String key : keyPerVersion) {
@@ -62,7 +62,7 @@ public class ConfigSetUsageScannerTest {
 
     @Test
     public void aJobUsingItRightNowBlocksBothOperations() throws Exception {
-        FreeStyleProject job = jobReferencing("uses-it-now", List.of("shared-db"), 0);
+        WorkflowJob job = jobReferencing("uses-it-now", List.of("shared-db"), 0);
 
         ConfigSetUsageScanner.Usage usage = ConfigSetUsageScanner.scan("shared-db", List.of(job));
 
@@ -77,7 +77,7 @@ public class ConfigSetUsageScannerTest {
     public void aReferenceOnlyInAnOlderVersionWarnsButDoesNotBlockWithdrawal() throws Exception {
         // v1 names the Config Set, v2 does not, and v2 is active. Nothing breaks today - but
         // activating v1 is one click, so the fact must still be reported.
-        FreeStyleProject job = jobReferencing("rolled-forward", java.util.Arrays.asList("shared-db", null), 1);
+        WorkflowJob job = jobReferencing("rolled-forward", java.util.Arrays.asList("shared-db", null), 1);
 
         ConfigSetUsageScanner.Usage usage = ConfigSetUsageScanner.scan("shared-db", List.of(job));
 
@@ -95,7 +95,7 @@ public class ConfigSetUsageScannerTest {
 
     @Test
     public void everyReferencingVersionIsReported() throws Exception {
-        FreeStyleProject job = jobReferencing("references-twice",
+        WorkflowJob job = jobReferencing("references-twice",
                 java.util.Arrays.asList("shared-db", null, "shared-db"), 1);
 
         ConfigSetUsageScanner.Usage usage = ConfigSetUsageScanner.scan("shared-db", List.of(job));
@@ -106,9 +106,9 @@ public class ConfigSetUsageScannerTest {
 
     @Test
     public void jobsWithoutThePropertyOrWithoutAChainAreIgnored() throws Exception {
-        FreeStyleProject plain = jenkins.createFreeStyleProject("no-property");
-        FreeStyleProject emptyChain = jobReferencing("empty-chain", java.util.Collections.singletonList(null), 0);
-        FreeStyleProject other = jobReferencing("uses-something-else", List.of("unrelated-key"), 0);
+        WorkflowJob plain = jenkins.createProject(WorkflowJob.class, "no-property");
+        WorkflowJob emptyChain = jobReferencing("empty-chain", java.util.Collections.singletonList(null), 0);
+        WorkflowJob other = jobReferencing("uses-something-else", List.of("unrelated-key"), 0);
 
         ConfigSetUsageScanner.Usage usage =
                 ConfigSetUsageScanner.scan("shared-db", List.of(plain, emptyChain, other));
@@ -124,8 +124,8 @@ public class ConfigSetUsageScannerTest {
         // Storage keys are case-sensitive filenames, so "Shared-DB" is a different Config Set from
         // "shared-db". Matching loosely here would report a dependency that does not exist and
         // block a deletion for no reason.
-        FreeStyleProject differentCase = jobReferencing("different-case", List.of("Shared-DB"), 0);
-        FreeStyleProject prefix = jobReferencing("prefix-only", List.of("shared-db-extra"), 0);
+        WorkflowJob differentCase = jobReferencing("different-case", List.of("Shared-DB"), 0);
+        WorkflowJob prefix = jobReferencing("prefix-only", List.of("shared-db-extra"), 0);
 
         ConfigSetUsageScanner.Usage usage =
                 ConfigSetUsageScanner.scan("shared-db", List.of(differentCase, prefix));
