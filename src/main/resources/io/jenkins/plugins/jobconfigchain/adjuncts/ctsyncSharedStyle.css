@@ -220,3 +220,14 @@
 .ctsync-help-row { display: flex; align-items: center; gap: 0.35rem; }
 .ctsync-content-type-row .help-area { flex-basis: 100%; }
 .ctsync-btn-row .jenkins-help-button, .ctsync-section-title-row .jenkins-help-button { flex: none; }
+
+/*
+ * Manage Jenkins sub-pages (l:settings-subpage, new Manage Jenkins UI). Core before the page-width option
+ * caps the content column at 900px (1200px with a sticky app bar), too narrow for the table shell and the
+ * editor. Newer core honours width="wide" on the page itself (its own --wide class, which this rule leaves
+ * alone); this rule gives a comparable result on older core and is a no-op where the container does not exist
+ * (classic UI, job page).
+ */
+.app-settings-container__inner:not(.app-settings-container__inner--wide):has(.ctsync-page) {
+  max-width: min(100%, 1600px);
+}

@@ -1,7 +1,11 @@
 <?jelly escape-by-default='true'?>
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout" xmlns:f="/lib/form" xmlns:jc="/lib/jobconfigchain">
-  <l:layout title="${%title}">
-    <l:main-panel>
+  <!-- Manage Jenkins sub-page (hosting review): l:settings-subpage supplies the layout, the Manage Jenkins
+       side panel when the user enables the new Manage Jenkins UI, and the page chrome. header="" suppresses its
+       default title bar because this page renders its own l:app-bar below (title plus controls); width="wide" is
+       honoured by newer core and ignored by older (the plugin CSS widens the container for those). noDefer keeps
+       the body rendered inline so the page scripts and the Monaco loader run as before. -->
+  <l:settings-subpage title="${%title}" header="" width="wide" noDefer="true">
       <st:bind var="proxy" value="${it}"/>
 
       <!-- CSP migration (see https://www.jenkins.io/doc/developer/security/csp/): this page's own
@@ -198,6 +202,5 @@
            literal </script> anywhere later in the document, silently swallowing whatever real
            HTML sits in between. Every script tag here must have an explicit closing tag. -->
       <st:adjunct includes="io.jenkins.plugins.jobconfigchain.adjuncts.ctsyncRootScript"/>
-    </l:main-panel>
-  </l:layout>
+  </l:settings-subpage>
 </j:jelly>
