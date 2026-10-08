@@ -32,7 +32,7 @@ Sources verified current as of 2026-09 (fetched directly, not from training-data
 - [x] Public GitHub repository with the plugin source (`Retro-kharkov1/job-config-chain`).
 - [x] License declared in both places Jenkins requires: `pom.xml` (`<license>`) and a `LICENSE`
       file at the repo root — this repo uses MIT, an OSI-approved license, which is acceptable.
-- [x] User documentation exists (`README.md`, with a full use-case catalog and screenshots).
+- [x] User documentation exists (`README.md` plus the foldered guide in `docs/`, with a full use-case catalog and screenshots).
 - [x] The plugin doesn't duplicate an existing hosted plugin's purpose (config-token
       validate/substitute with base-chain composition and build-identity pinning is a distinct
       niche — worth a final check against <https://plugins.jenkins.io/> immediately before filing,

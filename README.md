@@ -49,7 +49,7 @@ pipeline {
 `configChainValidate` fails the build if `app.json` references a `#{Path}#` token with no matching key in the
 effective configuration. `configChainSubstitute` then replaces every token in place, taking secrets from their
 bound Jenkins credentials. The full click-through with screenshots is in
-[Getting started](docs/getting-started.md).
+[Getting started](docs/getting-started/README.md).
 
 ## Install
 
@@ -86,15 +86,19 @@ Building the `.hpi` yourself is described in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Parameters: `file`, `useBase`, `configKey`, `version`, `redeployFromRun`, `encoding`.
 Details, the resolution matrix and the failure messages are in the
-[Pipeline step reference](docs/pipeline-steps.md).
+[Pipeline reference](docs/pipeline/README.md).
 
 ## Documentation
 
 | Page | Content |
 |---|---|
-| [Getting started](docs/getting-started.md) | Install to first successful build, with screenshots. |
-| [Pipeline step reference](docs/pipeline-steps.md) | Parameters, resolution matrix, isolation, failures, pinning, encoding, arrays. |
-| [Use cases](docs/use-cases.md) | Scenario walkthroughs: authoring, deploying, rollback, drift. |
+| [User guide](docs/README.md) | Front page of the guide. |
+| [Getting started](docs/getting-started/README.md) | Install to first successful build, with screenshots. |
+| [Concepts](docs/concepts/README.md) | Config Sets, base chain, merging, secrets, Deployment Binding. |
+| [User guide: screens](docs/user-guide/README.md) | Manage Jenkins pages, editors, job page, compare, Generate Template. |
+| [Pipeline reference](docs/pipeline/README.md) | Parameters, resolution matrix, encoding, substitution, failure messages. |
+| [Use cases](docs/use-cases/README.md) | Scenario walkthroughs: authoring, deploying, rollback, drift. |
+| [Troubleshooting](docs/troubleshooting/README.md) | Symptom, cause, fix. |
 | [HOSTING.md](HOSTING.md) | Status of the Jenkins hosting request. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Build from source, fast UI loop, tests, pull requests. |
 
