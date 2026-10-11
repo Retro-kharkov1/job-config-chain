@@ -147,20 +147,7 @@ MAVEN_HOME="${MAVEN_USER_HOME}/wrapper/dists/${distributionUrlNameMain-}/$(hash_
 
 exec_maven() {
   unset MVNW_VERBOSE MVNW_USERNAME MVNW_PASSWORD MVNW_REPOURL || :
-  # job-config-chain: compute the CI-friendly `revision` property from GitVersion
-  # before delegating to the real Maven binary, so a single `./mvnw clean verify` — no
-  # -D flag, no CI-platform script — produces a real computed SemVer in the built
-  # .hpi (see the long comment on the `revision` property in pom.xml for why this
-  # cannot be done from inside the Maven build itself via a plugin execution).
-  # Graceful degradation: if `dotnet-gitversion` is missing, not on PATH, or the
-  # checkout has no git history, no -Drevision is passed and pom.xml's own default
-  # (0.0.0-SNAPSHOT) applies — the build never fails because of this.
-  __CTS_REVISION="$(dotnet-gitversion "$scriptDir" /showvariable SemVer 2>/dev/null || :)"
-  if [ -n "${__CTS_REVISION-}" ]; then
-    exec "$MAVEN_HOME/bin/$MVN_CMD" "-Drevision=$__CTS_REVISION" "$@" || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD"
-  else
-    exec "$MAVEN_HOME/bin/$MVN_CMD" "$@" || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD"
-  fi
+  exec "$MAVEN_HOME/bin/$MVN_CMD" "$@" || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD"
 }
 
 if [ -d "$MAVEN_HOME" ]; then

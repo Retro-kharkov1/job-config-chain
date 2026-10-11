@@ -40,17 +40,7 @@
 @SET __MVNW_ARG0_NAME__=
 @SET MVNW_USERNAME=
 @SET MVNW_PASSWORD=
-@REM job-config-chain: compute the CI-friendly `revision` property from GitVersion
-@REM before delegating to the real Maven binary, so a single `mvnw.cmd clean verify` —
-@REM no -D flag, no CI-platform script — produces a real computed SemVer in the built
-@REM .hpi (see the long comment on the `revision` property in pom.xml for why this
-@REM cannot be done from inside the Maven build itself via a plugin execution).
-@REM Graceful degradation: if `dotnet-gitversion` is missing, not on PATH, or the
-@REM checkout has no git history, no -Drevision is passed and pom.xml's own default
-@REM (0.0.0-SNAPSHOT) applies — the build never fails because of this.
-@SET __CTS_DREVISION__=
-@FOR /F "usebackq delims=" %%V IN (`dotnet-gitversion "%~dp0." /showvariable SemVer 2^>nul`) DO @SET __CTS_DREVISION__=-Drevision=%%V
-@IF NOT "%__MVNW_CMD__%"=="" ("%__MVNW_CMD__%" %__CTS_DREVISION__% %*)
+@IF NOT "%__MVNW_CMD__%"=="" ("%__MVNW_CMD__%" %*)
 @echo Cannot start maven from wrapper >&2 && exit /b 1
 @GOTO :EOF
 : end batch / begin powershell #>

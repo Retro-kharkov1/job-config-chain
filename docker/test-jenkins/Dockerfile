@@ -12,13 +12,11 @@
 # Stage 1: build the plugin's .hpi from source, so `docker compose up --build` never
 # depends on a pre-existing host build (target/job-config-chain.hpi).
 #
-# Plain `mvn` (no mvnw wrapper, no GitVersion CLI) — mirrors docker-build.sh's approach
-# for the exact same reason: `-Drevision=...` can't be supplied without a SemVer already
-# computed, and the plugin's own README documents that a bare `mvn` invocation still
-# succeeds, falling back to pom.xml's default `revision` (0.0.0-SNAPSHOT). The Jenkins
-# plugin parent POM (org.jenkins-ci.plugins:plugin) pins <finalName> to the bare
-# artifactId, so the output path is always target/job-config-chain.hpi regardless of
-# version — matching what stage 2 below expects.
+# Plain `mvn` (no mvnw wrapper). Only pom.xml and src are copied (not .mvn/ nor .git), so the
+# git-changelist extension is not active and the version stays pom.xml's default
+# `${changelist}` = 999999-SNAPSHOT -- irrelevant here. The Jenkins plugin parent POM
+# (org.jenkins-ci.plugins:plugin) pins <finalName> to the bare artifactId, so the output path is
+# always target/job-config-chain.hpi regardless of version -- matching what stage 2 expects.
 #
 # JDK/Maven image pinned to eclipse-temurin-21 — a real build-time requirement (not just a
 # target-bytecode choice): the org.jenkins-ci.plugins:plugin parent POM bump to
