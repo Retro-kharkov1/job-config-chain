@@ -13,7 +13,7 @@
 
   <groupId>io.jenkins.plugins</groupId>
   <artifactId>job-config-chain</artifactId>
-  <version>${revision}${changelist}</version>
+  <version>${changelist}</version>
   <packaging>hpi</packaging>
 
   <name>Job Config Chain</name>
@@ -40,38 +40,13 @@
   </scm>
 
   <properties>
-    <!-- CI-friendly version (https://maven.apache.org/maven-ci-friendly.html).
-         IMPORTANT (verified against Maven's own docs and empirically against this repo):
-         `${revision}` is interpolated into <version> while Maven builds the reactor's
-         project models, BEFORE any lifecycle phase of any plugin runs — so a plugin
-         execution bound to `validate`/`initialize` (e.g. exec-maven-plugin, gmavenplus)
-         CANNOT set this property in time to affect this build's own packaged artifact
-         version (confirmed: it still produced "0.0.0-SNAPSHOT" in the .hpi manifest
-         even though the script ran and computed a real SemVer). Per Maven's own docs,
-         `revision` must be present as a command-line `-D` property or via
-         `.mvn/maven.config` BEFORE Maven starts reading POMs.
-         That is why version computation lives in `mvnw`/`mvnw.cmd` (see repo root):
-         the wrapper shells out to `dotnet-gitversion` first and passes
-         `-Drevision=<computed SemVer>` into the real `mvn` invocation it wraps. This
-         default value below is only the graceful-degradation fallback for a bare
-         checkout with no git history / no GitVersion CLI installed (or for anyone who
-         invokes the raw `mvn` binary directly instead of the wrapper). -->
-    <revision>0.0.0-SNAPSHOT</revision>
-    <!-- Jenkins Hosting Checker / official CD requirement
-         (https://www.jenkins.io/doc/developer/publishing/releasing-cd/): the packaged version
-         MUST contain `${changelist}`. This repo keeps its own GitVersion-computed `revision`
-         above (interim GitHub Packages release path, see the `github-packages` profile and
-         publish-github-packages.yaml) rather than dropping it — the "Manually Controlled
-         Prefix"/"Wrapped Components" pattern documented on that page (`${revision}-${changelist}`,
-         also used by real jenkinsci-hosted plugins, e.g. git-plugin) layers the standard
-         `changelist` qualifier on top instead of replacing the whole scheme outright. `-999999-SNAPSHOT` (the leading dash is part of the value so a release build can pass an EMPTY
-         `-Dchangelist=` and get a version of exactly `<revision>`, e.g. `0.1.0`; with a literal dash in
-         <version> the best an empty value could give is `0.1.0-`; see .github/workflows/release.yml)
-         is the standard local/dev fallback value (see any archetype-generated plugin pom.xml); once
-         this repo is transferred and released via the official CD pipeline
-         (.github/workflows/cd.yaml + .mvn/extensions.xml's git-changelist-maven-extension), that
-         extension computes a real value for `changelist` from the git tag being released. -->
-    <changelist>-999999-SNAPSHOT</changelist>
+    <!-- Fully automated Jenkins CD versioning (https://www.jenkins.io/doc/developer/publishing/releasing-cd/):
+         <version> is `${changelist}` only. .mvn/extensions.xml (git-changelist-maven-extension)
+         computes `<commit count>.v<12-char commit hash>` (format from .mvn/maven.config), e.g.
+         `1234.vabcdef012345`, only when the build is run with `-Dset.changelist` (the CD workflow
+         and release.yml do; it requires a clean working tree). A plain build keeps the
+         `999999-SNAPSHOT` default below. -->
+    <changelist>999999-SNAPSHOT</changelist>
     <!-- Bumped 2026-09-28 in response to the Jenkins Security Advisory of 2026-09-02
          (https://www.jenkins.io/security/advisory/2026-09-02/), which names fixed
          core version "Jenkins 2.580, LTS 2.568.3" for 13 CVEs (CVE-2026-84645 through
@@ -125,16 +100,13 @@
   <dependencyManagement>
     <dependencies>
       <dependency>
-        <!-- Latest published version of bom-2.568.x as of 2026-09-28, confirmed against
-             https://repo.jenkins-ci.org/public/io/jenkins/tools/bom/bom-2.568.x/maven-metadata.xml
-             (17 releases listed, <latest>/<release> both 7093.v37de7b_4a_8a_4f). Both
+        <!-- bom-2.568.x 7134.vc450c4b_83de0: the version the Jenkins Hosting Checker requires
+             (hosting request jenkins-infra/repository-permissions-updater#5307). Both
              io.jenkins.plugins:gson-api and io.jenkins.plugins:snakeyaml-api (used below
-             with no explicit <version>) remain managed through this bom's inherited
-             dependencyManagement chain (bom-2.568.x -> bom-2.580.x -> bom-weekly),
-             confirmed by reading jenkinsci/bom's bom-weekly/pom.xml on GitHub master. -->
+             with no explicit <version>) remain managed through this bom. -->
         <groupId>io.jenkins.tools.bom</groupId>
         <artifactId>bom-${jenkins.baseline}.x</artifactId>
-        <version>7093.v37de7b_4a_8a_4f</version>
+        <version>7134.vc450c4b_83de0</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
