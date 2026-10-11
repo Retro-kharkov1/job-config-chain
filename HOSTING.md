@@ -72,6 +72,15 @@ Sources verified current as of 2026-09 (fetched directly, not from training-data
    plugins (`jenkinsci/git-plugin`, `jenkinsci/credentials-plugin`). It has no effect until the
    repo is transferred into the `jenkinsci` org (`ci.jenkins.io` only builds repos it owns), but is
    ready in advance as step 4 below describes.
+2a. ~~**Versioning / CD requirements.**~~ **Closed 2026-10-11** (hosting request
+   `jenkins-infra/repository-permissions-updater#5307`, Hosting Checker). `pom.xml` is now
+   `<version>${changelist}</version>` with `changelist` = `999999-SNAPSHOT`, `.mvn/maven.config`
+   contains `-Dchangelist.format=%d.v%s`, and the BOM is pinned at `bom-2.568.x` `7134.vc450c4b_83de0`.
+   The earlier GitVersion-driven `${revision}` scheme was removed (GitVersion is not combined with CD).
+   Resulting versions look like `1234.vabcdef012345`. `.github/workflows/cd.yaml` + `.mvn/extensions.xml`
+   are already in place; after the transfer, official releases come from `cd.yaml` and the tag-triggered
+   `release.yml` / `publish-github-packages.yaml` should be retired or reduced to GitHub-only mirrors
+   (one release mechanism per artifact). See CONTRIBUTING.md for the build-side description.
 3. **GitHub two-factor authentication (2FA).** The hosting-request docs fetched above do not
    explicitly restate a 2FA requirement, but GitHub has required 2FA for anyone contributing code
    on github.com since March 2023, and the `jenkinsci` org (into which this repo will be forked)

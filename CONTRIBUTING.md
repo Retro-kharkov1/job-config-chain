@@ -21,15 +21,19 @@ docker-build.cmd           # Windows cmd.exe
 The result is `target/job-config-chain.hpi`. Install it by uploading it under Manage Jenkins -> Plugins ->
 Advanced settings -> Deploy Plugin.
 
-Versions are computed by GitVersion from commit history, not written into `pom.xml`: the `<version>` element is
-`${revision}` and the build passes `-Drevision=<SemVer>` (the wrapper and `docker-build.*` do this; if
-`dotnet-gitversion` is missing, the build falls back to `0.0.0-SNAPSHOT`). The `.hpi` version is
-`${revision}-${changelist}`, with `changelist` defaulting to `999999-SNAPSHOT` outside the official CD pipeline.
-An uncommitted change cannot produce a new version number: commit first, then build, or successive builds will
-carry the same version. Use `+semver: minor` or `+semver: major` in a commit message to bump beyond a patch.
+Versions follow the Jenkins continuous-delivery scheme ([JEP-229](https://github.com/jenkinsci/jep/tree/master/jep/229),
+[releasing-cd](https://www.jenkins.io/doc/developer/publishing/releasing-cd/)). `pom.xml` has `<version>${changelist}</version>`
+with `changelist` defaulting to `999999-SNAPSHOT`; `.mvn/extensions.xml` (git-changelist-maven-extension) and
+`.mvn/maven.config` (`-Dchangelist.format=%d.v%s`) compute `<commit count>.v<12-char commit hash>`, for example
+`1234.vabcdef012345`, but only when Maven is run with `-Dset.changelist` (needs a clean working tree and full git
+history). A normal local or Docker build omits the flag and produces `999999-SNAPSHOT`, which is what you want
+during development. To check a release version locally: commit, then `mvn -Dset.changelist -DskipTests clean verify`.
+The `.hpi` carries the version in `Plugin-Version`.
 
-This versioning scheme is expected to change when the plugin moves to the Jenkins organization (official CD);
-see [HOSTING.md](HOSTING.md).
+Releases: pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml` (build, tests, GitHub Release with the `.hpi`,
+GitHub Packages). The tag is only the release label; the plugin version is the computed one above (tag `v0.2.0` ->
+`job-config-chain-1234.vabcdef012345.hpi`). Once the plugin lives in the Jenkins organization, releases go through
+`.github/workflows/cd.yaml` instead, with the same version scheme; see [HOSTING.md](HOSTING.md).
 
 ## Fast loop for UI changes: `mvn hpi:run`
 
