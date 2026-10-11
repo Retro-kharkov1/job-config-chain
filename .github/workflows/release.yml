@@ -81,7 +81,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Checkout (full history)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ steps.tag.outputs.tag }}
           # git-changelist counts commits; a shallow clone would compute a wrong version number.
