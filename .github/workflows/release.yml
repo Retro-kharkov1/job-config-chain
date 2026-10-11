@@ -87,7 +87,7 @@ jobs:
           # git-changelist counts commits; a shallow clone would compute a wrong version number.
           fetch-depth: 0
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           # JDK 21 to RUN Maven/maven-hpi-plugin; bytecode target stays maven.compiler.release=17.
           java-version: '21'
