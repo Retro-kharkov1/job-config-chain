@@ -100,13 +100,13 @@
   <dependencyManagement>
     <dependencies>
       <dependency>
-        <!-- bom-2.568.x 7134.vc450c4b_83de0: the version the Jenkins Hosting Checker requires
+        <!-- bom-2.568.x 7169.vb_32a_cfd93fa_6: the version the Jenkins Hosting Checker requires
              (hosting request jenkins-infra/repository-permissions-updater#5307). Both
              io.jenkins.plugins:gson-api and io.jenkins.plugins:snakeyaml-api (used below
              with no explicit <version>) remain managed through this bom. -->
         <groupId>io.jenkins.tools.bom</groupId>
         <artifactId>bom-${jenkins.baseline}.x</artifactId>
-        <version>7134.vc450c4b_83de0</version>
+        <version>7169.vb_32a_cfd93fa_6</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
