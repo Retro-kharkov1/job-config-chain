@@ -1,6 +1,8 @@
 # Job Config Chain
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=github-sponsors)](https://github.com/sponsors/Retro-kharkov1)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-retro.kharkov-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/retro.kharkov)
 
 A Jenkins plugin for **job-scoped configuration management** with **base-chain composition**,
 **secrets binding**, and **build-identity pinning** for safe rollback. It keeps a nested, structured
@@ -18,7 +20,7 @@ database and no git-backed store.
 - [Pipeline steps at a glance](#pipeline-steps-at-a-glance)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
-- [Support this project](#support-this-project)
+- [Support this project](#-support-this-project)
 - [License](#license)
 
 ## Quick start
@@ -107,12 +109,12 @@ Details, the resolution matrix and the failure messages are in the
 Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md), including the fast
 `mvn hpi:run` loop for UI changes.
 
-## Support this project
+## ☕ Support this project
 
 If this plugin saves you time, consider supporting its development:
 
-- [GitHub Sponsors](https://github.com/sponsors/Retro-kharkov1)
-- [Buy Me a Coffee](https://buymeacoffee.com/retro.kharkov)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=github-sponsors)](https://github.com/sponsors/Retro-kharkov1)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-retro.kharkov-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/retro.kharkov)
 
 ## License
 
