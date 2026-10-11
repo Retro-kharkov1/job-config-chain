@@ -1,20 +1,21 @@
 # Release workflow: a pushed `vX.Y.Z` tag builds, tests and publishes the plugin automatically.
 #
 # Mirrors the conventions of the owner's other repo (Retro-kharkov1/chatdock,
-# .github/workflows/release.yml): trigger on `v*.*.*` tags (+ manual dispatch), version computed
-# by GitVersion (gittools/actions pinned to the verified tag v4.7.0, versionSpec 6.8.x), built
+# .github/workflows/release.yml): trigger on `v*.*.*` tags (+ manual dispatch), built
 # artifacts attached to the GitHub Release as assets, authenticated with the built-in
-# GITHUB_TOKEN only (no PAT, no extra secrets).
+# GITHUB_TOKEN only (no PAT, no extra secrets). The tag is only the release marker/label; the
+# plugin version is NOT derived from it (see below).
 #
 # What one run does, in order (each step gates the next; a red step publishes nothing after it):
-#   1. checkout the tag with FULL history (GitVersion needs it)
-#   2. GitVersion -> SemVer; must equal the tag without the `v` (guards a mismatch)
-#   3. `mvn clean verify` -- the whole test suite is the release gate
-#   4. check the .hpi manifest really says Plugin-Version == SemVer (no SNAPSHOT/changelist suffix)
-#   5. stage assets: job-config-chain-<semver>.hpi, job-config-chain.hpi, SHA256SUMS
-#   6. create/update the GitHub Release for the tag (body from .github/release-notes/<tag>.md
+#   1. checkout the tag with FULL history (the git-changelist extension counts commits)
+#   2. `mvn clean verify` -- the whole test suite is the release gate; the version is computed
+#      by .mvn/extensions.xml (git-changelist-maven-extension) when `-Dset.changelist` is passed
+#   3. read Plugin-Version from the .hpi manifest and check it is a release version of the form
+#      `<commit count>.v<commit hash>` (no SNAPSHOT / 999999 fallback)
+#   4. stage assets: job-config-chain-<version>.hpi, job-config-chain.hpi, SHA256SUMS
+#   5. create/update the GitHub Release for the tag (body from .github/release-notes/<tag>.md
 #      when that file exists, otherwise auto-generated notes) and upload the assets
-#   7. publish the same version to GitHub Packages (Maven registry)
+#   6. publish the same version to GitHub Packages (Maven registry)
 #
 # Why Packages is folded in here and not left on `release: published`: a release created with
 # the built-in GITHUB_TOKEN does NOT trigger other workflows (GitHub's recursion guard,
@@ -22,9 +23,11 @@
 # so publish-github-packages.yaml would silently never fire. That workflow is now
 # workflow_dispatch-only and serves as a manual re-publish fallback.
 #
-# Version scheme: pom.xml is `${revision}${changelist}`. A release passes `-Drevision=<semver>`
-# and an EMPTY `-Dchangelist=` so the packaged version is exactly <semver> (0.1.0 for tag v0.1.0).
-# Locally and in Jenkins CD `changelist` keeps its non-empty default / computed value.
+# Version scheme: pom.xml is `${changelist}` (Jenkins CD, JEP-229). The git-changelist extension
+# computes `<commit count>.v<12-char hash>` (e.g. 1234.vabcdef012345) from the checked-out
+# commit, but ONLY when `-Dset.changelist` is passed (otherwise the build stays 999999-SNAPSHOT);
+# this workflow and jenkinsci's cd.yaml both pass it. The extension refuses a dirty working tree. The version is
+# therefore NOT the tag: tag v0.2.0 yields e.g. job-config-chain-1234.vabcdef012345.hpi.
 #
 # FUTURE (Jenkins CD): once the repo is forked into the jenkinsci org, official releases go
 # through cd.yaml (maven-cd reusable workflow, git-changelist-maven-extension) and this
@@ -81,31 +84,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: refs/tags/${{ steps.tag.outputs.tag }}
-          # GitVersion walks commits and tags; a shallow clone makes it fail or compute nonsense.
+          # git-changelist counts commits; a shallow clone would compute a wrong version number.
           fetch-depth: 0
-
-      - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v4.7.0
-        with:
-          versionSpec: '6.8.x'
-
-      - name: Determine version
-        id: gitversion
-        uses: gittools/actions/gitversion/execute@v4.7.0
-        # Also exports env vars GitVersion_SemVer, GitVersion_FullSemVer, ...
-
-      - name: Check version matches the tag
-        id: version
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-          SEMVER: ${{ env.GitVersion_SemVer }}
-        run: |
-          echo "tag=$TAG GitVersion SemVer=$SEMVER"
-          if [ -z "$SEMVER" ] || [ "v$SEMVER" != "$TAG" ]; then
-            echo "::error::GitVersion computed '${SEMVER}' but the tag is '${TAG}'. For a manual run, start it from the tag itself (Use workflow from: Tag) so GitVersion sees the tag."
-            exit 1
-          fi
-          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
         with:
@@ -116,34 +96,32 @@ jobs:
           server-id: github # matches <id>github</id> in pom.xml's github-packages profile
 
       - name: Build and test (release gate)
-        # `mvn` (preinstalled on the runner), not ./mvnw: the wrapper would run its own
-        # dotnet-gitversion; the version computed above is the single source of truth.
-        # -Dchangelist= (empty) makes the version exactly <semver>; see header.
+        # `mvn` (preinstalled on the runner). -Dset.changelist activates the version computation.
         run: >
           mvn -B
-          -Drevision=${{ steps.version.outputs.semver }}
-          -Dchangelist=
+          -Dset.changelist
           -Dmaven.clean.failOnError=false
           clean verify
 
       - name: Stage release assets
         id: assets
         env:
-          SEMVER: ${{ steps.version.outputs.semver }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
-          # Fail closed if the manifest does not carry exactly the release version.
-          MANIFEST_VERSION="$(unzip -p target/job-config-chain.hpi META-INF/MANIFEST.MF | tr -d '\r' | sed -n 's/^Plugin-Version: //p')"
-          echo "Plugin-Version in .hpi manifest: '$MANIFEST_VERSION'"
-          if [ "$MANIFEST_VERSION" != "$SEMVER" ]; then
-            echo "::error::.hpi Plugin-Version '${MANIFEST_VERSION}' != '${SEMVER}'"
+          # The version is whatever the git-changelist extension computed; fail closed unless it
+          # is a real release version (<commit count>.v<hash>), not the 999999-SNAPSHOT fallback.
+          VERSION="$(unzip -p target/job-config-chain.hpi META-INF/MANIFEST.MF | tr -d '\r' | sed -n 's/^Plugin-Version: //p')"
+          echo "Plugin-Version in .hpi manifest: '$VERSION'"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.v[0-9a-f]+$'; then
+            echo "::error::.hpi Plugin-Version '${VERSION}' is not a release version (<commit count>.v<hash>); shallow checkout or git-changelist extension inactive?"
             exit 1
           fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           mkdir -p release-assets
-          cp target/job-config-chain.hpi "release-assets/job-config-chain-${SEMVER}.hpi"
+          cp target/job-config-chain.hpi "release-assets/job-config-chain-${VERSION}.hpi"
           cp target/job-config-chain.hpi release-assets/job-config-chain.hpi
-          (cd release-assets && sha256sum "job-config-chain-${SEMVER}.hpi" job-config-chain.hpi > SHA256SUMS && cat SHA256SUMS)
+          (cd release-assets && sha256sum "job-config-chain-${VERSION}.hpi" job-config-chain.hpi > SHA256SUMS && cat SHA256SUMS)
           # Release body: committed notes for this tag win over auto-generated ones.
           NOTES=".github/release-notes/${TAG}.md"
           if [ -f "$NOTES" ]; then
@@ -158,7 +136,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          name: Job Config Chain ${{ steps.tag.outputs.tag }}
+          name: Job Config Chain ${{ steps.tag.outputs.tag }} (${{ steps.assets.outputs.version }})
           body_path: ${{ steps.assets.outputs.body_path }}
           generate_release_notes: ${{ steps.assets.outputs.generate == 'true' }}
           draft: false
@@ -166,7 +144,7 @@ jobs:
           make_latest: true
           fail_on_unmatched_files: true
           files: |
-            release-assets/job-config-chain-${{ steps.version.outputs.semver }}.hpi
+            release-assets/job-config-chain-${{ steps.assets.outputs.version }}.hpi
             release-assets/job-config-chain.hpi
             release-assets/SHA256SUMS
         env:
@@ -178,8 +156,7 @@ jobs:
         # distributionManagement profile (kept out of the default/official path in pom.xml).
         run: >
           mvn -B -Pgithub-packages
-          -Drevision=${{ steps.version.outputs.semver }}
-          -Dchangelist=
+          -Dset.changelist
           -DskipTests
           deploy
         env:
