@@ -222,8 +222,10 @@ public class CspCleanPagesTest {
         if (acceptLanguage != null) {
             wc.addRequestHeader("Accept-Language", acceptLanguage);
         }
-        return wc.goTo(PageHelp.URL_NAME + "/" + name, null).getWebResponse();
+        return wc.goTo(HELP_PATH + "help-" + name + ".html", null).getWebResponse();
     }
+
+    private static final String HELP_PATH = "plugin/job-config-chain/help/";
 
     @Test
     public void everyAdminFieldHasAHelpLinkThatResolvesToAHelpFile() throws Exception {
@@ -231,7 +233,7 @@ public class CspCleanPagesTest {
             String html = client().goTo(p.getValue()).getWebResponse().getContentAsString();
             for (String name : REQUIRED_HELP.get(p.getKey())) {
                 assertTrue(html.contains("helpURL=\"") && Pattern.compile(
-                        "helpURL=\"[^\"]*/" + PageHelp.URL_NAME + "/" + name + "\"").matcher(html).find(),
+                        "helpURL=\"[^\"]*/" + HELP_PATH + "help-" + name + "\\.html\"").matcher(html).find(),
                         p.getKey() + ": a (?) link to " + name + " must be rendered");
                 WebResponse rsp = help(name, null);
                 assertEquals(200, rsp.getStatusCode(), name + " must be served");
@@ -260,19 +262,45 @@ public class CspCleanPagesTest {
     }
 
     @Test
-    public void theHelpEndpointServesOnlyKnownNamesAndOnlyToAdministrators() throws Exception {
+    public void theHelpFilesAreServedStaticallyAndOnlyKnownNamesResolve() throws Exception {
         assertEquals(404, help("noSuchHelp", null).getStatusCode());
-        assertEquals(404, help("..%2F..%2Fpom", null).getStatusCode());
-        assertEquals(404, help("newConfigKey.html", null).getStatusCode());
-        jenkins.jenkins.setSecurityRealm(jenkins.createDummySecurityRealm());
-        jenkins.jenkins.setAuthorizationStrategy(new org.jvnet.hudson.test.MockAuthorizationStrategy()
-                .grant(Jenkins.READ).everywhere().to("reader")
-                .grant(Jenkins.ADMINISTER).everywhere().to("admin"));
-        JenkinsRule.WebClient reader = jenkins.createWebClient().withBasicCredentials("reader");
-        reader.getOptions().setThrowExceptionOnFailingStatusCode(false);
-        assertEquals(403, reader.goTo(PageHelp.URL_NAME + "/newConfigKey", null).getWebResponse().getStatusCode());
-        JenkinsRule.WebClient admin = jenkins.createWebClient().withBasicCredentials("admin");
-        assertEquals(200, admin.goTo(PageHelp.URL_NAME + "/newConfigKey", null).getWebResponse().getStatusCode());
+        JenkinsRule.WebClient wc = client();
+        wc.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        // Core's Plugin#doDynamic refuses ".." and "%" in the path outright with 400 (a stricter "not served" than 404).
+        WebResponse traversal = wc.goTo(HELP_PATH + "..%2F..%2Fpom.xml", null).getWebResponse();
+        assertEquals(400, traversal.getStatusCode());
+        assertFalse(traversal.getContentAsString().contains("<project") || traversal.getContentAsString().contains("<div>"),
+                "nothing of the target file or any help may be served");
+        assertEquals(404, wc.goTo(HELP_PATH + "help-newConfigKey", null).getWebResponse().getStatusCode());
+        // The old hidden action is gone: its URL no longer exists.
+        assertEquals(404, wc.goTo("job-config-chain-help/newConfigKey", null).getWebResponse().getStatusCode());
+    }
+
+    @Test
+    public void everyRenderedHelpLinkResolvesToAnExistingFileForEveryLocale() throws Exception {
+        Path helpDir = Path.of("src/main/webapp/help");
+        Pattern linkPattern = Pattern.compile("helpURL=\"[^\"]*?/plugin/job-config-chain/help/(help-[A-Za-z]+\\.html)\"");
+        List<String> problems = new ArrayList<>();
+        int checked = 0;
+        for (Map.Entry<String, String> p : pages().entrySet()) {
+            String html = client().goTo(p.getValue()).getWebResponse().getContentAsString();
+            Matcher m = linkPattern.matcher(html);
+            while (m.find()) {
+                String file = m.group(1);
+                String stem = file.substring(0, file.length() - ".html".length());
+                checked++;
+                if (!Files.isRegularFile(helpDir.resolve(file))) {
+                    problems.add(p.getKey() + ": missing " + file);
+                }
+                for (String locale : BundleParityTest.SUPPORTED_LOCALES) {
+                    if (!Files.isRegularFile(helpDir.resolve(stem + "_" + locale + ".html"))) {
+                        problems.add(p.getKey() + ": missing " + stem + "_" + locale + ".html");
+                    }
+                }
+            }
+        }
+        assertTrue(checked > 0, "the pages must render help links");
+        assertTrue(problems.isEmpty(), "help links must resolve to files under webapp/help: " + problems);
     }
 
     @Test

@@ -103,7 +103,7 @@ public class BundleParityTest {
 
     /** Localized in-UI help files for the admin pages. */
     private static final File PAGE_HELP =
-            new File("src/main/resources/io/jenkins/plugins/jobconfigchain/ui/PageHelp");
+            new File("src/main/webapp/help");
 
     private static final File ADJUNCTS =
             new File("src/main/resources/io/jenkins/plugins/jobconfigchain/adjuncts");

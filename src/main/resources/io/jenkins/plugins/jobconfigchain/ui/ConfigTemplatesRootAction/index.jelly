@@ -44,7 +44,7 @@
             <input type="checkbox" id="showDeletedToggle"/>
             ${%showDeleted.label} (${it.deletedConfigSets.size()})
           </label>
-          <f:helpLink url="/job-config-chain-help/showDeleted" featureName="${%showDeleted.label}"/>
+          <f:helpLink url="/plugin/job-config-chain/help/help-showDeleted.html" featureName="${%showDeleted.label}"/>
         </div>
         <f:helpArea/>
       </j:if>
@@ -164,13 +164,13 @@
                text alone); the placeholder now only carries the example format, exactly like that
                same secret-path input's own "database.password" placeholder. -->
           <f:entry title="${%newConfigSet.projectKeyLabel}"
-                   help="/job-config-chain-help/newConfigKey">
+                   help="/plugin/job-config-chain/help/help-newConfigKey.html">
             <input type="text" name="projectKey" id="newProjectKey" placeholder="my-app" class="jenkins-input"/>
           </f:entry>
           <div>
             <div class="help-sibling ctsync-help-row">
               <label class="ctsync-content-type-label">${%contentType.label}</label>
-              <f:helpLink url="/job-config-chain-help/contentType" featureName="${%contentType.label}"/>
+              <f:helpLink url="/plugin/job-config-chain/help/help-contentType.html" featureName="${%contentType.label}"/>
             </div>
             <f:helpArea/>
             <div class="ctsync-content-type-hint"><l:icon src="symbol-information-circle" class="icon-sm"/> ${%contentType.chooseOnceHelp}</div>

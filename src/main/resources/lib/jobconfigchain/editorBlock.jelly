@@ -54,7 +54,7 @@
         <button type="button" id="backTo3PanelBtn" class="jenkins-button ctsync-hidden"
                title="${%backTo3Panel.title}"
                ><l:icon src="symbol-arrow-left" class="icon-sm"/> ${%backTo3Panel.label}</button>
-        <f:helpLink url="/job-config-chain-help/generateTemplate" featureName="${%generateTemplate.label}"/>
+        <f:helpLink url="/plugin/job-config-chain/help/help-generateTemplate.html" featureName="${%generateTemplate.label}"/>
       </div>
     </div>
     <f:helpArea/>
@@ -110,7 +110,7 @@
       <div class="ctsync-content-type-row ctsync-hidden" id="contentTypeRow">
         <span class="help-sibling ctsync-help-row">
           <label class="ctsync-content-type-label">${%contentType.label}</label>
-          <f:helpLink url="/job-config-chain-help/contentType" featureName="${%contentType.label}"/>
+          <f:helpLink url="/plugin/job-config-chain/help/help-contentType.html" featureName="${%contentType.label}"/>
         </span>
         <j:choose>
           <j:when test="${it.contentTypeLocked}">
@@ -131,13 +131,13 @@
       <div class="ctsync-merge-top">
         <div class="ctsync-merge-pane" id="mergedBasesPane">
           <h3 class="help-sibling">${%mergedBases.heading}
-            <f:helpLink url="/job-config-chain-help/mergedBases" featureName="${%mergedBases.heading}"/></h3>
+            <f:helpLink url="/plugin/job-config-chain/help/help-mergedBases.html" featureName="${%mergedBases.heading}"/></h3>
           <f:helpArea/>
           <div id="mergedBasesEditor" class="ctsync-editor-frame"/>
         </div>
         <div class="ctsync-merge-pane" id="envOverridePane">
           <h3 class="help-sibling">${%envOverride.heading}
-            <f:helpLink url="/job-config-chain-help/overrideEditor" featureName="${%envOverride.heading}"/></h3>
+            <f:helpLink url="/plugin/job-config-chain/help/help-overrideEditor.html" featureName="${%envOverride.heading}"/></h3>
           <f:helpArea/>
 
           <!-- Save-result feedback (owner requirement, 2026-09-14): no longer an inline banner div
@@ -168,7 +168,7 @@
       </div>
       <div class="ctsync-merge-pane ctsync-merge-full" id="mergedResultPane">
         <h3 class="help-sibling">${%mergedResult.heading}
-          <f:helpLink url="/job-config-chain-help/mergedResult" featureName="${%mergedResult.heading}"/></h3>
+          <f:helpLink url="/plugin/job-config-chain/help/help-mergedResult.html" featureName="${%mergedResult.heading}"/></h3>
         <f:helpArea/>
         <div id="mergedEditor" class="ctsync-editor-frame"/>
         <div id="mergedStaleIndicator" class="ctsync-stale ctsync-hidden">
@@ -178,7 +178,7 @@
     </div>
 
     <f:entry title="${%changeNote.entryTitle}"
-                 help="/job-config-chain-help/changeNote">
+                 help="/plugin/job-config-chain/help/help-changeNote.html">
       <input class="jenkins-input" type="text" id="noteField" required="required"/>
     </f:entry>
     <input type="hidden" id="baseChainField" value=""/>

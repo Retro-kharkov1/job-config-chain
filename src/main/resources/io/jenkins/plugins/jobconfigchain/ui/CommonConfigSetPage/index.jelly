@@ -156,7 +156,7 @@
           </tr>
         </template>
         <f:entry title="${%addSecret.entryTitle}"
-                 help="/job-config-chain-help/secretBinding">
+                 help="/plugin/job-config-chain/help/help-secretBinding.html">
           <div class="ctsync-secret-form">
             <div class="ctsync-secret-form-fields">
               <input class="jenkins-input ctsync-secret-path-input" type="text" id="secretPath" placeholder="database.password"/>
@@ -267,7 +267,7 @@
                      title="${%generateTemplate.disabledTitle}"><l:icon src="symbol-document-text" class="icon-sm"/> ${%generateTemplate.label}</button>
             </j:otherwise>
           </j:choose>
-          <f:helpLink url="/job-config-chain-help/commonEditor" featureName="${%editor.heading}"/>
+          <f:helpLink url="/plugin/job-config-chain/help/help-commonEditor.html" featureName="${%editor.heading}"/>
         </div>
         <f:helpArea/>
 
@@ -280,7 +280,7 @@
         <div class="ctsync-content-type-row" id="contentTypeRow">
           <span class="help-sibling ctsync-help-row">
           <label class="ctsync-content-type-label">${%contentType.label}</label>
-          <f:helpLink url="/job-config-chain-help/contentType" featureName="${%contentType.label}"/>
+          <f:helpLink url="/plugin/job-config-chain/help/help-contentType.html" featureName="${%contentType.label}"/>
         </span>
           <j:choose>
             <j:when test="${it.contentTypeLocked}">
@@ -370,7 +370,7 @@
              #generateCopyRow, whichever is visible) creates breathing room before this field
              instead of it sitting flush against the coding block. -->
         <f:entry title="${%changeNote.entryTitle}"
-                 help="/job-config-chain-help/changeNote">
+                 help="/plugin/job-config-chain/help/help-changeNote.html">
           <input class="jenkins-input" type="text" id="noteField" required="required"/>
         </f:entry>
         <input type="hidden" id="contentTypeField" value="${it.preselectedContentTypeValue}"/>

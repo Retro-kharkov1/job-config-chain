@@ -19,7 +19,7 @@
     <div id="baseChainEditor">
       <div class="help-sibling ctsync-help-row">
         <span class="ctsync-label-strong">${%baseChain.rowsHelpLabel}</span>
-        <f:helpLink url="/job-config-chain-help/baseChainRows" featureName="${%baseChain.rowsHelpLabel}"/>
+        <f:helpLink url="/plugin/job-config-chain/help/help-baseChainRows.html" featureName="${%baseChain.rowsHelpLabel}"/>
       </div>
       <f:helpArea/>
       <p>${%baseChain.intro(scopeNoun)}</p>
