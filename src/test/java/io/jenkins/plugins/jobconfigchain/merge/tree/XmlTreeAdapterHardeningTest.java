@@ -116,6 +116,55 @@ public class XmlTreeAdapterHardeningTest {
     }
 
     @Test
+    public void parser_rejectsAnExternalEntityAndNeverReadsTheFile(@TempDir Path dir) throws Exception {
+        Path secret = dir.resolve("secret.txt");
+        Files.writeString(secret, "leaked-secret", StandardCharsets.UTF_8);
+        String xml = "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"" + secret.toUri() + "\">]><r><a>&x;</a></r>";
+
+        RuntimeException e = assertThrows(RuntimeException.class, () -> XML.parse(xml));
+        assertFalse(String.valueOf(e.getMessage()).contains("leaked-secret"));
+    }
+
+    @Test
+    public void parser_rejectsAnExternalDtd(@TempDir Path dir) throws Exception {
+        Path dtd = dir.resolve("ext.dtd");
+        Files.writeString(dtd, "<!ENTITY secret \"leaked-secret\">", StandardCharsets.UTF_8);
+        String xml = "<?xml version=\"1.0\"?><!DOCTYPE r SYSTEM \"" + dtd.toUri() + "\"><r><a>&secret;</a></r>";
+
+        assertThrows(RuntimeException.class, () -> XML.parse(xml));
+    }
+
+    @Test
+    public void hardenedFactory_refusesToLoadAnExternalStylesheetInclude(@TempDir Path dir) throws Exception {
+        Path included = dir.resolve("inc.xsl");
+        Files.writeString(included, "<xsl:stylesheet version=\"1.0\" "
+                + "xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"/>", StandardCharsets.UTF_8);
+        String xsl = "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\">"
+                + "<xsl:include href=\"" + included.toUri() + "\"/></xsl:stylesheet>";
+
+        assertThrows(TransformerConfigurationException.class,
+                () -> XmlTreeAdapter.newHardenedTransformerFactory().newTransformer(
+                        new StreamSource(new StringReader(xsl))));
+    }
+
+    @Test
+    public void hardenedFactory_doesNotLeakFileContentThroughDocumentFunction(@TempDir Path dir) throws Exception {
+        Path secret = dir.resolve("secret.xml");
+        Files.writeString(secret, "<s>leaked-secret</s>", StandardCharsets.UTF_8);
+        String xsl = "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\">"
+                + "<xsl:output method=\"text\"/><xsl:template match=\"/\">"
+                + "<xsl:value-of select=\"document('" + secret.toUri() + "')\"/></xsl:template></xsl:stylesheet>";
+        StringWriter out = new StringWriter();
+        try {
+            XmlTreeAdapter.newHardenedTransformerFactory().newTransformer(new StreamSource(new StringReader(xsl)))
+                    .transform(new StreamSource(new StringReader("<r/>")), new StreamResult(out));
+        } catch (TransformerException expected) {
+            // refused outright: also acceptable
+        }
+        assertFalse(out.toString().contains("leaked-secret"), "document() must not read external files: " + out);
+    }
+
+    @Test
     public void harden_doesNotThrowWhenTheFactoryRejectsTheAttributes() throws Exception {
         RestrictiveFactory restrictive = new RestrictiveFactory(TransformerFactory.newInstance());
 

@@ -64,12 +64,12 @@ final class XmlTreeAdapter implements TreeFormat {
      * not support them; secure processing still applies then). Used for DOM serialization only, which
      * is why {@code jenkins.util.xml.XMLUtils#safeTransform} (rejects {@code DOMSource}) is not used.
      */
-    static TransformerFactory newHardenedTransformerFactory() {
-        return harden(TransformerFactory.newInstance());
+    static TransformerFactory newHardenedTransformerFactory() { // lgtm[jenkins/unsafe-classes] hardened: secure processing, no external DTD/stylesheet, serialization only
+        return harden(TransformerFactory.newInstance()); // lgtm[jenkins/unsafe-classes] hardened: secure processing, no external DTD/stylesheet, serialization only
     }
 
     /** Applies the hardening to {@code factory} (package-private so a test can pass a restrictive one). */
-    static TransformerFactory harden(TransformerFactory factory) {
+    static TransformerFactory harden(TransformerFactory factory) { // lgtm[jenkins/unsafe-classes] hardened: secure processing, no external DTD/stylesheet, serialization only
         try {
             factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
         } catch (TransformerConfigurationException e) {
@@ -80,7 +80,7 @@ final class XmlTreeAdapter implements TreeFormat {
         return factory;
     }
 
-    private static void setAttributeQuietly(TransformerFactory factory, String attribute) {
+    private static void setAttributeQuietly(TransformerFactory factory, String attribute) { // lgtm[jenkins/unsafe-classes] hardened: secure processing, no external DTD/stylesheet, serialization only
         try {
             factory.setAttribute(attribute, "");
         } catch (IllegalArgumentException e) {
@@ -181,7 +181,7 @@ final class XmlTreeAdapter implements TreeFormat {
     @Override
     public String serialize(TreeNode root) {
         try {
-            Transformer t = newHardenedTransformerFactory().newTransformer();
+            Transformer t = newHardenedTransformerFactory().newTransformer(); // lgtm[jenkins/unsafe-classes] hardened: secure processing, no external DTD/stylesheet, serialization only
             t.setOutputProperty(OutputKeys.INDENT, "yes");
             t.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
             t.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
@@ -438,7 +438,7 @@ final class XmlTreeAdapter implements TreeFormat {
             StringBuilder sb = new StringBuilder();
             for (Element e : elements) {
                 try {
-                    Transformer t = newHardenedTransformerFactory().newTransformer();
+                    Transformer t = newHardenedTransformerFactory().newTransformer(); // lgtm[jenkins/unsafe-classes] hardened: secure processing, no external DTD/stylesheet, serialization only
                     t.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
                     StringWriter sw = new StringWriter();
                     t.transform(new DOMSource(e), new StreamResult(sw));
