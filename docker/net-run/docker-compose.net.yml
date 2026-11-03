@@ -1,0 +1,18 @@
+# Full-suite verify runner (baseline vs after). The source is mounted read-only and COPIED into the
+# container's own filesystem by in-container.sh; Maven cache is the persistent job-config-chain-m2 volume.
+# Run through net-run.sh (compose project: config-template-sync).
+services:
+  net:
+    image: maven:3.9-eclipse-temurin-21
+    labels:
+      space: config-template-sync
+    working_dir: /work
+    entrypoint: ["bash", "/src/docker/net-run/in-container.sh"]
+    volumes:
+      - ../..:/src:ro
+      - ${ORIG_DIR:-.}:/orig:ro
+      - job-config-chain-m2:/root/.m2
+
+volumes:
+  job-config-chain-m2:
+    external: true
